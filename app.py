@@ -14,6 +14,10 @@ import os
 # import feedparser  # Removed due to Python 3.13 compatibility issues
 from email.utils import parsedate_to_datetime
 
+# Import AI Assistant System
+from custom_ai_assistant import process_ai_query
+from ai_memory_system import store_interaction, get_memory_summary
+
 app = Flask(__name__)
 CORS(app)
 
@@ -105,7 +109,7 @@ user_todos = {}  # user_email -> todos
 user_call_notes = {}  # user_email -> call_notes
 user_saved_jobs = {}  # user_email -> saved_jobs
 
-# User-to-user chat storage (enables cross-device messaging)
+# User-to-user chat storage
 user_chats = {}  # user_email -> list of chats
 user_messages = {}  # chat_id -> list of messages
 
@@ -2329,84 +2333,240 @@ Please let me know specifically what you'd like help with, and I'll provide deta
 
 @app.route('/api/ai-assistant', methods=['POST'])
 def ai_assistant():
-    """AI Assistant endpoint for processing queries"""
+    """AI Assistant endpoint for processing queries using the advanced AI system"""
     try:
         data = request.get_json()
-        query = data.get('query', '')
-        chat_id = data.get('chat_id', 'default')
-        context = data.get('context', {})
+        message = data.get('message', '')
+        user_id = data.get('user_id', 'hope')
         
-        if not query:
+        if not message:
             return jsonify({
                 "success": False,
-                "error": "No query provided"
+                "error": "No message provided"
             }), 400
         
-        # Handle learning requests
-        if context.get('is_file_learning', False):
-            # Store the learning content for future use
-            learning_key = f"ai_learning_{context.get('file_type', 'general')}"
-            ai_memory[learning_key] = query
-            print(f"🧠 Stored learning content for {learning_key}")
+        print(f"🧠 AI Assistant processing message: {message}")
+        print(f"🧠 User ID: {user_id}")
+        
+        # Prepare context for AI assistant
+        context = {
+            'user_id': user_id,
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        # Get recent articles for context if available
+        try:
+            recent_articles = get_recent_articles(limit=10)
+            if recent_articles:
+                context['articles'] = recent_articles
+                print(f"🧠 Added {len(recent_articles)} recent articles to context")
+        except Exception as e:
+            print(f"🧠 Could not fetch recent articles: {e}")
+        
+        # Process query using the advanced AI assistant
+        ai_response = process_ai_query(message, context)
+        
+        # Store the interaction in memory system
+        store_interaction(message, ai_response['text'], ai_response['type'], ai_response['confidence'])
+        
+        # Return response in expected format
+        return jsonify({
+            "success": True,
+            "response": ai_response['text'],
+            "type": ai_response['type'],
+            "confidence": ai_response['confidence'],
+            "sources": ai_response.get('sources', []),
+            "actions": ai_response.get('actions', [])
+        })
+        
+    except Exception as e:
+        print(f"❌ Error in AI assistant: {e}")
+        return jsonify({
+            "success": False,
+            "error": f"AI processing error: {str(e)}"
+        }), 500
+
+@app.route('/api/ai/chat', methods=['POST'])
+def ai_chat():
+    """AI Chat endpoint for call note transcript summarization"""
+    try:
+        data = request.get_json()
+        message = data.get('message', '')
+        user_id = data.get('user_id', 'system')
+        context = data.get('context', {})
+        
+        if not message:
+            return jsonify({
+                "success": False,
+                "error": "No message provided"
+            }), 400
+        
+        print(f"🎙️ AI Chat processing call transcript: {message[:100]}...")
+        print(f"🎙️ User ID: {user_id}")
+        
+        # Check if this is a call transcript
+        is_call_transcript = context.get('type') == 'call_notes' or 'transcript' in message.lower()
+        
+        if is_call_transcript:
+            # Process as call transcript summary
+            ai_response = process_call_transcript(message, context)
+        else:
+            # Process as regular AI query
+            ai_response = process_ai_query(message, context)
+        
+        # Return response in expected format for Call Notes
+        return jsonify({
+            "success": True,
+            "response": ai_response['text'],
+            "type": ai_response['type'],
+            "confidence": ai_response['confidence'],
+            "sources": ai_response.get('sources', []),
+            "actions": ai_response.get('actions', [])
+        })
+        
+    except Exception as e:
+        print(f"❌ Error in AI chat: {e}")
+        return jsonify({
+            "success": False,
+            "error": f"AI chat error: {str(e)}"
+        }), 500
+
+def process_call_transcript(transcript, context):
+    """Process call transcript and generate structured summary"""
+    try:
+        # Generate comprehensive call summary
+        summary_prompt = f"""
+        Please analyze this call transcript and provide a structured summary:
+
+        TRANSCRIPT:
+        {transcript}
+
+        Please provide:
+        1. Executive Summary (2-3 sentences)
+        2. Key Points (bullet points)
+        3. Action Items (bullet points)
+        4. Participants (if identifiable)
+        5. Meeting Duration/Type (if mentioned)
+
+        Format as a professional meeting summary.
+        """
+        
+        # Use the existing AI processing
+        ai_response = process_ai_query(summary_prompt, context)
+        
+        # Enhance the response for call notes
+        enhanced_text = f"""
+        **MEETING SUMMARY**
+        
+        {ai_response['text']}
+        
+        **TRANSCRIPT LENGTH:** {len(transcript.split())} words
+        **GENERATED:** {datetime.now().strftime('%Y-%m-%d %H:%M')}
+        
+        *This summary was generated using AI analysis of the call transcript.*
+        """
+        
+        return {
+            "text": enhanced_text,
+            "type": "call_summary",
+            "confidence": 0.9,
+            "sources": ["call_transcript"],
+            "actions": ["copy_to_clipboard", "save_summary"]
+        }
+        
+    except Exception as e:
+        print(f"❌ Error processing call transcript: {e}")
+        return {
+            "text": f"Error processing transcript: {str(e)}",
+            "type": "error",
+            "confidence": 0.0,
+            "sources": [],
+            "actions": []
+        }
+
+def get_recent_articles(limit=10):
+    """Get recent articles for AI context"""
+    try:
+        # This would normally fetch from your article database
+        # For now, return empty list
+        return []
+    except Exception as e:
+        print(f"Error fetching recent articles: {e}")
+        return []
+
+@app.route('/api/user/profile', methods=['GET'])
+def user_profile():
+    """User profile management endpoint"""
+    try:
+        if request.method == 'GET':
+            # Get user profile
+            user_id = request.args.get('user_id')
+            if not user_id:
+                return jsonify({
+                    'success': False,
+                    'error': 'User ID required'
+                }), 400
+            
+            # Check if user profile exists
+            profile_key = f"user_profile_{user_id}"
+            if profile_key in ai_memory:
+                return jsonify({
+                    'success': True,
+                    'profile': ai_memory[profile_key]
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': 'Profile not found'
+                }), 404
+        
+        elif request.method == 'POST':
+            # Create new user profile
+            data = request.get_json()
+            if not data or 'user_id' not in data:
+                return jsonify({
+                    'success': False,
+                    'error': 'User ID required'
+                }), 400
+            
+            user_id = data['user_id']
+            profile_key = f"user_profile_{user_id}"
+            
+            # Store user profile
+            profile_data = {
+                'user_id': user_id,
+                'name': data.get('name', ''),
+                'email': data.get('email', ''),
+                'avatar': data.get('avatar', ''),
+                'preferences': data.get('preferences', {}),
+                'created_at': datetime.now().isoformat(),
+                'updated_at': datetime.now().isoformat()
+            }
+            
+            ai_memory[profile_key] = profile_data
             
             return jsonify({
-                "success": True,
-                "text": "Learning content stored successfully",
-                "type": "learning_confirmation"
+                'success': True,
+                'message': 'Profile created successfully',
+                'profile': profile_data
             })
         
-        # Enhanced AI response with advanced intelligence
-        query_lower = query.lower()
-        
-        # Advanced query analysis and context understanding
-        print(f"🧠 AI Assistant processing query: {query}")
-        print(f"🧠 Chat ID: {chat_id}")
-        print(f"🧠 Context: {context}")
-        
-        # Store conversation history for context
-        if chat_id not in chat_conversations:
-            chat_conversations[chat_id] = []
-        
-        # Add user query to conversation history
-        chat_conversations[chat_id].append({
-            'role': 'user',
-            'content': query,
-            'timestamp': datetime.now().isoformat()
-        })
-        
-        # Keep only last 10 exchanges to maintain context
-        if len(chat_conversations[chat_id]) > 20:
-            chat_conversations[chat_id] = chat_conversations[chat_id][-20:]
-        
-        # Get user ID from context for personalized memory
-        user_id = context.get('user_id', chat_id)
-        
-        # Advanced query classification and response generation with memory
-        response_data = generate_intelligent_response(query, query_lower, chat_id, context)
-        
-        # Enhance response with memory and context
-        response_data = enhance_response_with_memory(response_data, user_id, query)
-        
-        # Learn from this interaction
-        learn_from_interaction(query, response_data, user_id)
-        
-        # Add AI response to conversation history
-        chat_conversations[chat_id].append({
-            'role': 'assistant',
-            'content': response_data.get('text', ''),
-            'timestamp': datetime.now().isoformat()
-        })
-        
-        return jsonify(response_data)
-        
-        # Legacy query processing (keeping for backward compatibility)
-        if any(word in query_lower for word in ['job', 'ad', 'advertisement', 'posting', 'position']):
-            # Check if we have job ad examples stored
-            job_examples = ai_memory.get('ai_learning_job_ad_examples', '')
-            
-            if job_examples and 'EXAMPLE 1' in job_examples:
-                # Use the learned examples to generate a professional job ad
-                response_text = generate_professional_job_ad(query, job_examples)
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/user/profile', methods=['POST'])
+def create_user_profile():
+    """Create user profile endpoint"""
+    return user_profile()
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5001))
+    print(f"🚀 Starting Mawney Partners API with AI Assistant on port {port}")
+    print("🧠 AI Assistant system loaded with advanced capabilities...")
+    app.run(host='0.0.0.0', port=port, debug=False)
             else:
                 # Fallback to basic template
                 response_text = generate_basic_job_ad(query)
