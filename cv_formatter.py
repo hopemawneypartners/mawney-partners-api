@@ -873,11 +873,32 @@ OTHER
             padding: 40px;
             background: white;
             font-size: 11pt;
+            page-break-inside: auto;
         }}
         
         @page {{
             size: A4;
             margin: 1cm;
+        }}
+        
+        /* Page Break Controls */
+        .section {{
+            page-break-inside: avoid;
+            margin-bottom: 20px;
+        }}
+        
+        .experience-item, .education-item {{
+            page-break-inside: avoid;
+            margin-bottom: 15px;
+        }}
+        
+        h1, h2, h3 {{
+            page-break-after: avoid;
+        }}
+        
+        /* Ensure content flows to multiple pages */
+        body {{
+            page-break-inside: auto;
         }}
         
         /* Logo Styling */
