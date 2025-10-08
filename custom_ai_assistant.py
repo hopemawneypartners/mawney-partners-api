@@ -762,21 +762,28 @@ I can also help you prepare for interviews or create a tailored cover letter!"""
             )
     
     def _format_cv(self, query: str, context: Dict = None) -> AIResponse:
-        """Format a CV/resume"""
+        """Format a CV/resume using the new Mawney Partners template"""
         try:
             # Extract CV information from query or context
             cv_data = self._extract_cv_data(query, context)
             
-            # Use template to format CV
-            cv_template = self.templates["cv_format"]["template"]
-            formatted_cv = cv_template.format(**cv_data)
+            # Use the new Mawney Partners template formatter
+            template_formatter = MawneyTemplateFormatter()
+            formatted_result = template_formatter.format_cv_with_template(str(cv_data), "cv")
             
-            return AIResponse(
-                text=formatted_cv,
-                type="cv_format",
-                confidence=0.8,
-                actions=["copy_to_clipboard", "save_cv"]
-            )
+            if formatted_result.get('success'):
+                return AIResponse(
+                    text=formatted_result.get('html_version', ''),
+                    type="cv_format",
+                    confidence=0.9,
+                    actions=["copy_to_clipboard", "save_cv", "download_pdf"]
+                )
+            else:
+                return AIResponse(
+                    text=f"I couldn't format your CV: {formatted_result.get('error', 'Unknown error')}",
+                    type="error",
+                    confidence=0.0
+                )
             
         except Exception as e:
             logger.error(f"Error formatting CV: {e}")
