@@ -41,6 +41,11 @@ class CVFileGenerator:
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 filename = f"cv_formatted_{timestamp}.html"
             
+            # Sanitize filename - remove spaces and special characters
+            import re
+            filename = re.sub(r'[^\w\-_.]', '_', filename)
+            filename = filename.replace(' ', '_').replace('(', '').replace(')', '')
+            
             # Ensure .html extension
             if not filename.endswith('.html'):
                 filename += '.html'
@@ -94,6 +99,11 @@ class CVFileGenerator:
                 if not filename:
                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                     filename = f"cv_formatted_{timestamp}.pdf"
+                
+                # Sanitize filename - remove spaces and special characters
+                import re
+                filename = re.sub(r'[^\w\-_.]', '_', filename)
+                filename = filename.replace(' ', '_').replace('(', '').replace(')', '')
                 
                 # Ensure .pdf extension
                 if not filename.endswith('.pdf'):
