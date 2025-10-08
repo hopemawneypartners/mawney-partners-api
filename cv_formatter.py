@@ -144,16 +144,37 @@ OTHER
         """
         try:
             logger.info(f"Formatting CV: {filename}")
+            logger.info(f"Input CV data length: {len(cv_data)} characters")
+            logger.info(f"Input CV data preview: {cv_data[:200]}...")
             
             # Parse the CV content
             parsed_cv = self._parse_cv_content(cv_data)
+            logger.info(f"Parsed CV sections: {list(parsed_cv.keys())}")
+            
+            # Check if we got any meaningful data
+            has_content = any([
+                parsed_cv.get("personal_info"),
+                parsed_cv.get("professional_summary"),
+                parsed_cv.get("core_competencies"),
+                parsed_cv.get("professional_experience"),
+                parsed_cv.get("work_experience"),
+                parsed_cv.get("education")
+            ])
+            
+            if not has_content:
+                logger.warning("No meaningful content extracted from CV, using fallback formatting")
+                # Create a fallback CV with the raw text
+                parsed_cv = self._create_fallback_cv(cv_data)
             
             # Apply Mawney Partners formatting
             formatted_cv = self._apply_company_formatting(parsed_cv)
+            logger.info(f"Applied formatting, sections: {list(formatted_cv.keys())}")
             
             # Generate HTML and plain text versions
             html_cv = self._generate_html_cv(formatted_cv)
             text_cv = self._generate_text_cv(formatted_cv)
+            
+            logger.info(f"Generated HTML CV, length: {len(html_cv)} characters")
             
             return {
                 "success": True,
@@ -175,9 +196,121 @@ OTHER
                 "formatted_cv": None
             }
     
+    def _create_fallback_cv(self, cv_data: str) -> Dict[str, Any]:
+        """Create a fallback CV structure when parsing fails - preserves ALL content"""
+        logger.info("Creating fallback CV structure with full content")
+        
+        # Try to extract basic info from the raw text
+        lines = cv_data.split('\n')
+        name = ""
+        email = ""
+        phone = ""
+        
+        # Look for name in first few lines
+        for line in lines[:5]:
+            line = line.strip()
+            if line and len(line) > 2 and len(line) < 50:
+                if not any(header in line.lower() for header in ['curriculum', 'vitae', 'resume', 'cv', 'email', 'phone']):
+                    name = line
+                    break
+        
+        # Extract email and phone
+        import re
+        email_match = re.search(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', cv_data)
+        if email_match:
+            email = email_match.group(0)
+        
+        phone_match = re.search(r'\+?[\d\s\-\(\)]{10,}', cv_data)
+        if phone_match:
+            phone = phone_match.group(0).strip()
+        
+        # Split the CV into logical sections for better formatting
+        sections = self._split_cv_into_sections(cv_data)
+        
+        return {
+            "personal_info": {
+                "name": name,
+                "email": email,
+                "phone": phone
+            },
+            "professional_summary": sections.get("summary", ""),
+            "core_competencies": sections.get("skills", []),
+            "professional_experience": sections.get("experience", []),
+            "work_experience": sections.get("work", []),
+            "education": sections.get("education", []),
+            "certifications": sections.get("certifications", []),
+            "additional_info": sections.get("additional", []),
+            "full_content": cv_data  # Preserve the entire original content
+        }
+    
+    def _split_cv_into_sections(self, cv_data: str) -> Dict[str, Any]:
+        """Split CV content into logical sections for better formatting"""
+        sections = {
+            "summary": "",
+            "skills": [],
+            "experience": [],
+            "work": [],
+            "education": [],
+            "certifications": [],
+            "additional": []
+        }
+        
+        # Split by common section headers
+        section_patterns = {
+            "summary": [r"profile", r"summary", r"objective", r"about", r"executive summary"],
+            "skills": [r"skills", r"competencies", r"expertise", r"technical skills"],
+            "experience": [r"experience", r"work experience", r"professional experience", r"career history"],
+            "education": [r"education", r"qualifications", r"academic"],
+            "certifications": [r"certifications", r"licenses", r"credentials", r"professional qualifications"],
+            "additional": [r"additional", r"other", r"interests", r"languages", r"projects"]
+        }
+        
+        lines = cv_data.split('\n')
+        current_section = None
+        current_content = []
+        
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+                
+            # Check if this line is a section header
+            is_header = False
+            for section_name, patterns in section_patterns.items():
+                for pattern in patterns:
+                    if re.search(pattern, line, re.IGNORECASE):
+                        # Save previous section
+                        if current_section and current_content:
+                            sections[current_section] = '\n'.join(current_content)
+                        
+                        # Start new section
+                        current_section = section_name
+                        current_content = []
+                        is_header = True
+                        break
+                if is_header:
+                    break
+            
+            if not is_header and current_section:
+                current_content.append(line)
+        
+        # Save the last section
+        if current_section and current_content:
+            sections[current_section] = '\n'.join(current_content)
+        
+        # If no sections were found, treat the whole thing as summary
+        if not any(sections.values()):
+            sections["summary"] = cv_data
+        
+        return sections
+    
     def _parse_cv_content(self, cv_text: str) -> Dict[str, Any]:
         """Parse CV content and extract structured information"""
         cv_text = cv_text.strip()
+        
+        # Debug: Log the input text
+        logger.info(f"Parsing CV content, length: {len(cv_text)} characters")
+        logger.info(f"First 500 characters: {cv_text[:500]}")
         
         # Initialize parsed structure
         parsed = {
@@ -192,25 +325,33 @@ OTHER
         
         # Extract personal information
         parsed["personal_info"] = self._extract_personal_info(cv_text)
+        logger.info(f"Extracted personal info: {parsed['personal_info']}")
         
         # Extract professional summary
         parsed["professional_summary"] = self._extract_professional_summary(cv_text)
+        logger.info(f"Extracted professional summary: {parsed['professional_summary'][:100]}...")
         
         # Extract core competencies/skills
         parsed["core_competencies"] = self._extract_core_competencies(cv_text)
+        logger.info(f"Extracted competencies: {len(parsed['core_competencies'])} items")
         
         # Extract professional experience (check both variations)
         parsed["professional_experience"] = self._extract_professional_experience(cv_text)
         parsed["work_experience"] = self._extract_work_experience(cv_text)
+        logger.info(f"Extracted professional experience: {len(parsed['professional_experience'])} items")
+        logger.info(f"Extracted work experience: {len(parsed['work_experience'])} items")
         
         # Extract education
         parsed["education"] = self._extract_education(cv_text)
+        logger.info(f"Extracted education: {len(parsed['education'])} items")
         
         # Extract certifications
         parsed["certifications"] = self._extract_certifications(cv_text)
+        logger.info(f"Extracted certifications: {len(parsed['certifications'])} items")
         
         # Extract additional information
         parsed["additional_info"] = self._extract_additional_info(cv_text)
+        logger.info(f"Extracted additional info: {len(parsed['additional_info'])} items")
         
         return parsed
     
@@ -953,11 +1094,23 @@ OTHER
             ('other', 'Other')
         ]
         
-        for section_key, section_title in sections:
-            if formatted_cv.get(section_key):
-                # Format content with proper HTML structure
-                formatted_content = self._format_content_as_html(formatted_cv[section_key], section_key)
-                html += f"""
+        # Check if we have full content (fallback case)
+        if formatted_cv.get('full_content'):
+            html += f"""
+    <div class="section">
+        <div class="section-header">CURRICULUM VITAE</div>
+        <div class="content">
+            <pre style="font-family: 'EB Garamond', Garamond, serif; white-space: pre-wrap; font-size: 11pt; line-height: 1.4;">{self._escape_html(formatted_cv['full_content'])}</pre>
+        </div>
+    </div>
+"""
+        else:
+            # Regular sectioned content
+            for section_key, section_title in sections:
+                if formatted_cv.get(section_key):
+                    # Format content with proper HTML structure
+                    formatted_content = self._format_content_as_html(formatted_cv[section_key], section_key)
+                    html += f"""
     <div class="section">
         <div class="section-header">{section_title.upper()}</div>
         <div class="content">
