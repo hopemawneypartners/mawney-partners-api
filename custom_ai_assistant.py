@@ -14,6 +14,7 @@ import random
 from ai_memory_system import store_interaction, get_custom_response, get_learned_suggestions, add_custom_response
 from cv_formatter import cv_formatter
 from cv_file_generator import cv_file_generator
+from mawney_template_formatter import mawney_template_formatter
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
