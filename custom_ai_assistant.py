@@ -764,6 +764,8 @@ I can also help you prepare for interviews or create a tailored cover letter!"""
     def _format_cv(self, query: str, context: Dict = None) -> AIResponse:
         """Format a CV/resume using the new Mawney Partners template"""
         try:
+            logger.info(f"🎯 AI Assistant _format_cv called with query: {query[:100]}...")
+            logger.info(f"🎯 Using new Mawney Partners template formatter")
             # Extract CV information from query or context
             cv_data = self._extract_cv_data(query, context)
             
@@ -1623,6 +1625,10 @@ def process_ai_query_with_files(query: str, context: Dict = None, file_analyses:
             
             # Check if this is a CV formatting request
             cv_files = [f for f in file_analyses if f.get('type') in ['pdf', 'text'] and _is_cv_file(f)]
+            logger.info(f"🔍 CV Detection: Found {len(cv_files)} CV files")
+            logger.info(f"🔍 Query: {enhanced_query}")
+            logger.info(f"🔍 CV formatting request: {_is_cv_formatting_request(enhanced_query, file_analyses)}")
+            
             if cv_files and _is_cv_formatting_request(enhanced_query, file_analyses):
                 # Handle CV formatting and get file info
                 cv_result = _handle_cv_formatting(cv_files)
