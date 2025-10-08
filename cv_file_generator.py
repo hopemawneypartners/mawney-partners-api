@@ -23,6 +23,15 @@ class CVFileGenerator:
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
             logger.info(f"Created output directory: {self.output_dir}")
+        else:
+            logger.info(f"Output directory already exists: {self.output_dir}")
+        
+        # Debug: List contents of directory
+        try:
+            files = os.listdir(self.output_dir)
+            logger.info(f"Directory contents: {files}")
+        except Exception as e:
+            logger.error(f"Error listing directory contents: {e}")
     
     def generate_html_file(self, html_content: str, filename: str = None) -> Dict[str, Any]:
         """
@@ -58,6 +67,14 @@ class CVFileGenerator:
                 f.write(html_content)
             
             logger.info(f"Generated HTML CV file: {filepath}")
+            logger.info(f"HTML content length: {len(html_content)} characters")
+            
+            # Verify file was written
+            if os.path.exists(filepath):
+                actual_size = os.path.getsize(filepath)
+                logger.info(f"File verified - actual size: {actual_size} bytes")
+            else:
+                logger.error(f"File was not created: {filepath}")
             
             # Get file size
             file_size = os.path.getsize(filepath)
