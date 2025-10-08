@@ -767,9 +767,17 @@ I can also help you prepare for interviews or create a tailored cover letter!"""
             # Extract CV information from query or context
             cv_data = self._extract_cv_data(query, context)
             
+            # Convert dictionary to text for parsing
+            cv_text = ""
+            if isinstance(cv_data, dict):
+                # Extract text content from the dictionary
+                cv_text = query  # Use the original query as the CV content
+            else:
+                cv_text = str(cv_data)
+            
             # Use the new Mawney Partners template formatter
             template_formatter = MawneyTemplateFormatter()
-            formatted_result = template_formatter.format_cv_with_template(str(cv_data), "cv")
+            formatted_result = template_formatter.format_cv_with_template(cv_text, "cv")
             
             if formatted_result.get('success'):
                 return AIResponse(
