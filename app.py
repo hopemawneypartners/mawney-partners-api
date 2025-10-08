@@ -2500,6 +2500,8 @@ def handle_ai_assistant_with_attachments():
             response_data['download_url'] = ai_response['download_url']
             response_data['download_filename'] = ai_response.get('filename')
             response_data['cv_file'] = ai_response.get('cv_file')
+            response_data['html_content'] = ai_response.get('html_content')
+            response_data['html_base64'] = ai_response.get('html_base64')
         
         return jsonify(response_data)
         
@@ -2707,4 +2709,932 @@ if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5001))
     print(f"🚀 Starting Mawney Partners API with AI Assistant on port {port}")
     print("🧠 AI Assistant system loaded with advanced capabilities...")
+    app.run(host='0.0.0.0', port=port, debug=False)
+            # Provide definitions for financial terms
+            response_text = get_financial_definition(query)
+            
+            return jsonify({
+                "success": True,
+                "text": response_text,
+                "type": "definition",
+                "confidence": 0.9,
+                "actions": ["copy_to_clipboard"]
+            })
+        
+        elif any(word in query_lower for word in ['search', 'find', 'latest', 'news', 'articles', 'market', 'trends', 'update', 'what', 'how', 'when', 'where', 'why']):
+            # Online search for relevant articles
+            response_text = search_online_articles(query)
+            
+            return jsonify({
+                "success": True,
+                "text": response_text,
+                "type": "online_search",
+                "confidence": 0.9,
+                "actions": ["copy_to_clipboard"]
+            })
+        
+        elif any(word in query_lower for word in ['cv', 'resume', 'format', 'template']):
+            # CV formatting help
+            response_text = f"""**CV Formatting Guide**
+
+**Header Section:**
+• Full name (larger font, bold)
+• Professional title
+• Contact information (phone, email, LinkedIn)
+• Location (city, country)
+
+**Professional Summary:**
+• 2-3 sentences highlighting key achievements
+• Tailored to the specific role
+• Quantify accomplishments where possible
+
+**Work Experience:**
+• Reverse chronological order
+• Company name, position, dates
+• 3-5 bullet points per role
+• Use action verbs (achieved, developed, managed)
+• Include quantifiable results
+
+**Education:**
+• Degree, institution, graduation year
+• Relevant coursework or honors
+• Professional certifications
+
+**Skills:**
+• Technical skills relevant to the role
+• Soft skills
+• Languages (if applicable)
+
+**Additional Sections (if relevant):**
+• Projects
+• Publications
+• Volunteer work
+• Interests (keep brief)
+
+**Formatting Tips:**
+• Use consistent formatting throughout
+• Keep it to 2 pages maximum
+• Use bullet points for easy scanning
+• Choose a clean, professional font
+• Save as PDF for submission
+
+*This is an AI-generated CV formatting guide.*"""
+            
+            return jsonify({
+                "success": True,
+                "text": response_text,
+                "type": "cv_format",
+                "confidence": 0.9,
+                "actions": ["copy_to_clipboard", "save_cv"]
+            })
+        
+        elif any(word in query_lower for word in ['market', 'trend', 'insight', 'analysis', 'credit', 'bond', 'debt']):
+            # Market insights
+            response_text = f"""**Market Analysis & Insights**
+
+**Current Credit Market Overview:**
+Based on recent market data and trends, the credit markets are showing mixed signals with several key developments:
+
+**Key Trends:**
+• Interest rate environment remains supportive for credit investments
+• Corporate credit spreads have tightened in recent months
+• High-yield markets continue to show resilience
+• ESG considerations are increasingly important in credit decisions
+
+**Sector Analysis:**
+• Financial services: Stable outlook with regulatory clarity
+• Technology: Strong fundamentals but valuation concerns
+• Healthcare: Defensive characteristics with growth potential
+• Energy: Transition risks but value opportunities
+
+**Risk Factors:**
+• Geopolitical tensions affecting global markets
+• Inflation concerns and central bank policy responses
+• Supply chain disruptions impacting corporate earnings
+• Regulatory changes in financial services
+
+**Investment Implications:**
+• Focus on quality credits with strong balance sheets
+• Consider duration risk in rising rate environment
+• Diversification across sectors and geographies
+• Active management to navigate market volatility
+
+**Outlook:**
+The credit markets remain attractive for income-seeking investors, but selectivity and risk management are crucial in the current environment.
+
+*This analysis is based on current market conditions and should not be considered as investment advice.*"""
+            
+            return jsonify({
+                "success": True,
+                "text": response_text,
+                "type": "market_insight",
+                "confidence": 0.8,
+                "actions": ["copy_to_clipboard", "save_market_insight"]
+            })
+        
+        else:
+            # General response
+            response_text = f"""I understand you're asking about: "{query}"
+
+I'm here to help with:
+• Creating job advertisements
+• CV and resume formatting
+• Market insights and analysis
+• Credit market information
+• Financial terminology explanations
+
+Could you please be more specific about what you'd like me to help you with? For example:
+- "Create a job ad for a credit analyst"
+- "Format my CV for a finance role"
+- "What are current credit market trends?"
+- "Explain credit spreads"
+
+I'm designed to assist with professional development and financial market questions."""
+            
+            return jsonify({
+                "success": True,
+                "text": response_text,
+                "type": "answer",
+                "confidence": 0.7,
+                "actions": ["copy_to_clipboard"]
+            })
+    
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+# User Profile API endpoints
+@app.route('/api/user/profile', methods=['GET'])
+def get_user_profile():
+    """Get user profile data"""
+    try:
+        email = request.args.get('email')
+        if not email:
+            return jsonify({
+                "success": False,
+                "error": "Email parameter required"
+            }), 400
+        
+        if email in user_profiles:
+            return jsonify({
+                "success": True,
+                "profile": user_profiles[email]
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "error": "User not found"
+            }), 404
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/api/user/profile', methods=['POST'])
+def update_user_profile():
+    """Update user profile data"""
+    try:
+        data = request.get_json()
+        email = data.get('email')
+        
+        if not email:
+            return jsonify({
+                "success": False,
+                "error": "Email required"
+            }), 400
+        
+        if email not in user_profiles:
+            return jsonify({
+                "success": False,
+                "error": "User not found"
+            }), 404
+        
+        # Update profile fields
+        if 'name' in data:
+            user_profiles[email]['name'] = data['name']
+        if 'avatar' in data:
+            user_profiles[email]['avatar'] = data['avatar']
+        if 'preferences' in data:
+            user_profiles[email]['preferences'].update(data['preferences'])
+        
+        user_profiles[email]['last_login'] = datetime.now().isoformat()
+        
+        return jsonify({
+            "success": True,
+            "profile": user_profiles[email]
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+# User Todos API endpoints
+@app.route('/api/user/todos', methods=['GET'])
+def get_user_todos():
+    """Get user todos"""
+    try:
+        email = request.args.get('email')
+        if not email:
+            return jsonify({
+                "success": False,
+                "error": "Email parameter required"
+            }), 400
+        
+        todos = user_todos.get(email, [])
+        return jsonify({
+            "success": True,
+            "todos": todos
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/api/user/todos', methods=['POST'])
+def save_user_todos():
+    """Save user todos"""
+    try:
+        data = request.get_json()
+        email = data.get('email')
+        todos = data.get('todos', [])
+        
+        if not email:
+            return jsonify({
+                "success": False,
+                "error": "Email required"
+            }), 400
+        
+        user_todos[email] = todos
+        return jsonify({
+            "success": True,
+            "todos": todos
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+# User Call Notes API endpoints
+@app.route('/api/user/call-notes', methods=['GET'])
+def get_user_call_notes():
+    """Get user call notes"""
+    try:
+        email = request.args.get('email')
+        if not email:
+            return jsonify({
+                "success": False,
+                "error": "Email parameter required"
+            }), 400
+        
+        call_notes = user_call_notes.get(email, [])
+        return jsonify({
+            "success": True,
+            "call_notes": call_notes
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/api/user/call-notes', methods=['POST'])
+def save_user_call_notes():
+    """Save user call notes"""
+    try:
+        data = request.get_json()
+        email = data.get('email')
+        call_notes = data.get('call_notes', [])
+        
+        if not email:
+            return jsonify({
+                "success": False,
+                "error": "Email required"
+            }), 400
+        
+        user_call_notes[email] = call_notes
+        return jsonify({
+            "success": True,
+            "call_notes": call_notes
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+# User Saved Jobs API endpoints
+@app.route('/api/user/saved-jobs', methods=['GET'])
+def get_user_saved_jobs():
+    """Get user saved jobs"""
+    try:
+        email = request.args.get('email')
+        if not email:
+            return jsonify({
+                "success": False,
+                "error": "Email parameter required"
+            }), 400
+        
+        saved_jobs = user_saved_jobs.get(email, [])
+        return jsonify({
+            "success": True,
+            "saved_jobs": saved_jobs
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/api/user/saved-jobs', methods=['POST'])
+def save_user_saved_jobs():
+    """Save user saved jobs"""
+    try:
+        data = request.get_json()
+        email = data.get('email')
+        saved_jobs = data.get('saved_jobs', [])
+        
+        if not email:
+            return jsonify({
+                "success": False,
+                "error": "Email required"
+            }), 400
+        
+        user_saved_jobs[email] = saved_jobs
+        return jsonify({
+            "success": True,
+            "saved_jobs": saved_jobs
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+# User-to-User Chat API endpoints
+@app.route('/api/user-chats', methods=['GET'])
+def get_user_chats():
+    """Get all user-to-user chats for a user"""
+    try:
+        email = request.args.get('email')
+        if not email:
+            return jsonify({
+                "success": False,
+                "error": "Email parameter required"
+            }), 400
+        
+        chats = user_chats.get(email, [])
+        return jsonify({
+            "success": True,
+            "chats": chats
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/api/user-chats', methods=['POST'])
+def save_user_chats():
+    """Save user-to-user chats"""
+    try:
+        data = request.get_json()
+        email = data.get('email')
+        chats = data.get('chats', [])
+        
+        if not email:
+            return jsonify({
+                "success": False,
+                "error": "Email required"
+            }), 400
+        
+        user_chats[email] = chats
+        return jsonify({
+            "success": True,
+            "chats": chats
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/api/user-messages', methods=['GET'])
+def get_user_messages():
+    """Get messages for a specific chat"""
+    try:
+        chat_id = request.args.get('chat_id')
+        if not chat_id:
+            return jsonify({
+                "success": False,
+                "error": "chat_id parameter required"
+            }), 400
+        
+        messages = user_messages.get(chat_id, [])
+        return jsonify({
+            "success": True,
+            "messages": messages
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/api/user-messages', methods=['POST'])
+def save_user_messages():
+    """Save messages for a specific chat"""
+    try:
+        data = request.get_json()
+        chat_id = data.get('chat_id')
+        messages = data.get('messages', [])
+        
+        if not chat_id:
+            return jsonify({
+                "success": False,
+                "error": "chat_id required"
+            }), 400
+        
+        user_messages[chat_id] = messages
+        return jsonify({
+            "success": True,
+            "messages": messages
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+def get_financial_definition(query):
+    """Provide definitions for financial terms"""
+    query_lower = query.lower()
+    
+    # CLO (Collateralized Loan Obligation)
+    if 'clo' in query_lower:
+        return """**CLO (Collateralized Loan Obligation)**
+
+A **Collateralized Loan Obligation (CLO)** is a structured financial instrument that pools together a portfolio of corporate loans and issues different tranches of securities backed by those loans.
+
+**Key Components:**
+• **Collateral**: Portfolio of corporate loans (typically leveraged loans)
+• **Tranches**: Different risk/return levels (Senior, Mezzanine, Equity)
+• **Manager**: CLO manager who selects and manages the loan portfolio
+• **Servicer**: Handles loan administration and payments
+
+**Structure:**
+• **Senior Tranche (AAA)**: Lowest risk, lowest return, first to receive payments
+• **Mezzanine Tranches (AA, A, BBB)**: Medium risk/return
+• **Equity Tranche**: Highest risk, highest return, last to receive payments
+
+**How it Works:**
+1. CLO manager raises capital from investors
+2. Uses capital to purchase a diversified portfolio of corporate loans
+3. Issues securities backed by the loan portfolio
+4. Loan payments flow through to investors based on tranche priority
+
+**Benefits:**
+• **Diversification**: Spreads risk across many loans
+• **Liquidity**: Converts illiquid loans into tradeable securities
+• **Yield**: Provides access to leveraged loan returns with structured risk
+
+**Risks:**
+• **Credit Risk**: Defaults in underlying loan portfolio
+• **Market Risk**: Changes in loan values and spreads
+• **Liquidity Risk**: Difficulty selling securities in stressed markets
+
+**Market Size:**
+The CLO market is one of the largest segments of the structured credit market, with over $1 trillion in assets under management globally.
+
+*This definition is provided by the Mawney Partners AI Assistant.*"""
+
+    # CDO (Collateralized Debt Obligation)
+    elif 'cdo' in query_lower:
+        return """**CDO (Collateralized Debt Obligation)**
+
+A **Collateralized Debt Obligation (CDO)** is a structured financial product that pools together various debt instruments and issues securities backed by that pool.
+
+**Key Types:**
+• **CLO**: Collateralized Loan Obligation (corporate loans)
+• **CBO**: Collateralized Bond Obligation (corporate bonds)
+• **CMO**: Collateralized Mortgage Obligation (mortgage-backed)
+• **Synthetic CDO**: Uses credit derivatives instead of actual assets
+
+**Structure:**
+• **Senior Tranche**: AAA-rated, lowest risk
+• **Mezzanine Tranches**: AA to BBB-rated, medium risk
+• **Equity Tranche**: Unrated, highest risk
+
+**Uses:**
+• **Risk Transfer**: Banks transfer credit risk to investors
+• **Capital Relief**: Reduces regulatory capital requirements
+• **Yield Enhancement**: Provides access to higher-yielding assets
+• **Diversification**: Spreads risk across multiple borrowers
+
+*This definition is provided by the Mawney Partners AI Assistant.*"""
+
+    # High Yield Bonds
+    elif any(term in query_lower for term in ['high yield', 'junk bond', 'speculative grade']):
+        return """**High Yield Bonds (Junk Bonds)**
+
+**High Yield Bonds** are corporate bonds that are rated below investment grade (BB+ and below by S&P, Ba1 and below by Moody's).
+
+**Characteristics:**
+• **Higher Yield**: Offer higher interest rates to compensate for risk
+• **Higher Risk**: Greater probability of default
+• **Lower Credit Rating**: Below investment grade
+• **Shorter Maturity**: Typically 5-10 years
+
+**Investors:**
+• **Institutional Investors**: Pension funds, insurance companies
+• **High Yield Funds**: Specialized mutual funds and ETFs
+• **Hedge Funds**: Often use leverage to enhance returns
+• **Retail Investors**: Through mutual funds and ETFs
+
+**Risk Factors:**
+• **Credit Risk**: Higher default probability
+• **Interest Rate Risk**: Sensitive to rate changes
+• **Liquidity Risk**: May be harder to sell
+• **Market Risk**: Prices can be volatile
+
+**Market Size:**
+The global high yield bond market is over $3 trillion, making it a significant part of the fixed income universe.
+
+*This definition is provided by the Mawney Partners AI Assistant.*"""
+
+    # Private Credit
+    elif 'private credit' in query_lower:
+        return """**Private Credit**
+
+**Private Credit** refers to debt financing provided by non-bank lenders to companies, typically through direct lending, mezzanine financing, or other alternative credit structures.
+
+**Key Characteristics:**
+• **Direct Lending**: Loans made directly to companies
+• **Higher Yields**: Typically higher returns than public bonds
+• **Less Liquid**: Not traded on public exchanges
+• **Customized Terms**: Tailored to borrower needs
+
+**Types:**
+• **Direct Lending**: Senior secured loans to middle-market companies
+• **Mezzanine**: Subordinated debt with equity features
+• **Distressed Debt**: Investments in troubled companies
+• **Special Situations**: Event-driven opportunities
+
+**Investors:**
+• **Private Credit Funds**: Specialized investment vehicles
+• **Institutional Investors**: Pension funds, endowments
+• **Family Offices**: High net worth individuals
+• **Insurance Companies**: Seeking yield and diversification
+
+**Benefits:**
+• **Higher Returns**: Typically 8-12% annual returns
+• **Diversification**: Uncorrelated with public markets
+• **Customization**: Tailored financing solutions
+• **Yield**: Attractive income generation
+
+**Risks:**
+• **Credit Risk**: Higher default rates than investment grade
+• **Liquidity Risk**: Limited secondary market
+• **Concentration Risk**: Often focused on specific sectors
+• **Operational Risk**: Requires active management
+
+*This definition is provided by the Mawney Partners AI Assistant.*"""
+
+    # Default response for other terms
+    else:
+        return f"""**Definition Request: {query}**
+
+I understand you're asking about "{query}", but I don't have a specific definition for that term in my knowledge base.
+
+**What I can help with:**
+• **Financial Terms**: CLO, CDO, High Yield, Private Credit, etc.
+• **Job Ads**: Professional job advertisement writing
+• **CV Formatting**: Resume and CV guidance
+• **Market Research**: Latest news and articles
+
+**Try asking:**
+• "What is a CLO?"
+• "Define private credit"
+• "What are high yield bonds?"
+• "Write a job ad for credit analyst"
+
+*This response is provided by the Mawney Partners AI Assistant.*"""
+
+@app.route('/api/ai-memory', methods=['GET', 'POST', 'DELETE'])
+def ai_memory_endpoint():
+    """AI Memory management endpoint"""
+    try:
+        if request.method == 'GET':
+            # Get memory statistics
+            memory_stats = {
+                'total_memories': sum(len(memories) for memories in ai_memory.values()),
+                'memory_types': {mem_type: len(memories) for mem_type, memories in ai_memory.items()},
+                'recent_interactions': len(ai_memory['user_interactions']),
+                'learned_knowledge': len(ai_memory['learned_knowledge']),
+                'user_preferences': len(ai_memory['user_preferences']),
+                'industry_insights': len(ai_memory['industry_insights'])
+            }
+            
+            return jsonify({
+                "success": True,
+                "memory_stats": memory_stats,
+                "timestamp": datetime.now().isoformat()
+            })
+        
+        elif request.method == 'POST':
+            # Store new memory
+            data = request.get_json()
+            key = data.get('key')
+            value = data.get('value')
+            memory_type = data.get('memory_type', 'learned_knowledge')
+            user_id = data.get('user_id')
+            
+            if not key or not value:
+                return jsonify({
+                    "success": False,
+                    "error": "Key and value are required"
+                }), 400
+            
+            success = store_memory(key, value, memory_type, user_id)
+            
+            return jsonify({
+                "success": success,
+                "message": "Memory stored successfully" if success else "Failed to store memory"
+            })
+        
+        elif request.method == 'DELETE':
+            # Clear specific memory or all memories
+            data = request.get_json()
+            memory_type = data.get('memory_type')
+            user_id = data.get('user_id')
+            
+            if memory_type and user_id:
+                # Clear specific user's memory type
+                if user_id in ai_memory[memory_type]:
+                    del ai_memory[memory_type][user_id]
+                return jsonify({
+                    "success": True,
+                    "message": f"Cleared {memory_type} memory for user {user_id}"
+                })
+            elif memory_type:
+                # Clear entire memory type
+                ai_memory[memory_type] = {}
+                return jsonify({
+                    "success": True,
+                    "message": f"Cleared all {memory_type} memories"
+                })
+            else:
+                # Clear all memories
+                for mem_type in ai_memory:
+                    ai_memory[mem_type] = {}
+                return jsonify({
+                    "success": True,
+                    "message": "Cleared all AI memories"
+                })
+    
+    except Exception as e:
+        print(f"❌ Error in AI memory endpoint: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+# User Profile Management API
+@app.route('/api/users/profile', methods=['GET', 'POST', 'PUT'])
+def user_profile():
+    """User profile management endpoint"""
+    try:
+        if request.method == 'GET':
+            # Get user profile
+            user_id = request.args.get('user_id')
+            if not user_id:
+                return jsonify({
+                    'success': False,
+                    'error': 'User ID required'
+                }), 400
+            
+            # Check if user profile exists
+            profile_key = f"user_profile_{user_id}"
+            if profile_key in ai_memory:
+                return jsonify({
+                    'success': True,
+                    'profile': ai_memory[profile_key]
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': 'Profile not found'
+                }), 404
+        
+        elif request.method == 'POST':
+            # Create new user profile
+            data = request.get_json()
+            if not data or 'user_id' not in data:
+                return jsonify({
+                    'success': False,
+                    'error': 'User ID required'
+                }), 400
+            
+            user_id = data['user_id']
+            profile_key = f"user_profile_{user_id}"
+            
+            # Store user profile
+            profile_data = {
+                'user_id': user_id,
+                'name': data.get('name', ''),
+                'email': data.get('email', ''),
+                'avatar': data.get('avatar', ''),
+                'preferences': data.get('preferences', {}),
+                'created_at': datetime.now().isoformat(),
+                'updated_at': datetime.now().isoformat()
+            }
+            
+            ai_memory[profile_key] = profile_data
+            store_memory(profile_key, profile_data)
+            
+            return jsonify({
+                'success': True,
+                'profile': profile_data,
+                'message': 'Profile created successfully'
+            })
+        
+        elif request.method == 'PUT':
+            # Update user profile
+            data = request.get_json()
+            if not data or 'user_id' not in data:
+                return jsonify({
+                    'success': False,
+                    'error': 'User ID required'
+                }), 400
+            
+            user_id = data['user_id']
+            profile_key = f"user_profile_{user_id}"
+            
+            # Check if profile exists
+            if profile_key not in ai_memory:
+                return jsonify({
+                    'success': False,
+                    'error': 'Profile not found'
+                }), 404
+            
+            # Update profile data
+            existing_profile = ai_memory[profile_key]
+            updated_profile = {
+                'user_id': user_id,
+                'name': data.get('name', existing_profile.get('name', '')),
+                'email': data.get('email', existing_profile.get('email', '')),
+                'avatar': data.get('avatar', existing_profile.get('avatar', '')),
+                'preferences': data.get('preferences', existing_profile.get('preferences', {})),
+                'created_at': existing_profile.get('created_at', datetime.now().isoformat()),
+                'updated_at': datetime.now().isoformat()
+            }
+            
+            ai_memory[profile_key] = updated_profile
+            store_memory(profile_key, updated_profile)
+            
+            return jsonify({
+                'success': True,
+                'profile': updated_profile,
+                'message': 'Profile updated successfully'
+            })
+    
+    except Exception as e:
+        print(f"❌ Error in user profile API: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'Server error: {str(e)}'
+        }), 500
+
+@app.route('/api/users/sync', methods=['POST'])
+def sync_user_data():
+    """Sync user data across platforms"""
+    try:
+        data = request.get_json()
+        if not data or 'user_id' not in data:
+            return jsonify({
+                'success': False,
+                'error': 'User ID required'
+            }), 400
+        
+        user_id = data['user_id']
+        profile_key = f"user_profile_{user_id}"
+        
+        # Store/update user data
+        user_data = {
+            'user_id': user_id,
+            'name': data.get('name', ''),
+            'email': data.get('email', ''),
+            'avatar': data.get('avatar', ''),
+            'preferences': data.get('preferences', {}),
+            'platform': data.get('platform', 'unknown'),
+            'last_sync': datetime.now().isoformat(),
+            'updated_at': datetime.now().isoformat()
+        }
+        
+        # Store in memory and persistent storage
+        ai_memory[profile_key] = user_data
+        store_memory(profile_key, user_data)
+        
+        # Also store sync timestamp
+        sync_key = f"user_sync_{user_id}"
+        ai_memory[sync_key] = {
+            'last_sync': datetime.now().isoformat(),
+            'platform': data.get('platform', 'unknown')
+        }
+        store_memory(sync_key, ai_memory[sync_key])
+        
+        return jsonify({
+            'success': True,
+            'message': 'User data synced successfully',
+            'sync_timestamp': datetime.now().isoformat()
+        })
+    
+    except Exception as e:
+        print(f"❌ Error syncing user data: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'Sync error: {str(e)}'
+        }), 500
+
+@app.route('/api/users/status', methods=['GET'])
+def user_status():
+    """Get user sync status"""
+    try:
+        user_id = request.args.get('user_id')
+        if not user_id:
+            return jsonify({
+                'success': False,
+                'error': 'User ID required'
+            }), 400
+        
+        profile_key = f"user_profile_{user_id}"
+        sync_key = f"user_sync_{user_id}"
+        
+        profile_exists = profile_key in ai_memory
+        sync_info = ai_memory.get(sync_key, {})
+        
+        return jsonify({
+            'success': True,
+            'profile_exists': profile_exists,
+            'last_sync': sync_info.get('last_sync'),
+            'platform': sync_info.get('platform'),
+            'message': 'User status retrieved successfully'
+        })
+    
+    except Exception as e:
+        print(f"❌ Error getting user status: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'Status error: {str(e)}'
+        }), 500
+
+@app.route('/api/download-cv/<filename>', methods=['GET'])
+def download_cv(filename):
+    """Download formatted CV file"""
+    try:
+        import os
+        cv_dir = 'generated_cvs'
+        
+        # Security: Only allow alphanumeric, dots, underscores, and hyphens in filename
+        import re
+        if not re.match(r'^[\w\-. ]+$', filename):
+            return jsonify({
+                'success': False,
+                'error': 'Invalid filename'
+            }), 400
+        
+        filepath = os.path.join(cv_dir, filename)
+        
+        if not os.path.exists(filepath):
+            return jsonify({
+                'success': False,
+                'error': 'File not found'
+            }), 404
+        
+        # Send file with appropriate mimetype
+        mimetype = 'text/html' if filename.endswith('.html') else 'application/pdf'
+        
+        return send_file(
+            filepath,
+            as_attachment=True,
+            download_name=filename,
+            mimetype=mimetype
+        )
+        
+    except Exception as e:
+        print(f"❌ Error downloading CV: {e}")
+        return jsonify({
+            'success': False,
+            'error': f'Download error: {str(e)}'
+        }), 500
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5001))
+    print(f"🚀 Starting Mawney Partners API with Comprehensive Credit Sources on port {port}")
+    print("📱 API server is running with 30+ RSS feeds...")
     app.run(host='0.0.0.0', port=port, debug=False)
