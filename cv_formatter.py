@@ -688,105 +688,254 @@ OTHER
         return self.sections["other"].format(content=formatted_other)
     
     def _generate_html_cv(self, formatted_cv: Dict[str, Any]) -> str:
-        """Generate HTML version of formatted CV"""
+        """Generate HTML version of formatted CV with precise formatting"""
         
-        # Check if top logo should be included
+        # Get logo paths - convert to base64 for embedded images
         top_logo_html = ""
+        bottom_logo_html = ""
+        
         if self.company_style['branding']['use_top_logo']:
             top_logo_path = self.company_style['branding']['top_logo_path']
-            top_logo_html = f'<div class="logo top-logo"><img src="{top_logo_path}" alt="Mawney Partners Logo" /></div>'
+            top_logo_base64 = self._image_to_base64(top_logo_path)
+            if top_logo_base64:
+                top_logo_html = f'<div class="logo top-logo"><img src="data:image/png;base64,{top_logo_base64}" alt="Mawney Partners Logo" /></div>'
+            else:
+                top_logo_html = f'<div class="logo top-logo"><img src="{top_logo_path}" alt="Mawney Partners Logo" /></div>'
         
-        # Check if bottom logo should be included
-        bottom_logo_html = ""
         if self.company_style['branding']['use_bottom_logo']:
             bottom_logo_path = self.company_style['branding']['bottom_logo_path']
-            bottom_logo_html = f'<div class="logo bottom-logo"><img src="{bottom_logo_path}" alt="Mawney Partners" /></div>'
+            bottom_logo_base64 = self._image_to_base64(bottom_logo_path)
+            if bottom_logo_base64:
+                bottom_logo_html = f'<div class="logo bottom-logo"><img src="data:image/png;base64,{bottom_logo_base64}" alt="Mawney Partners" /></div>'
+            else:
+                bottom_logo_html = f'<div class="logo bottom-logo"><img src="{bottom_logo_path}" alt="Mawney Partners" /></div>'
         
         html = f"""
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>CV - Mawney Partners Style</title>
+    <title>CV - Mawney Partners</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');
         
-        body {{
-            font-family: {self.company_style['layout']['font_family']};
-            color: {self.company_style['colors']['text']};
-            line-height: {self.company_style['layout']['line_spacing']};
-            margin: {self.company_style['layout']['margins']};
+        * {{
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }}
+        
+        body {{
+            font-family: 'EB Garamond', Garamond, 'Times New Roman', serif;
+            color: #2c3e50;
+            line-height: 1.4;
+            margin: 0;
+            padding: 40px;
+            background: white;
+            font-size: 11pt;
+        }}
+        
+        @page {{
+            size: A4;
+            margin: 1cm;
+        }}
+        
+        /* Logo Styling */
         .logo {{
             text-align: center;
         }}
+        
         .top-logo {{
-            margin-bottom: 1.5em;
+            margin-bottom: 20px;
         }}
+        
         .top-logo img {{
             max-width: 250px;
             height: auto;
+            display: block;
+            margin: 0 auto;
         }}
+        
         .bottom-logo {{
-            margin-top: 2em;
-            padding-top: 1em;
+            margin-top: 30px;
+            padding-top: 20px;
             border-top: 1px solid #ddd;
         }}
+        
         .bottom-logo img {{
-            max-width: 200px;
+            max-width: 180px;
             height: auto;
-            opacity: 0.8;
+            display: block;
+            margin: 0 auto;
+            opacity: 0.7;
         }}
+        
+        /* Header Styling */
         .header {{
             text-align: center;
-            margin-bottom: 2em;
-            border-bottom: 1px solid {self.company_style['colors']['secondary']};
-            padding-bottom: 1em;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #3498db;
         }}
+        
         .name {{
-            font-size: {self.company_style['header']['name_font_size']};
-            font-weight: bold;
-            color: {self.company_style['colors']['primary']};
-            margin-bottom: 0.5em;
-            font-family: 'EB Garamond', Garamond, Georgia, serif;
+            font-size: 22pt;
+            font-weight: 700;
+            color: #2c3e50;
+            margin-bottom: 8px;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
         }}
+        
         .contact {{
-            font-size: {self.company_style['header']['contact_font_size']};
-            color: #666;
+            font-size: 10pt;
+            color: #555;
+            font-weight: 400;
         }}
+        
+        /* Section Styling */
         .section {{
-            margin-bottom: 1.5em;
+            margin-bottom: 20px;
             page-break-inside: avoid;
         }}
+        
         .section-header {{
-            font-size: {self.company_style['sections']['section_headers']};
-            color: {self.company_style['colors']['primary']};
-            border-bottom: 2px solid {self.company_style['colors']['secondary']};
-            margin-bottom: 0.5em;
-            padding-bottom: 0.2em;
-            font-weight: bold;
-            letter-spacing: 1px;
-            font-family: 'EB Garamond', Garamond, Georgia, serif;
+            font-size: 13pt;
+            font-weight: 700;
+            color: #2c3e50;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 5px;
+            margin-bottom: 12px;
         }}
+        
         .content {{
-            font-size: {self.company_style['sections']['font_size']};
-            font-family: 'EB Garamond', Garamond, Georgia, serif;
+            font-size: 11pt;
+            line-height: 1.5;
+            color: #333;
         }}
+        
+        /* Bullet Points */
+        .content ul {{
+            margin: 10px 0 10px 20px;
+            padding: 0;
+        }}
+        
+        .content li {{
+            margin-bottom: 6px;
+            line-height: 1.5;
+        }}
+        
+        /* Bold Text */
+        .content strong,
+        .content b {{
+            font-weight: 700;
+            color: #2c3e50;
+        }}
+        
+        /* Italic Text */
+        .content em,
+        .content i {{
+            font-style: italic;
+            font-weight: 400;
+        }}
+        
+        /* Job Titles and Company Names */
+        .job-title {{
+            font-weight: 700;
+            font-size: 11.5pt;
+            color: #2c3e50;
+            margin-top: 10px;
+            margin-bottom: 4px;
+        }}
+        
+        .company-name {{
+            font-weight: 600;
+            font-style: italic;
+            color: #555;
+        }}
+        
+        .date-range {{
+            font-style: italic;
+            color: #666;
+            font-size: 10pt;
+        }}
+        
+        /* Education Styling */
+        .education-item {{
+            margin-bottom: 10px;
+        }}
+        
+        .degree {{
+            font-weight: 700;
+            color: #2c3e50;
+        }}
+        
+        .institution {{
+            font-style: italic;
+            color: #555;
+        }}
+        
+        /* Skills/Competencies */
+        .skills-list {{
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 10px 0;
+        }}
+        
+        .skill-item {{
+            background: #f8f9fa;
+            padding: 4px 12px;
+            border-radius: 3px;
+            font-size: 10pt;
+            border: 1px solid #e0e0e0;
+        }}
+        
+        /* Paragraphs */
+        .content p {{
+            margin-bottom: 10px;
+            text-align: justify;
+        }}
+        
+        /* Print Optimization */
         @media print {{
             body {{
-                margin: 0.5in;
+                padding: 0;
+                margin: 0;
             }}
+            
             .section {{
                 page-break-inside: avoid;
             }}
+            
+            .top-logo {{
+                page-break-after: avoid;
+            }}
+            
+            .header {{
+                page-break-after: avoid;
+            }}
+        }}
+        
+        /* Spacing and Layout */
+        .spacer {{
+            height: 10px;
+        }}
+        
+        hr {{
+            border: none;
+            border-top: 1px solid #ddd;
+            margin: 15px 0;
         }}
     </style>
 </head>
 <body>
     {top_logo_html}
     <div class="header">
-        <div class="name">{formatted_cv['header'].split(chr(10))[0]}</div>
-        <div class="contact">{' | '.join(formatted_cv['header'].split(chr(10))[1:]) if len(formatted_cv['header'].split(chr(10))) > 1 else ''}</div>
+        <div class="name">{self._escape_html(formatted_cv['header'].split(chr(10))[0])}</div>
+        <div class="contact">{self._escape_html(' | '.join(formatted_cv['header'].split(chr(10))[1:])) if len(formatted_cv['header'].split(chr(10))) > 1 else ''}</div>
     </div>
 """
         
@@ -806,10 +955,14 @@ OTHER
         
         for section_key, section_title in sections:
             if formatted_cv.get(section_key):
+                # Format content with proper HTML structure
+                formatted_content = self._format_content_as_html(formatted_cv[section_key], section_key)
                 html += f"""
     <div class="section">
-        <div class="section-header">{section_title}</div>
-        <div class="content">{formatted_cv[section_key].replace(chr(10), '<br>')}</div>
+        <div class="section-header">{section_title.upper()}</div>
+        <div class="content">
+{formatted_content}
+        </div>
     </div>
 """
         
@@ -889,6 +1042,102 @@ OTHER
             analysis_parts.append(f"✓ Financial industry relevance detected: {', '.join(found_keywords[:5])}")
         
         return " | ".join(analysis_parts)
+    
+    def _image_to_base64(self, image_path: str) -> Optional[str]:
+        """Convert image to base64 string for embedding in HTML"""
+        try:
+            import base64
+            import os
+            
+            if not os.path.exists(image_path):
+                logger.warning(f"Logo image not found: {image_path}")
+                return None
+            
+            with open(image_path, 'rb') as image_file:
+                encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
+                return encoded_string
+        except Exception as e:
+            logger.error(f"Error encoding image to base64: {e}")
+            return None
+    
+    def _escape_html(self, text: str) -> str:
+        """Escape HTML special characters"""
+        import html
+        return html.escape(text) if text else ""
+    
+    def _format_content_as_html(self, content: str, section_type: str) -> str:
+        """Format content with proper HTML structure, bullets, bold, and italics"""
+        if not content:
+            return ""
+        
+        lines = content.strip().split('\n')
+        html_parts = []
+        in_list = False
+        
+        for line in lines:
+            line = line.strip()
+            if not line:
+                if in_list:
+                    html_parts.append('</ul>')
+                    in_list = False
+                continue
+            
+            # Check if line is a bullet point
+            if line.startswith('•') or line.startswith('-') or line.startswith('*'):
+                if not in_list:
+                    html_parts.append('<ul>')
+                    in_list = True
+                # Remove bullet character and format
+                bullet_content = line[1:].strip()
+                bullet_content = self._apply_text_formatting(bullet_content)
+                html_parts.append(f'    <li>{bullet_content}</li>')
+            
+            # Check if line looks like a job title or header (contains | or bold indicators)
+            elif '|' in line:
+                if in_list:
+                    html_parts.append('</ul>')
+                    in_list = False
+                
+                # Split by | to separate title, company, dates
+                parts = [p.strip() for p in line.split('|')]
+                if len(parts) >= 2:
+                    # Job title and dates
+                    html_parts.append(f'<div class="job-title">{self._escape_html(parts[0])}</div>')
+                    html_parts.append(f'<div class="date-range">{self._escape_html(parts[1])}</div>')
+                else:
+                    formatted_line = self._apply_text_formatting(line)
+                    html_parts.append(f'<p>{formatted_line}</p>')
+            
+            # Regular paragraph
+            else:
+                if in_list:
+                    html_parts.append('</ul>')
+                    in_list = False
+                formatted_line = self._apply_text_formatting(line)
+                html_parts.append(f'<p>{formatted_line}</p>')
+        
+        # Close any open list
+        if in_list:
+            html_parts.append('</ul>')
+        
+        return '\n            '.join(html_parts)
+    
+    def _apply_text_formatting(self, text: str) -> str:
+        """Apply bold and italic formatting to text"""
+        import re
+        
+        # Escape HTML first
+        text = self._escape_html(text)
+        
+        # Bold: **text** or __text__
+        text = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', text)
+        text = re.sub(r'__(.*?)__', r'<strong>\1</strong>', text)
+        
+        # Italic: *text* or _text_ (but not ** or __)
+        text = re.sub(r'(?<!\*)\*(?!\*)([^\*]+?)\*(?!\*)', r'<em>\1</em>', text)
+        text = re.sub(r'(?<!_)_(?!_)([^_]+?)_(?!_)', r'<em>\1</em>', text)
+        
+        return text
 
 # Global instance
 cv_formatter = CVFormatter()
