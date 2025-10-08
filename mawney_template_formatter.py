@@ -18,7 +18,7 @@ class MawneyTemplateFormatter:
     """Formats CVs using the exact Mawney Partners template"""
     
     def __init__(self):
-        self.template_path = os.path.join(os.path.dirname(__file__), 'mawney_cv_template.html')
+        self.template_path = os.path.join(os.path.dirname(__file__), 'mawney_cv_template_correct.html')
         
     def format_cv_with_template(self, cv_data: str, filename: str = '') -> Dict[str, Any]:
         """Format CV using the exact Mawney Partners template (compatible with AI assistant)"""
@@ -126,20 +126,48 @@ class MawneyTemplateFormatter:
             'interests': []
         }
         
-        # Extract name (usually first line)
+        # Extract name (usually first line or most prominent text)
         if lines:
-            parsed['name'] = lines[0]
+            # Look for name patterns
+            name_candidates = []
+            for line in lines[:5]:  # Check first 5 lines
+                if len(line.split()) >= 2 and len(line.split()) <= 4:  # Likely a name
+                    if not any(word.lower() in ['cv', 'resume', 'curriculum', 'vitae'] for word in line.split()):
+                        name_candidates.append(line)
+            
+            if name_candidates:
+                parsed['name'] = name_candidates[0]
+            else:
+                parsed['name'] = lines[0]
         
         # Extract contact info
-        for line in lines:
-            if '@' in line and '.' in line:
-                email_match = re.search(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', line)
-                if email_match:
-                    parsed['email'] = email_match.group(0)
-            
-            phone_match = re.search(r'\+?[\d\s\-\(\)]{10,}', line)
+        full_text = ' '.join(lines)
+        
+        # Email extraction
+        email_match = re.search(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', full_text)
+        if email_match:
+            parsed['email'] = email_match.group(0)
+        
+        # Phone extraction
+        phone_patterns = [
+            r'\+?[\d\s\-\(\)]{10,}',  # General phone pattern
+            r'\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b',  # US phone
+            r'\b\+44[\s\-]?\d{2,4}[\s\-]?\d{3,4}[\s\-]?\d{3,4}\b'  # UK phone
+        ]
+        
+        for pattern in phone_patterns:
+            phone_match = re.search(pattern, full_text)
             if phone_match:
                 parsed['phone'] = phone_match.group(0).strip()
+                break
+        
+        # Location extraction
+        location_keywords = ['england', 'uk', 'united kingdom', 'london', 'manchester', 'birmingham', 'leeds', 'sheffield', 'bristol', 'newcastle', 'liverpool']
+        for line in lines:
+            line_lower = line.lower()
+            if any(keyword in line_lower for keyword in location_keywords):
+                parsed['location'] = line
+                break
         
         # Extract professional summary
         summary_started = False
