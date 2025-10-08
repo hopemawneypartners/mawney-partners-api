@@ -1493,6 +1493,131 @@ def process_ai_query(query: str, context: Dict = None) -> Dict:
         "actions": response.actions or []
     }
 
+def process_ai_query_with_files(query: str, context: Dict = None, file_analyses: List[Dict] = None) -> Dict:
+    """Process AI queries with file attachments"""
+    try:
+        # Create enhanced context with file information
+        enhanced_context = context.copy() if context else {}
+        
+        if file_analyses:
+            enhanced_context['file_analyses'] = file_analyses
+            enhanced_context['has_attachments'] = True
+            
+            # Format file information for the AI
+            file_context = _format_file_context_for_ai(file_analyses)
+            enhanced_context['file_context'] = file_context
+            
+            # Enhance the query with file information
+            enhanced_query = _enhance_query_with_files(query, file_analyses)
+        else:
+            enhanced_query = query
+            enhanced_context['has_attachments'] = False
+        
+        # Process the enhanced query
+        response = ai_assistant.process_query(enhanced_query, enhanced_context)
+        
+        # Enhance response with file-specific information
+        if file_analyses:
+            response.text = _enhance_response_with_file_info(response.text, file_analyses)
+            response.type = 'file_analysis' if response.type == 'answer' else response.type
+            response.confidence = min(response.confidence + 0.1, 1.0)  # Boost confidence for file analysis
+        
+        return {
+            "text": response.text,
+            "type": response.type,
+            "confidence": response.confidence,
+            "sources": response.sources or [],
+            "actions": response.actions or []
+        }
+        
+    except Exception as e:
+        logger.error(f"Error processing AI query with files: {e}")
+        return {
+            "text": f"I encountered an error while analyzing your files: {str(e)}. Please try again or contact support.",
+            "type": "error",
+            "confidence": 0.0,
+            "sources": [],
+            "actions": []
+        }
+
+def _format_file_context_for_ai(file_analyses: List[Dict]) -> str:
+    """Format file analysis results for AI context"""
+    if not file_analyses:
+        return ""
+    
+    context_parts = []
+    context_parts.append("The user has provided the following files for analysis:")
+    
+    for i, analysis in enumerate(file_analyses, 1):
+        filename = analysis.get('filename', f'File {i}')
+        file_type = analysis.get('type', 'unknown')
+        
+        context_parts.append(f"\nFile {i}: {filename}")
+        context_parts.append(f"Type: {file_type}")
+        
+        if analysis.get('extracted_text'):
+            text_preview = analysis['extracted_text'][:300]
+            if len(analysis['extracted_text']) > 300:
+                text_preview += "..."
+            context_parts.append(f"Content: {text_preview}")
+        
+        if analysis.get('analysis'):
+            context_parts.append(f"Analysis: {analysis['analysis']}")
+        
+        if analysis.get('error'):
+            context_parts.append(f"Error: {analysis['error']}")
+    
+    return "\n".join(context_parts)
+
+def _enhance_query_with_files(query: str, file_analyses: List[Dict]) -> str:
+    """Enhance the user query with file context"""
+    if not file_analyses:
+        return query
+    
+    # Count file types
+    image_count = sum(1 for f in file_analyses if f.get('type') == 'image')
+    document_count = sum(1 for f in file_analyses if f.get('type') in ['pdf', 'text'])
+    
+    file_summary = []
+    if image_count > 0:
+        file_summary.append(f"{image_count} image(s)")
+    if document_count > 0:
+        file_summary.append(f"{document_count} document(s)")
+    
+    if file_summary:
+        enhanced_query = f"{query}\n\n[The user has also uploaded {', '.join(file_summary)} for analysis. Please consider the content of these files in your response.]"
+    else:
+        enhanced_query = query
+    
+    return enhanced_query
+
+def _enhance_response_with_file_info(response_text: str, file_analyses: List[Dict]) -> str:
+    """Enhance the AI response with file-specific information"""
+    if not file_analyses:
+        return response_text
+    
+    # Add file processing summary
+    successful_files = [f for f in file_analyses if f.get('type') not in ['error', 'unsupported']]
+    error_files = [f for f in file_analyses if f.get('type') in ['error', 'unsupported']]
+    
+    if successful_files:
+        file_summary = f"\n\n📎 **File Analysis Summary:** I've analyzed {len(successful_files)} file(s) you uploaded."
+        
+        for analysis in successful_files:
+            filename = analysis.get('filename', 'Unknown')
+            if analysis.get('has_text'):
+                file_summary += f"\n• {filename}: Text content extracted and analyzed"
+            else:
+                file_summary += f"\n• {filename}: File processed (no readable text found)"
+        
+        response_text += file_summary
+    
+    if error_files:
+        error_summary = f"\n\n⚠️ **Note:** {len(error_files)} file(s) could not be processed due to format or technical issues."
+        response_text += error_summary
+    
+    return response_text
+
 if __name__ == "__main__":
     # Test the AI assistant
     test_queries = [
