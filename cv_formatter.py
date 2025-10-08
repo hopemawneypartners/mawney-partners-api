@@ -161,10 +161,9 @@ OTHER
                 parsed_cv.get("education")
             ])
             
-            if not has_content:
-                logger.warning("No meaningful content extracted from CV, using fallback formatting")
-                # Create a fallback CV with the raw text
-                parsed_cv = self._create_fallback_cv(cv_data)
+            # FORCE FALLBACK for now to ensure we capture ALL content
+            logger.warning("Using fallback formatting to preserve ALL CV content")
+            parsed_cv = self._create_fallback_cv(cv_data)
             
             # Apply Mawney Partners formatting
             formatted_cv = self._apply_company_formatting(parsed_cv)

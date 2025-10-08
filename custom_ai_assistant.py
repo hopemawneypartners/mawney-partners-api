@@ -1819,6 +1819,14 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
         filename = cv_file.get('filename', 'uploaded_cv')
         cv_content = cv_file.get('extracted_text', '')
         
+        # Debug: Log the extracted content
+        logger.info(f"=== CV FILE ANALYSIS ===")
+        logger.info(f"Filename: {filename}")
+        logger.info(f"File type: {cv_file.get('type', 'unknown')}")
+        logger.info(f"Content length: {len(cv_content)} characters")
+        logger.info(f"First 1000 characters: {cv_content[:1000]}")
+        logger.info(f"=== END CV FILE ANALYSIS ===")
+        
         if not cv_content:
             return {
                 "text": "I was unable to extract text from your CV file. Please ensure it's a readable PDF or text document.",
