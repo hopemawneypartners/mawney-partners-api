@@ -46,8 +46,13 @@ class CVFormatter:
             "layout": {
                 "margins": "1 inch",
                 "line_spacing": "1.15",
-                "font_family": "Arial, sans-serif",
+                "font_family": "Garamond, Georgia, serif",
                 "average_line_length": 62  # Based on analysis
+            },
+            "branding": {
+                "logo_path": "assets/mawney_logo.png",
+                "use_logo": True,
+                "logo_position": "top-center"  # or "top-left", "top-right"
             },
             "common_sections": [
                 "EDUCATION",
@@ -682,6 +687,14 @@ OTHER
     
     def _generate_html_cv(self, formatted_cv: Dict[str, Any]) -> str:
         """Generate HTML version of formatted CV"""
+        
+        # Check if logo should be included
+        logo_html = ""
+        if self.company_style['branding']['use_logo']:
+            logo_path = self.company_style['branding']['logo_path']
+            logo_position = self.company_style['branding']['logo_position']
+            logo_html = f'<div class="logo"><img src="{logo_path}" alt="Mawney Partners Logo" /></div>'
+        
         html = f"""
 <!DOCTYPE html>
 <html>
@@ -689,27 +702,42 @@ OTHER
     <meta charset="UTF-8">
     <title>CV - Mawney Partners Style</title>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');
+        
         body {{
             font-family: {self.company_style['layout']['font_family']};
             color: {self.company_style['colors']['text']};
             line-height: {self.company_style['layout']['line_spacing']};
             margin: {self.company_style['layout']['margins']};
         }}
+        .logo {{
+            text-align: center;
+            margin-bottom: 1.5em;
+        }}
+        .logo img {{
+            max-width: 200px;
+            height: auto;
+        }}
         .header {{
             text-align: center;
             margin-bottom: 2em;
+            border-bottom: 1px solid {self.company_style['colors']['secondary']};
+            padding-bottom: 1em;
         }}
         .name {{
             font-size: {self.company_style['header']['name_font_size']};
             font-weight: bold;
             color: {self.company_style['colors']['primary']};
             margin-bottom: 0.5em;
+            font-family: 'EB Garamond', Garamond, Georgia, serif;
         }}
         .contact {{
             font-size: {self.company_style['header']['contact_font_size']};
+            color: #666;
         }}
         .section {{
             margin-bottom: 1.5em;
+            page-break-inside: avoid;
         }}
         .section-header {{
             font-size: {self.company_style['sections']['section_headers']};
@@ -717,13 +745,26 @@ OTHER
             border-bottom: 2px solid {self.company_style['colors']['secondary']};
             margin-bottom: 0.5em;
             padding-bottom: 0.2em;
+            font-weight: bold;
+            letter-spacing: 1px;
+            font-family: 'EB Garamond', Garamond, Georgia, serif;
         }}
         .content {{
             font-size: {self.company_style['sections']['font_size']};
+            font-family: 'EB Garamond', Garamond, Georgia, serif;
+        }}
+        @media print {{
+            body {{
+                margin: 0.5in;
+            }}
+            .section {{
+                page-break-inside: avoid;
+            }}
         }}
     </style>
 </head>
 <body>
+    {logo_html}
     <div class="header">
         <div class="name">{formatted_cv['header'].split(chr(10))[0]}</div>
         <div class="contact">{' | '.join(formatted_cv['header'].split(chr(10))[1:]) if len(formatted_cv['header'].split(chr(10))) > 1 else ''}</div>
