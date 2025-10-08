@@ -142,7 +142,7 @@ class FileAnalyzer:
             }
     
     def _analyze_pdf(self, file_data: bytes, filename: str) -> Dict[str, Any]:
-        """Extract text from PDF files"""
+        """Extract text from PDF files with improved text cleaning"""
         try:
             extracted_text = ""
             page_count = 0
@@ -154,7 +154,9 @@ class FileAnalyzer:
                     for page in pdf.pages:
                         text = page.extract_text()
                         if text:
-                            extracted_text += text + "\n"
+                            # Clean the extracted text
+                            cleaned_text = self._clean_extracted_text(text)
+                            extracted_text += cleaned_text + "\n"
             except Exception as e:
                 logger.warning(f"pdfplumber failed for {filename}, trying PyPDF2: {str(e)}")
                 
@@ -165,9 +167,17 @@ class FileAnalyzer:
                 for page in pdf_reader.pages:
                     text = page.extract_text()
                     if text:
-                        extracted_text += text + "\n"
+                        # Clean the extracted text
+                        cleaned_text = self._clean_extracted_text(text)
+                        extracted_text += cleaned_text + "\n"
             
             extracted_text = extracted_text.strip()
+            
+            # Log the extracted content for debugging
+            logger.info(f"PDF extraction for {filename}:")
+            logger.info(f"Page count: {page_count}")
+            logger.info(f"Text length: {len(extracted_text)} characters")
+            logger.info(f"First 500 characters: {extracted_text[:500]}")
             
             # Analyze document content
             analysis = self._analyze_document_content(extracted_text, filename)
@@ -196,6 +206,40 @@ class FileAnalyzer:
                 'extracted_text': '',
                 'analysis': f'Error processing PDF: {str(e)}'
             }
+    
+    def _clean_extracted_text(self, text: str) -> str:
+        """Clean and normalize extracted PDF text"""
+        import re
+        
+        # Replace multiple spaces with single space
+        text = re.sub(r'\s+', ' ', text)
+        
+        # Fix common PDF extraction issues
+        text = text.replace('ﬁ', 'fi')
+        text = text.replace('ﬂ', 'fl')
+        text = text.replace('ﬀ', 'ff')
+        text = text.replace('ﬃ', 'ffi')
+        text = text.replace('ﬄ', 'ffl')
+        
+        # Fix concatenated words by adding spaces between lowercase and uppercase
+        text = re.sub(r'([a-z])([A-Z])', r'\1 \2', text)
+        
+        # Fix concatenated words by adding spaces between letters and numbers
+        text = re.sub(r'([a-zA-Z])(\d)', r'\1 \2', text)
+        text = re.sub(r'(\d)([a-zA-Z])', r'\1 \2', text)
+        
+        # Fix common date patterns
+        text = re.sub(r'(\d{4})\s*-\s*(\d{4})', r'\1 - \2', text)
+        text = re.sub(r'(\w{3})\s*(\d{4})', r'\1 \2', text)
+        
+        # Fix bullet points and lists
+        text = re.sub(r'[•▪▫‣⁃]', '•', text)
+        
+        # Clean up extra whitespace
+        text = re.sub(r'\n\s*\n', '\n\n', text)
+        text = re.sub(r'[ \t]+', ' ', text)
+        
+        return text.strip()
     
     def _analyze_text_file(self, file_data: bytes, filename: str, mime_type: str) -> Dict[str, Any]:
         """Analyze text-based files"""
