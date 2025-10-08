@@ -13,6 +13,7 @@ from dataclasses import dataclass
 import random
 from ai_memory_system import store_interaction, get_custom_response, get_learned_suggestions, add_custom_response
 from cv_formatter import cv_formatter
+from cv_file_generator import cv_file_generator
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -1499,6 +1500,7 @@ def process_ai_query_with_files(query: str, context: Dict = None, file_analyses:
     try:
         # Create enhanced context with file information
         enhanced_context = context.copy() if context else {}
+        cv_file_info = None
         
         if file_analyses:
             enhanced_context['file_analyses'] = file_analyses
@@ -1510,9 +1512,30 @@ def process_ai_query_with_files(query: str, context: Dict = None, file_analyses:
             
             # Enhance the query with file information
             enhanced_query = _enhance_query_with_files(query, file_analyses)
+            
+            # Check if this is a CV formatting request
+            cv_files = [f for f in file_analyses if f.get('type') in ['pdf', 'text'] and _is_cv_file(f)]
+            if cv_files and _is_cv_formatting_request(enhanced_query, file_analyses):
+                # Handle CV formatting and get file info
+                cv_result = _handle_cv_formatting(cv_files)
+                if isinstance(cv_result, dict) and cv_result.get('has_file'):
+                    cv_file_info = cv_result
         else:
             enhanced_query = query
             enhanced_context['has_attachments'] = False
+        
+        # If we have CV file info, use it directly
+        if cv_file_info:
+            return {
+                "text": cv_file_info.get('text', ''),
+                "type": "cv_formatting",
+                "confidence": 0.95,
+                "sources": [],
+                "actions": [],
+                "cv_file": cv_file_info.get('file_info'),
+                "download_url": cv_file_info.get('download_url'),
+                "filename": cv_file_info.get('filename')
+            }
         
         # Process the enhanced query
         response = ai_assistant.process_query(enhanced_query, enhanced_context)
@@ -1603,7 +1626,10 @@ def _enhance_response_with_file_info(response_text: str, file_analyses: List[Dic
     if cv_files and _is_cv_formatting_request(response_text, file_analyses):
         # Handle CV formatting
         cv_response = _handle_cv_formatting(cv_files)
-        if cv_response:
+        if cv_response and isinstance(cv_response, dict):
+            # Return the text portion for the response
+            return cv_response.get('text', response_text)
+        elif cv_response:
             return cv_response
     
     # Add file processing summary
@@ -1682,11 +1708,14 @@ def _is_cv_formatting_request(query: str, file_analyses: List[Dict]) -> bool:
     
     return False
 
-def _handle_cv_formatting(cv_files: List[Dict]) -> str:
-    """Handle CV formatting request"""
+def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
+    """Handle CV formatting request and generate downloadable file"""
     try:
         if not cv_files:
-            return "I don't see any CV files to format. Please upload your CV document."
+            return {
+                "text": "I don't see any CV files to format. Please upload your CV document.",
+                "has_file": False
+            }
         
         # Use the first CV file
         cv_file = cv_files[0]
@@ -1694,13 +1723,23 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> str:
         cv_content = cv_file.get('extracted_text', '')
         
         if not cv_content:
-            return "I was unable to extract text from your CV file. Please ensure it's a readable PDF or text document."
+            return {
+                "text": "I was unable to extract text from your CV file. Please ensure it's a readable PDF or text document.",
+                "has_file": False
+            }
         
         # Format the CV
         formatted_result = cv_formatter.format_cv(cv_content, filename)
         
         if not formatted_result.get('success'):
-            return f"I encountered an error formatting your CV: {formatted_result.get('error', 'Unknown error')}"
+            return {
+                "text": f"I encountered an error formatting your CV: {formatted_result.get('error', 'Unknown error')}",
+                "has_file": False
+            }
+        
+        # Generate HTML file for download
+        html_content = formatted_result.get('html_version', '')
+        file_result = cv_file_generator.generate_html_file(html_content, f"formatted_{filename}")
         
         # Create response
         response = "📄 **CV Formatted in Mawney Partners Style**\n\n"
@@ -1709,33 +1748,50 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> str:
         if formatted_result.get('analysis'):
             response += f"**Analysis:** {formatted_result['analysis']}\n\n"
         
-        # Add formatted CV
-        response += "**Formatted CV:**\n"
-        response += "```\n"
-        response += formatted_result.get('text_version', '')[:2000]  # Limit length
-        if len(formatted_result.get('text_version', '')) > 2000:
-            response += "\n... [truncated for display]"
-        response += "\n```\n\n"
+        # Add file download info
+        if file_result.get('success'):
+            response += "✅ **Your formatted CV is ready for download!**\n\n"
+            response += f"📥 **Download:** {file_result['filename']}\n"
+            response += f"📊 **Size:** {file_result['file_size']:,} bytes\n"
+            response += f"🔗 **Format:** HTML (can be opened in any browser and saved as PDF)\n\n"
         
         # Add sections found
         sections_found = formatted_result.get('sections_found', [])
         if sections_found:
             response += f"**Sections Identified:** {', '.join(sections_found)}\n\n"
         
+        # Add preview (truncated)
+        response += "**Preview:**\n"
+        response += "```\n"
+        text_preview = formatted_result.get('text_version', '')[:500]
+        response += text_preview
+        if len(formatted_result.get('text_version', '')) > 500:
+            response += "\n... [truncated - full version in downloadable file]"
+        response += "\n```\n\n"
+        
         # Add download instructions
         response += "💡 **Next Steps:**\n"
-        response += "• Review the formatted CV above\n"
-        response += "• Copy the content to your preferred document editor\n"
-        response += "• Apply final formatting adjustments as needed\n"
-        response += "• Save in your preferred format (PDF, Word, etc.)\n\n"
+        response += "• Download the formatted CV file above\n"
+        response += "• Open in your web browser\n"
+        response += "• Print to PDF or save directly\n"
+        response += "• Edit in your preferred document editor if needed\n\n"
         
-        response += "**Note:** This CV has been formatted according to Mawney Partners' professional standards with proper sectioning, clear headers, and consistent styling."
+        response += "**Note:** This CV has been formatted with Garamond typography, your company logos (top & bottom), and professional Mawney Partners styling."
         
-        return response
+        return {
+            "text": response,
+            "has_file": True,
+            "file_info": file_result,
+            "download_url": file_result.get('download_url'),
+            "filename": file_result.get('filename')
+        }
         
     except Exception as e:
         logger.error(f"Error handling CV formatting: {e}")
-        return f"I encountered an error while formatting your CV: {str(e)}. Please try again or contact support."
+        return {
+            "text": f"I encountered an error while formatting your CV: {str(e)}. Please try again or contact support.",
+            "has_file": False
+        }
 
 if __name__ == "__main__":
     # Test the AI assistant
