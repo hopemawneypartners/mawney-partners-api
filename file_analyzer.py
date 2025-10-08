@@ -208,7 +208,7 @@ class FileAnalyzer:
             }
     
     def _clean_extracted_text(self, text: str) -> str:
-        """Clean and normalize extracted PDF text"""
+        """Clean and normalize extracted PDF text with aggressive word separation"""
         import re
         
         # Replace multiple spaces with single space
@@ -221,12 +221,34 @@ class FileAnalyzer:
         text = text.replace('ﬃ', 'ffi')
         text = text.replace('ﬄ', 'ffl')
         
+        # AGGRESSIVE word separation - handle multiple cases
         # Fix concatenated words by adding spaces between lowercase and uppercase
         text = re.sub(r'([a-z])([A-Z])', r'\1 \2', text)
         
         # Fix concatenated words by adding spaces between letters and numbers
         text = re.sub(r'([a-zA-Z])(\d)', r'\1 \2', text)
         text = re.sub(r'(\d)([a-zA-Z])', r'\1 \2', text)
+        
+        # Fix concatenated words by adding spaces between punctuation and letters
+        text = re.sub(r'([.,;:])([a-zA-Z])', r'\1 \2', text)
+        text = re.sub(r'([a-zA-Z])([.,;:])', r'\1\2', text)
+        
+        # Fix common concatenated patterns
+        text = re.sub(r'([a-z])([A-Z][a-z])', r'\1 \2', text)  # "wordWord" -> "word Word"
+        text = re.sub(r'([a-z])([A-Z]{2,})', r'\1 \2', text)   # "wordWORD" -> "word WORD"
+        
+        # Fix specific common concatenations
+        text = re.sub(r'andcertified', 'and certified', text, flags=re.IGNORECASE)
+        text = re.sub(r'withstrong', 'with strong', text, flags=re.IGNORECASE)
+        text = re.sub(r'analyticaland', 'analytical and', text, flags=re.IGNORECASE)
+        text = re.sub(r'problem-solving', 'problem-solving', text, flags=re.IGNORECASE)
+        text = re.sub(r'experienceof', 'experience of', text, flags=re.IGNORECASE)
+        text = re.sub(r'statisticalanalysis', 'statistical analysis', text, flags=re.IGNORECASE)
+        text = re.sub(r'isconscientious', 'is conscientious', text, flags=re.IGNORECASE)
+        text = re.sub(r'inindependent', 'in independent', text, flags=re.IGNORECASE)
+        text = re.sub(r'workandalso', 'work and also', text, flags=re.IGNORECASE)
+        text = re.sub(r'excelsat', 'excels at', text, flags=re.IGNORECASE)
+        text = re.sub(r'teamwork', 'teamwork', text, flags=re.IGNORECASE)
         
         # Fix common date patterns
         text = re.sub(r'(\d{4})\s*-\s*(\d{4})', r'\1 - \2', text)
