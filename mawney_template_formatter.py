@@ -348,6 +348,26 @@ class MawneyTemplateFormatter:
         
         return '\n'.join([f'<li>{interest}</li>' for interest in interests])
     
+    def _get_logo_base64(self) -> str:
+        """Get MP logo as base64 - using simple text logo for now"""
+        try:
+            # For now, use a simple text-based MP logo
+            # In production, this would load the actual MP logo image
+            logger.info("Using text-based MP logo")
+            return '''
+            <div style="text-align: center; margin-bottom: 30px;">
+                <div style="font-family: 'EB Garamond', serif; font-size: 36pt; font-weight: 700; color: #2c3e50; letter-spacing: 8px;">
+                    MP
+                </div>
+                <div style="font-family: 'EB Garamond', serif; font-size: 8pt; color: #7f8c8d; letter-spacing: 2px; margin-top: -5px;">
+                    MAWNEY PARTNERS
+                </div>
+            </div>
+            '''
+        except Exception as e:
+            logger.error(f"Error getting logo: {e}")
+            return ""
+    
     def _extract_text_from_html(self, html: str) -> str:
         """Extract plain text from HTML"""
         import re
