@@ -11,7 +11,7 @@ import xml.etree.ElementTree as ET
 import re
 import json
 import os
-# import feedparser  # Removed due to Python 3.13 compatibility issues
+import feedparser  # Re-enabled for article monitoring
 from email.utils import parsedate_to_datetime
 
 # Import AI Assistant System
@@ -2336,8 +2336,9 @@ def ai_assistant():
     """AI Assistant endpoint for processing queries using the advanced AI system"""
     try:
         data = request.get_json()
-        message = data.get('message', '')
-        user_id = data.get('user_id', 'hope')
+        # Support both 'query' (from iOS app) and 'message' parameters
+        message = data.get('query', data.get('message', ''))
+        user_id = data.get('chat_id', data.get('user_id', 'hope'))
         
         if not message:
             return jsonify({
@@ -2369,10 +2370,11 @@ def ai_assistant():
         # Store the interaction in memory system
         store_interaction(message, ai_response['text'], ai_response['type'], ai_response['confidence'])
         
-        # Return response in expected format
+        # Return response in expected format (support both iOS and other clients)
         return jsonify({
             "success": True,
-            "response": ai_response['text'],
+            "text": ai_response['text'],  # iOS app expects 'text'
+            "response": ai_response['text'],  # Alternative key for compatibility
             "type": ai_response['type'],
             "confidence": ai_response['confidence'],
             "sources": ai_response.get('sources', []),
@@ -2487,11 +2489,28 @@ def process_call_transcript(transcript, context):
 def get_recent_articles(limit=10):
     """Get recent articles for AI context"""
     try:
-        # This would normally fetch from your article database
-        # For now, return empty list
-        return []
+        # Fetch from comprehensive RSS articles system
+        all_articles = get_comprehensive_rss_articles()
+        
+        if not all_articles:
+            print("⚠️ No articles available from RSS feeds")
+            return []
+        
+        # Sort by date and return most recent
+        sorted_articles = sorted(
+            all_articles, 
+            key=lambda x: x.get('publishedAt', x.get('date', '')), 
+            reverse=True
+        )
+        
+        recent_articles = sorted_articles[:limit]
+        print(f"✅ Fetched {len(recent_articles)} recent articles for AI context")
+        
+        return recent_articles
     except Exception as e:
-        print(f"Error fetching recent articles: {e}")
+        print(f"❌ Error fetching recent articles: {e}")
+        import traceback
+        traceback.print_exc()
         return []
 
 @app.route('/api/user/profile', methods=['GET'])

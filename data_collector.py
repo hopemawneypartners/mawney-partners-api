@@ -98,7 +98,8 @@ class DataCollector:
                     )
                     self.logger.info(f"Found username field with selector: {selector}")
                     break
-                except:
+                except Exception as e:
+                    self.logger.debug(f"Selector {selector} not found: {str(e)}")
                     continue
             
             if not username_field:
@@ -111,7 +112,8 @@ class DataCollector:
                     password_field = driver.find_element(By.CSS_SELECTOR, selector)
                     self.logger.info(f"Found password field with selector: {selector}")
                     break
-                except:
+                except Exception as e:
+                    self.logger.debug(f"Selector {selector} not found: {str(e)}")
                     continue
             
             if not password_field:
@@ -144,7 +146,8 @@ class DataCollector:
                     login_button = driver.find_element(By.CSS_SELECTOR, selector)
                     self.logger.info(f"Found submit button with selector: {selector}")
                     break
-                except:
+                except Exception as e:
+                    self.logger.debug(f"Selector {selector} not found: {str(e)}")
                     continue
             
             if login_button:
@@ -173,7 +176,8 @@ class DataCollector:
                         driver.find_element(By.CSS_SELECTOR, indicator)
                         self.logger.info(f"Successfully logged into {source['name']}")
                         return True
-                    except:
+                    except Exception as e:
+                        self.logger.debug(f"Logout indicator {indicator} not found: {str(e)}")
                         continue
                 
                 # If no logout indicators found, assume login failed
@@ -273,6 +277,16 @@ class DataCollector:
             
             # Parse the RSS feed
             feed = feedparser.parse(feed_url)
+            
+            # Check if feed parsing was successful
+            if hasattr(feed, 'bozo') and feed.bozo:
+                self.logger.warning(f"RSS feed {feed_url} has parsing issues: {feed.bozo_exception if hasattr(feed, 'bozo_exception') else 'Unknown error'}")
+                # Continue anyway, sometimes feeds work despite bozo flag
+            
+            if not hasattr(feed, 'entries') or not feed.entries:
+                self.logger.warning(f"No entries found in RSS feed {feed_url}")
+                return []
+            
             articles = []
             
             # Get current date and yesterday for filtering
@@ -427,13 +441,14 @@ class DataCollector:
                             try:
                                 link_elem = parent.find_element(By.CSS_SELECTOR, 'a')
                                 article['link'] = link_elem.get_attribute('href')
-                            except:
+                            except Exception as e:
                                 # Try grandparent container
                                 try:
                                     grandparent = parent.find_element(By.XPATH, './..')
                                     link_elem = grandparent.find_element(By.CSS_SELECTOR, 'a')
                                     article['link'] = link_elem.get_attribute('href')
-                                except:
+                                except Exception as e2:
+                                    self.logger.debug(f"Could not find link in parent or grandparent: {str(e2)}")
                                     pass
                         
                         # For FT, prioritize content links over stream/section links
@@ -444,7 +459,8 @@ class DataCollector:
                                 content_links = parent.find_elements(By.CSS_SELECTOR, 'a[href*="/content/"]')
                                 if content_links:
                                     article['link'] = content_links[0].get_attribute('href')
-                            except:
+                            except Exception as e:
+                                self.logger.debug(f"Could not find FT content links: {str(e)}")
                                 pass
                                 
                     except Exception as e:
@@ -459,7 +475,8 @@ class DataCollector:
                                 timestamp_elem = parent.find_element(By.CSS_SELECTOR, selector)
                                 article['timestamp'] = timestamp_elem.text.strip()
                                 break
-                            except:
+                            except Exception as e:
+                                self.logger.debug(f"Timestamp selector {selector} not found: {str(e)}")
                                 continue
                     except Exception as e:
                         self.logger.warning(f"Error finding timestamp for article {i}: {str(e)}")
