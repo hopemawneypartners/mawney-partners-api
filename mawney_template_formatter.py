@@ -310,3 +310,4 @@ class MawneyTemplateFormatter:
 
 # Create instance for use in other modules
 mawney_template_formatter = MawneyTemplateFormatter()
+

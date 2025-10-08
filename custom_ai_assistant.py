@@ -1834,8 +1834,8 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
                 "has_file": False
             }
         
-        # Format the CV
-        formatted_result = cv_formatter.format_cv(cv_content, filename)
+        # Format the CV using the new Mawney Partners template
+        formatted_result = mawney_template_formatter.format_cv_with_template(cv_content, filename)
         
         if not formatted_result.get('success'):
             return {
