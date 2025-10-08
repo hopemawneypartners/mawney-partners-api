@@ -1626,7 +1626,9 @@ def process_ai_query_with_files(query: str, context: Dict = None, file_analyses:
                 "actions": [],
                 "cv_file": cv_file_info.get('file_info'),
                 "download_url": cv_file_info.get('download_url'),
-                "filename": cv_file_info.get('filename')
+                "filename": cv_file_info.get('filename'),
+                "html_content": cv_file_info.get('html_content'),
+                "html_base64": cv_file_info.get('html_base64')
             }
         
         # Process the enhanced query
