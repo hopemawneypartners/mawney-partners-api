@@ -12,6 +12,7 @@ from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 import random
 from ai_memory_system import store_interaction, get_custom_response, get_learned_suggestions, add_custom_response
+from cv_formatter import cv_formatter
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -1596,6 +1597,15 @@ def _enhance_response_with_file_info(response_text: str, file_analyses: List[Dic
     if not file_analyses:
         return response_text
     
+    # Check if this is a CV formatting request
+    cv_files = [f for f in file_analyses if f.get('type') in ['pdf', 'text'] and _is_cv_file(f)]
+    
+    if cv_files and _is_cv_formatting_request(response_text, file_analyses):
+        # Handle CV formatting
+        cv_response = _handle_cv_formatting(cv_files)
+        if cv_response:
+            return cv_response
+    
     # Add file processing summary
     successful_files = [f for f in file_analyses if f.get('type') not in ['error', 'unsupported']]
     error_files = [f for f in file_analyses if f.get('type') in ['error', 'unsupported']]
@@ -1617,6 +1627,115 @@ def _enhance_response_with_file_info(response_text: str, file_analyses: List[Dic
         response_text += error_summary
     
     return response_text
+
+def _is_cv_file(file_analysis: Dict) -> bool:
+    """Check if a file is likely a CV/resume"""
+    filename = file_analysis.get('filename', '').lower()
+    content = file_analysis.get('extracted_text', '').lower()
+    
+    # Check filename
+    cv_filename_indicators = ['cv', 'resume', 'curriculum', 'vitae']
+    if any(indicator in filename for indicator in cv_filename_indicators):
+        return True
+    
+    # Check content for CV indicators
+    cv_content_indicators = [
+        'curriculum vitae', 'professional experience', 'work experience',
+        'education', 'qualifications', 'skills', 'objective', 'summary'
+    ]
+    
+    if any(indicator in content for indicator in cv_content_indicators):
+        return True
+    
+    # Check for common CV patterns
+    cv_patterns = [
+        r'\b(19|20)\d{2}\b.*\b(19|20)\d{2}\b',  # Date ranges
+        r'email\s*:',  # Email field
+        r'phone\s*:',  # Phone field
+        r'address\s*:',  # Address field
+    ]
+    
+    import re
+    for pattern in cv_patterns:
+        if re.search(pattern, content):
+            return True
+    
+    return False
+
+def _is_cv_formatting_request(query: str, file_analyses: List[Dict]) -> bool:
+    """Check if this is a CV formatting request"""
+    query_lower = query.lower()
+    
+    cv_formatting_keywords = [
+        'format', 'reformat', 'style', 'template', 'cv', 'resume',
+        'mawney', 'company style', 'professional', 'layout'
+    ]
+    
+    # Check if query mentions CV formatting
+    if any(keyword in query_lower for keyword in cv_formatting_keywords):
+        return True
+    
+    # Check if files are CVs and query is about formatting
+    cv_files = [f for f in file_analyses if _is_cv_file(f)]
+    if cv_files and any(word in query_lower for word in ['format', 'style', 'template', 'reformat']):
+        return True
+    
+    return False
+
+def _handle_cv_formatting(cv_files: List[Dict]) -> str:
+    """Handle CV formatting request"""
+    try:
+        if not cv_files:
+            return "I don't see any CV files to format. Please upload your CV document."
+        
+        # Use the first CV file
+        cv_file = cv_files[0]
+        filename = cv_file.get('filename', 'uploaded_cv')
+        cv_content = cv_file.get('extracted_text', '')
+        
+        if not cv_content:
+            return "I was unable to extract text from your CV file. Please ensure it's a readable PDF or text document."
+        
+        # Format the CV
+        formatted_result = cv_formatter.format_cv(cv_content, filename)
+        
+        if not formatted_result.get('success'):
+            return f"I encountered an error formatting your CV: {formatted_result.get('error', 'Unknown error')}"
+        
+        # Create response
+        response = "📄 **CV Formatted in Mawney Partners Style**\n\n"
+        
+        # Add analysis
+        if formatted_result.get('analysis'):
+            response += f"**Analysis:** {formatted_result['analysis']}\n\n"
+        
+        # Add formatted CV
+        response += "**Formatted CV:**\n"
+        response += "```\n"
+        response += formatted_result.get('text_version', '')[:2000]  # Limit length
+        if len(formatted_result.get('text_version', '')) > 2000:
+            response += "\n... [truncated for display]"
+        response += "\n```\n\n"
+        
+        # Add sections found
+        sections_found = formatted_result.get('sections_found', [])
+        if sections_found:
+            response += f"**Sections Identified:** {', '.join(sections_found)}\n\n"
+        
+        # Add download instructions
+        response += "💡 **Next Steps:**\n"
+        response += "• Review the formatted CV above\n"
+        response += "• Copy the content to your preferred document editor\n"
+        response += "• Apply final formatting adjustments as needed\n"
+        response += "• Save in your preferred format (PDF, Word, etc.)\n\n"
+        
+        response += "**Note:** This CV has been formatted according to Mawney Partners' professional standards with proper sectioning, clear headers, and consistent styling."
+        
+        return response
+        
+    except Exception as e:
+        logger.error(f"Error handling CV formatting: {e}")
+        return f"I encountered an error while formatting your CV: {str(e)}. Please try again or contact support."
 
 if __name__ == "__main__":
     # Test the AI assistant
