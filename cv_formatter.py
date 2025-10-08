@@ -21,7 +21,7 @@ class CVFormatter:
         self.sections = self._initialize_sections()
         
     def _initialize_company_style(self) -> Dict[str, Any]:
-        """Initialize Mawney Partners CV style template"""
+        """Initialize Mawney Partners CV style template based on analysis of 43 examples"""
         return {
             "header": {
                 "name_font_size": "24pt",
@@ -46,43 +46,78 @@ class CVFormatter:
             "layout": {
                 "margins": "1 inch",
                 "line_spacing": "1.15",
-                "font_family": "Arial, sans-serif"
-            }
+                "font_family": "Arial, sans-serif",
+                "average_line_length": 62  # Based on analysis
+            },
+            "common_sections": [
+                "EDUCATION",
+                "PROFESSIONAL EXPERIENCE", 
+                "WORK EXPERIENCE",
+                "EXPERIENCE",
+                "LANGUAGES",
+                "INTERESTS",
+                "ADDITIONAL INFORMATION",
+                "OTHER"
+            ]
         }
     
     def _initialize_sections(self) -> Dict[str, str]:
-        """Initialize CV section templates in Mawney Partners style"""
+        """Initialize CV section templates in Mawney Partners style based on analysis"""
         return {
             "professional_summary": """
-**PROFESSIONAL SUMMARY**
+PROFESSIONAL SUMMARY
 {content}
 
 """,
             "core_competencies": """
-**CORE COMPETENCIES**
+CORE COMPETENCIES
 {content}
 
 """,
             "professional_experience": """
-**PROFESSIONAL EXPERIENCE**
+PROFESSIONAL EXPERIENCE
+
+{content}
+
+""",
+            "work_experience": """
+WORK EXPERIENCE
 
 {content}
 
 """,
             "education": """
-**EDUCATION**
+EDUCATION
+
+{content}
+
+""",
+            "languages": """
+LANGUAGES
+
+{content}
+
+""",
+            "interests": """
+INTERESTS
 
 {content}
 
 """,
             "certifications": """
-**CERTIFICATIONS & LICENSES**
+CERTIFICATIONS & LICENSES
 
 {content}
 
 """,
             "additional_information": """
-**ADDITIONAL INFORMATION**
+ADDITIONAL INFORMATION
+
+{content}
+
+""",
+            "other": """
+OTHER
 
 {content}
 
@@ -157,8 +192,9 @@ class CVFormatter:
         # Extract core competencies/skills
         parsed["core_competencies"] = self._extract_core_competencies(cv_text)
         
-        # Extract professional experience
+        # Extract professional experience (check both variations)
         parsed["professional_experience"] = self._extract_professional_experience(cv_text)
+        parsed["work_experience"] = self._extract_work_experience(cv_text)
         
         # Extract education
         parsed["education"] = self._extract_education(cv_text)
@@ -280,6 +316,26 @@ class CVFormatter:
                 break
         
         # If no explicit experience section, try to extract from full text
+        if not experiences:
+            experiences = self._extract_experience_from_text(cv_text)
+        
+        return experiences[:10]  # Limit to 10 most recent
+    
+    def _extract_work_experience(self, cv_text: str) -> List[Dict[str, str]]:
+        """Extract work experience (alternative to professional experience)"""
+        experience_keywords = ['work experience', 'work history', 'employment history']
+        
+        experiences = []
+        
+        for keyword in experience_keywords:
+            pattern = rf'{keyword}[:\s]*(.*?)(?=\n\n[A-Z][A-Z\s]+\n|$)'
+            match = re.search(pattern, cv_text, re.IGNORECASE | re.DOTALL)
+            if match:
+                content = match.group(1).strip()
+                experiences = self._parse_experience_content(content)
+                break
+        
+        # If no explicit work experience section, try to extract from full text
         if not experiences:
             experiences = self._extract_experience_from_text(cv_text)
         
@@ -492,9 +548,13 @@ class CVFormatter:
             "professional_summary": self._format_professional_summary(parsed_cv.get("professional_summary", "")),
             "core_competencies": self._format_core_competencies(parsed_cv.get("core_competencies", [])),
             "professional_experience": self._format_professional_experience(parsed_cv.get("professional_experience", [])),
+            "work_experience": self._format_work_experience(parsed_cv.get("work_experience", [])),
             "education": self._format_education(parsed_cv.get("education", [])),
+            "languages": self._format_languages(parsed_cv.get("languages", [])),
+            "interests": self._format_interests(parsed_cv.get("interests", [])),
             "certifications": self._format_certifications(parsed_cv.get("certifications", [])),
-            "additional_info": self._format_additional_info(parsed_cv.get("additional_info", []))
+            "additional_info": self._format_additional_info(parsed_cv.get("additional_info", [])),
+            "other": self._format_other(parsed_cv.get("other", []))
         }
         
         return formatted
@@ -580,6 +640,46 @@ class CVFormatter:
         formatted_info = " • ".join(additional)
         return self.sections["additional_information"].format(content=formatted_info)
     
+    def _format_work_experience(self, experiences: List[Dict[str, str]]) -> str:
+        """Format work experience"""
+        if not experiences:
+            return ""
+        
+        formatted_experiences = []
+        for exp in experiences:
+            exp_text = f"{exp.get('title', '')}"
+            if exp.get('dates'):
+                exp_text += f" | {exp['dates']}"
+            if exp.get('description'):
+                exp_text += f"\n{exp['description']}"
+            formatted_experiences.append(exp_text)
+        
+        return self.sections["work_experience"].format(content="\n\n".join(formatted_experiences))
+    
+    def _format_languages(self, languages: List[str]) -> str:
+        """Format languages"""
+        if not languages:
+            return ""
+        
+        formatted_languages = " • ".join(languages)
+        return self.sections["languages"].format(content=formatted_languages)
+    
+    def _format_interests(self, interests: List[str]) -> str:
+        """Format interests"""
+        if not interests:
+            return ""
+        
+        formatted_interests = " • ".join(interests)
+        return self.sections["interests"].format(content=formatted_interests)
+    
+    def _format_other(self, other: List[str]) -> str:
+        """Format other information"""
+        if not other:
+            return ""
+        
+        formatted_other = " • ".join(other)
+        return self.sections["other"].format(content=formatted_other)
+    
     def _generate_html_cv(self, formatted_cv: Dict[str, Any]) -> str:
         """Generate HTML version of formatted CV"""
         html = f"""
@@ -635,9 +735,13 @@ class CVFormatter:
             ('professional_summary', 'Professional Summary'),
             ('core_competencies', 'Core Competencies'),
             ('professional_experience', 'Professional Experience'),
+            ('work_experience', 'Work Experience'),
             ('education', 'Education'),
+            ('languages', 'Languages'),
+            ('interests', 'Interests'),
             ('certifications', 'Certifications'),
-            ('additional_info', 'Additional Information')
+            ('additional_info', 'Additional Information'),
+            ('other', 'Other')
         ]
         
         for section_key, section_title in sections:
@@ -664,9 +768,13 @@ class CVFormatter:
             'professional_summary',
             'core_competencies', 
             'professional_experience',
+            'work_experience',
             'education',
+            'languages',
+            'interests',
             'certifications',
-            'additional_info'
+            'additional_info',
+            'other'
         ]
         
         for section in sections:
