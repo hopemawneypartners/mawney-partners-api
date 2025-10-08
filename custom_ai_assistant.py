@@ -1787,12 +1787,15 @@ def _is_cv_formatting_request(query: str, file_analyses: List[Dict]) -> bool:
     """Check if this is a CV formatting request"""
     query_lower = query.lower()
     
-    # Strong CV formatting keywords
+    # Strong CV formatting keywords - more flexible matching
     strong_cv_keywords = [
-        'format this cv', 'format my cv', 'format the cv', 'format cv',
-        'format this resume', 'format my resume',
-        'mawney style', 'company style', 'your style',
-        'reformat', 'format this', 'format it'
+        'format this cv', 'format my cv', 'format the cv', 'format cv', 'format resume',
+        'format this resume', 'format my resume', 'format the resume',
+        'mawney style', 'company style', 'your style', 'professional style',
+        'reformat', 'format this', 'format it', 'format document',
+        'make it professional', 'professional format', 'company format',
+        'use the template', 'apply template', 'mawney template', 'company template',
+        'style it', 'professional layout', 'company layout'
     ]
     
     # Check for strong CV formatting indicators
@@ -1801,7 +1804,7 @@ def _is_cv_formatting_request(query: str, file_analyses: List[Dict]) -> bool:
     
     # Check if files are CVs and query mentions formatting
     cv_files = [f for f in file_analyses if _is_cv_file(f)]
-    if cv_files and 'format' in query_lower:
+    if cv_files and any(word in query_lower for word in ['format', 'style', 'template', 'professional', 'layout', 'design']):
         return True
     
     return False
