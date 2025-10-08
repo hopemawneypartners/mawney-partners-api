@@ -2746,6 +2746,7 @@ def download_cv(filename):
         }), 500
 
 if __name__ == '__main__':
+    # Force restart to pick up new template
     port = int(os.environ.get('PORT', 5001))
     print(f"🚀 Starting Mawney Partners API with AI Assistant on port {port}")
     print("🧠 AI Assistant system loaded with advanced capabilities...")

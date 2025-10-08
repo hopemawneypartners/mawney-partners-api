@@ -23,12 +23,17 @@ class MawneyTemplateFormatter:
     def format_cv_with_template(self, cv_data: str, filename: str = '') -> Dict[str, Any]:
         """Format CV using the exact Mawney Partners template (compatible with AI assistant)"""
         try:
+            logger.info(f"Using template path: {self.template_path}")
+            logger.info(f"Template exists: {os.path.exists(self.template_path)}")
+            
             # Parse the CV data
             parsed_data = self._parse_cv_data(cv_data)
             
             # Load the template
             with open(self.template_path, 'r', encoding='utf-8') as f:
                 template = f.read()
+            
+            logger.info(f"Template loaded, length: {len(template)} characters")
             
             # Get logo base64
             top_logo_base64 = self._get_logo_base64()
