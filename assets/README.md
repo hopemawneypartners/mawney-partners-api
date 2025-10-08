@@ -1,48 +1,69 @@
 # Mawney Partners Logo Assets
 
-## Logo Files Required
+## ✅ Logo Files Added
 
-Place your two logo files in this directory:
+Your two logo files have been placed in this directory:
 
-### 1. Main Logo
-- **Filename:** `mawney_logo.png`
-- **Usage:** CV headers, documents, professional materials
-- **Recommended size:** 200-400px wide
-- **Format:** PNG with transparent background preferred
+### 1. Top Logo (Header)
+- **Filename:** `cv logo 1.png` ✅
+- **Usage:** CV header (top of document)
+- **Position:** Top-center, above candidate name
+- **Size:** Max 250px wide
+- **Format:** PNG
 
-### 2. Alternative Logo
-- **Filename:** `mawney_logo_alt.png` (or `mawney_logo_white.png` if it's a white version)
-- **Usage:** Alternative styling, dark backgrounds
-- **Recommended size:** 200-400px wide
-- **Format:** PNG with transparent background preferred
+### 2. Bottom Logo (Footer)
+- **Filename:** `cv logo 2.png` ✅
+- **Usage:** CV footer (bottom of document)
+- **Position:** Bottom-center, after all sections
+- **Size:** Max 200px wide
+- **Format:** PNG with subtle opacity (0.8)
 
 ## File Structure
 
 ```
 /Users/hopegilbert/Desktop/mawney-api-clean/assets/
 ├── README.md (this file)
-├── mawney_logo.png (place your first logo here)
-└── mawney_logo_alt.png (place your second logo here)
+├── cv logo 1.png ✅ (TOP LOGO - in header)
+└── cv logo 2.png ✅ (BOTTOM LOGO - in footer)
 ```
 
-## Current Usage
+## Current Configuration
 
 The CV formatter is configured to use:
 - **Font:** Garamond (EB Garamond web font)
-- **Logo:** `assets/mawney_logo.png`
-- **Position:** Top-center of CV
+- **Top Logo:** `assets/cv logo 1.png` (header)
+- **Bottom Logo:** `assets/cv logo 2.png` (footer)
+- **Position:** Center-aligned for both
 
-## To Add Your Logos
+## CV Layout
 
-Simply copy your two logo PNG files into this directory and rename them as specified above.
+```
+┌─────────────────────────────────┐
+│      [TOP LOGO - cv logo 1]     │
+│                                 │
+│      CANDIDATE NAME             │
+│      Contact Information        │
+├─────────────────────────────────┤
+│                                 │
+│      CV CONTENT                 │
+│      (All sections)             │
+│                                 │
+├─────────────────────────────────┤
+│    [BOTTOM LOGO - cv logo 2]    │
+└─────────────────────────────────┘
+```
 
-If your logos have different names or you want to use different positioning, update the configuration in `cv_formatter.py`:
+## Customization
+
+If you want to change logo settings, update in `cv_formatter.py`:
 
 ```python
 "branding": {
-    "logo_path": "assets/mawney_logo.png",
-    "use_logo": True,
-    "logo_position": "top-center"  # or "top-left", "top-right"
+    "top_logo_path": "assets/cv logo 1.png",
+    "bottom_logo_path": "assets/cv logo 2.png",
+    "use_top_logo": True,
+    "use_bottom_logo": True,
+    "logo_position": "center"
 }
 ```
 

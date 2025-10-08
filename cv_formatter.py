@@ -50,9 +50,11 @@ class CVFormatter:
                 "average_line_length": 62  # Based on analysis
             },
             "branding": {
-                "logo_path": "assets/mawney_logo.png",
-                "use_logo": True,
-                "logo_position": "top-center"  # or "top-left", "top-right"
+                "top_logo_path": "assets/cv logo 1.png",
+                "bottom_logo_path": "assets/cv logo 2.png",
+                "use_top_logo": True,
+                "use_bottom_logo": True,
+                "logo_position": "center"
             },
             "common_sections": [
                 "EDUCATION",
@@ -688,12 +690,17 @@ OTHER
     def _generate_html_cv(self, formatted_cv: Dict[str, Any]) -> str:
         """Generate HTML version of formatted CV"""
         
-        # Check if logo should be included
-        logo_html = ""
-        if self.company_style['branding']['use_logo']:
-            logo_path = self.company_style['branding']['logo_path']
-            logo_position = self.company_style['branding']['logo_position']
-            logo_html = f'<div class="logo"><img src="{logo_path}" alt="Mawney Partners Logo" /></div>'
+        # Check if top logo should be included
+        top_logo_html = ""
+        if self.company_style['branding']['use_top_logo']:
+            top_logo_path = self.company_style['branding']['top_logo_path']
+            top_logo_html = f'<div class="logo top-logo"><img src="{top_logo_path}" alt="Mawney Partners Logo" /></div>'
+        
+        # Check if bottom logo should be included
+        bottom_logo_html = ""
+        if self.company_style['branding']['use_bottom_logo']:
+            bottom_logo_path = self.company_style['branding']['bottom_logo_path']
+            bottom_logo_html = f'<div class="logo bottom-logo"><img src="{bottom_logo_path}" alt="Mawney Partners" /></div>'
         
         html = f"""
 <!DOCTYPE html>
@@ -712,11 +719,23 @@ OTHER
         }}
         .logo {{
             text-align: center;
+        }}
+        .top-logo {{
             margin-bottom: 1.5em;
         }}
-        .logo img {{
+        .top-logo img {{
+            max-width: 250px;
+            height: auto;
+        }}
+        .bottom-logo {{
+            margin-top: 2em;
+            padding-top: 1em;
+            border-top: 1px solid #ddd;
+        }}
+        .bottom-logo img {{
             max-width: 200px;
             height: auto;
+            opacity: 0.8;
         }}
         .header {{
             text-align: center;
@@ -764,7 +783,7 @@ OTHER
     </style>
 </head>
 <body>
-    {logo_html}
+    {top_logo_html}
     <div class="header">
         <div class="name">{formatted_cv['header'].split(chr(10))[0]}</div>
         <div class="contact">{' | '.join(formatted_cv['header'].split(chr(10))[1:]) if len(formatted_cv['header'].split(chr(10))) > 1 else ''}</div>
@@ -793,6 +812,9 @@ OTHER
         <div class="content">{formatted_cv[section_key].replace(chr(10), '<br>')}</div>
     </div>
 """
+        
+        # Add bottom logo
+        html += f"\n    {bottom_logo_html}\n"
         
         html += "</body></html>"
         return html
