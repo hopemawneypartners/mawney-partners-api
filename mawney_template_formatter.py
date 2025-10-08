@@ -20,6 +20,55 @@ class MawneyTemplateFormatter:
     def __init__(self):
         self.template_path = os.path.join(os.path.dirname(__file__), 'mawney_cv_template.html')
         
+    def format_cv_with_template(self, cv_data: str, filename: str = '') -> Dict[str, Any]:
+        """Format CV using the exact Mawney Partners template (compatible with AI assistant)"""
+        try:
+            # Parse the CV data
+            parsed_data = self._parse_cv_data(cv_data)
+            
+            # Load the template
+            with open(self.template_path, 'r', encoding='utf-8') as f:
+                template = f.read()
+            
+            # Get logo base64
+            top_logo_base64 = self._get_logo_base64()
+            
+            # Fill in the template
+            formatted_html = template.format(
+                TOP_LOGO_BASE64=top_logo_base64,
+                NAME=parsed_data.get('name', ''),
+                CONTACT_INFO=self._format_contact_info(parsed_data),
+                PROFESSIONAL_SUMMARY=self._format_professional_summary(parsed_data),
+                SKILLS_COLUMN_1=self._format_skills_column_1(parsed_data),
+                SKILLS_COLUMN_2=self._format_skills_column_2(parsed_data),
+                EXPERIENCE_ITEMS=self._format_experience_items(parsed_data),
+                EDUCATION_ITEMS=self._format_education_items(parsed_data),
+                INTERESTS_ITEMS=self._format_interests(parsed_data)
+            )
+            
+            logger.info(f"Formatted CV using template, length: {len(formatted_html)} characters")
+            
+            return {
+                'success': True,
+                'html_version': formatted_html,
+                'text_version': self._extract_text_from_html(formatted_html),
+                'analysis': f"CV formatted using Mawney Partners template. Extracted: {len(parsed_data.get('experience', []))} experience items, {len(parsed_data.get('education', []))} education items.",
+                'sections_found': list(parsed_data.keys()),
+                'formatted_data': parsed_data
+            }
+            
+        except Exception as e:
+            logger.error(f"Error formatting CV with template: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'html_version': '',
+                'text_version': cv_data,
+                'analysis': f"Error formatting CV: {str(e)}",
+                'sections_found': [],
+                'formatted_data': {}
+            }
+
     def format_cv(self, cv_data: str) -> Dict[str, Any]:
         """Format CV using the exact Mawney Partners template"""
         try:

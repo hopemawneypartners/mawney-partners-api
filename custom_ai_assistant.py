@@ -14,7 +14,7 @@ import random
 from ai_memory_system import store_interaction, get_custom_response, get_learned_suggestions, add_custom_response
 from cv_formatter import cv_formatter
 from cv_file_generator import cv_file_generator
-from mawney_template_formatter import mawney_template_formatter
+from mawney_template_formatter import MawneyTemplateFormatter
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -1838,7 +1838,8 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
             }
         
         # Format the CV using the new Mawney Partners template
-        formatted_result = mawney_template_formatter.format_cv_with_template(cv_content, filename)
+        template_formatter = MawneyTemplateFormatter()
+        formatted_result = template_formatter.format_cv_with_template(cv_content, filename)
         
         if not formatted_result.get('success'):
             return {
