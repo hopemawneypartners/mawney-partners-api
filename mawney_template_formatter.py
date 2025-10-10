@@ -60,29 +60,17 @@ class MawneyTemplateFormatter:
         formatted_html = formatted_html.replace('{SKILLS_LIST}', self._format_skills_list(parsed_data))
         formatted_html = formatted_html.replace('{EXPERIENCE_ITEMS}', self._format_experience_items(parsed_data))
         formatted_html = formatted_html.replace('{EDUCATION_ITEMS}', self._format_education_items(parsed_data))
-            
-            logger.info(f"Formatted CV using template, length: {len(formatted_html)} characters")
-            
-            return {
-                'success': True,
-                'html_version': formatted_html,
-                'text_version': self._extract_text_from_html(formatted_html),
-                'analysis': f"CV formatted using Mawney Partners template. Extracted: {len(parsed_data.get('experience', []))} experience items, {len(parsed_data.get('education', []))} education items.",
-                'sections_found': list(parsed_data.keys()),
-                'formatted_data': parsed_data
-            }
-            
-        except Exception as e:
-            logger.error(f"Error formatting CV with template: {e}")
-            return {
-                'success': False,
-                'error': str(e),
-                'html_version': '',
-                'text_version': cv_data,
-                'analysis': f"Error formatting CV: {str(e)}",
-                'sections_found': [],
-                'formatted_data': {}
-            }
+        
+        logger.info(f"Formatted CV using template, length: {len(formatted_html)} characters")
+        
+        return {
+            'success': True,
+            'html_version': formatted_html,
+            'text_version': self._extract_text_from_html(formatted_html),
+            'analysis': f"CV formatted using Mawney Partners template. Extracted: {len(parsed_data.get('experience', []))} experience items, {len(parsed_data.get('education', []))} education items.",
+            'sections_found': list(parsed_data.keys()),
+            'formatted_data': parsed_data
+        }
 
     def format_cv(self, cv_data: str) -> Dict[str, Any]:
         """Format CV using the exact Mawney Partners template"""
