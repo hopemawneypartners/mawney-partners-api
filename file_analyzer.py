@@ -37,13 +37,20 @@ class FileAnalyzer:
             Dictionary containing analysis results
         """
         try:
-            logger.info(f"Analyzing file: {filename} (type: {mime_type})")
+            logger.info(f"📎 Analyzing file: {filename} (type: {mime_type})")
+            logger.info(f"📎 File size: {len(file_data)} bytes")
             
             if mime_type in self.supported_image_types:
-                return self._analyze_image(file_data, filename)
+                result = self._analyze_image(file_data, filename)
+                logger.info(f"📎 Image analysis result: {result.get('type', 'unknown')}")
+                return result
             elif mime_type in self.supported_document_types:
-                return self._analyze_document(file_data, filename, mime_type)
+                result = self._analyze_document(file_data, filename, mime_type)
+                logger.info(f"📎 Document analysis result: {result.get('type', 'unknown')}")
+                logger.info(f"📎 Extracted text length: {len(result.get('extracted_text', ''))}")
+                return result
             else:
+                logger.warning(f"📎 Unsupported file type: {mime_type}")
                 return {
                     'type': 'unsupported',
                     'filename': filename,

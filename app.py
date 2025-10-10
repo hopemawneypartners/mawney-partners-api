@@ -2336,10 +2336,16 @@ Please let me know specifically what you'd like help with, and I'll provide deta
 def ai_assistant():
     """AI Assistant endpoint for processing queries using the advanced AI system"""
     try:
+        print(f"🧠 AI Assistant request received")
+        print(f"🧠 Content-Type: {request.content_type}")
+        print(f"🧠 Method: {request.method}")
+        
         # Check if this is a multipart request (with attachments)
         if request.content_type and request.content_type.startswith('multipart/form-data'):
+            print(f"🧠 Processing as multipart request with attachments")
             return handle_ai_assistant_with_attachments()
         else:
+            print(f"🧠 Processing as text-only request")
             return handle_ai_assistant_text_only()
         
     except Exception as e:
