@@ -218,8 +218,35 @@ class FileAnalyzer:
         """Clean and normalize extracted PDF text with aggressive word separation"""
         import re
         
-        # Replace multiple spaces with single space
-        text = re.sub(r'\s+', ' ', text)
+        # CRITICAL: Preserve line breaks for CV structure!
+        # Only replace multiple spaces/tabs on the same line
+        text = re.sub(r'[ \t]+', ' ', text)
+        
+        # Add line breaks before CV section headers to preserve structure
+        cv_section_headers = [
+            'PROFESSIONAL EXPERIENCE', 'WORK EXPERIENCE', 'EMPLOYMENT HISTORY', 'CAREER HISTORY',
+            'EDUCATION', 'QUALIFICATIONS', 'ACADEMIC BACKGROUND',
+            'PROFESSIONAL SUMMARY', 'SUMMARY', 'PROFILE', 'OBJECTIVE',
+            'SKILLS', 'COMPETENCIES', 'TECHNICAL SKILLS', 'KEY SKILLS',
+            'CERTIFICATIONS', 'PROFESSIONAL CERTIFICATIONS',
+            'INTERESTS', 'HOBBIES', 'PERSONAL INTERESTS',
+            'LANGUAGES', 'REFERENCES'
+        ]
+        
+        for header in cv_section_headers:
+            # Add line breaks before section headers (case insensitive)
+            text = re.sub(f'([a-z])({header})', r'\1\n\n\2', text, flags=re.IGNORECASE)
+            text = re.sub(f'({header})([A-Z][a-z])', r'\1\n\n\2', text, flags=re.IGNORECASE)
+        
+        # Add line breaks before company names (all caps with 2+ words)
+        text = re.sub(r'([a-z])([A-Z]{2,}\s+[A-Z]{2,})', r'\1\n\n\2', text)
+        
+        # Add line breaks before dates (year ranges)
+        text = re.sub(r'([a-z])((?:19|20)\d{2}\s*[-–]\s*(?:19|20)\d{2})', r'\1\n\2', text, flags=re.IGNORECASE)
+        text = re.sub(r'([a-z])((?:19|20)\d{2}\s*[-–]\s*(?:Present|Current))', r'\1\n\2', text, flags=re.IGNORECASE)
+        
+        # Add line breaks before bullet points
+        text = re.sub(r'([a-z])([•▪▫‣⁃])', r'\1\n\2', text, flags=re.IGNORECASE)
         
         # Fix common PDF extraction issues
         text = text.replace('ﬁ', 'fi')
@@ -248,14 +275,12 @@ class FileAnalyzer:
         text = re.sub(r'andcertified', 'and certified', text, flags=re.IGNORECASE)
         text = re.sub(r'withstrong', 'with strong', text, flags=re.IGNORECASE)
         text = re.sub(r'analyticaland', 'analytical and', text, flags=re.IGNORECASE)
+        text = re.sub(r'skillslooking', 'skills looking', text, flags=re.IGNORECASE)
+        text = re.sub(r'lookingfor', 'looking for', text, flags=re.IGNORECASE)
+        text = re.sub(r'ananalyst', 'an analyst', text, flags=re.IGNORECASE)
         text = re.sub(r'problem-solving', 'problem-solving', text, flags=re.IGNORECASE)
         text = re.sub(r'experienceof', 'experience of', text, flags=re.IGNORECASE)
         text = re.sub(r'statisticalanalysis', 'statistical analysis', text, flags=re.IGNORECASE)
-        text = re.sub(r'isconscientious', 'is conscientious', text, flags=re.IGNORECASE)
-        text = re.sub(r'inindependent', 'in independent', text, flags=re.IGNORECASE)
-        text = re.sub(r'workandalso', 'work and also', text, flags=re.IGNORECASE)
-        text = re.sub(r'excelsat', 'excels at', text, flags=re.IGNORECASE)
-        text = re.sub(r'teamwork', 'teamwork', text, flags=re.IGNORECASE)
         
         # Fix common date patterns
         text = re.sub(r'(\d{4})\s*-\s*(\d{4})', r'\1 - \2', text)
