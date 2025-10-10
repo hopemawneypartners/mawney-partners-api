@@ -3,10 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CV - Mawney Partners</title>
+    <title>Mawney Partners CV</title>
+    <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');
-        
         * {
             margin: 0;
             padding: 0;
@@ -14,342 +13,188 @@
         }
         
         body {
-            font-family: 'EB Garamond', Garamond, 'Times New Roman', serif;
-            font-size: 11pt;
+            font-family: 'EB Garamond', serif;
+            font-size: 12pt;
             line-height: 1.4;
             color: #2c3e50;
             background: white;
-            padding: 0;
-            margin: 0;
             width: 100%;
             max-width: none;
         }
         
         @page {
             size: A4;
-            margin: 1cm 1.5cm;
-            padding: 0;
+            margin: 2cm 2.5cm;
         }
         
-        /* Force content to flow across pages */
-        .page-content {
-            min-height: 100vh;
-            page-break-inside: auto;
-            height: auto;
-            overflow: visible;
-        }
-        
-        /* Ensure proper page breaks */
-        .section {
-            page-break-inside: auto;
+        /* Header Section */
+        .header {
+            text-align: center;
             margin-bottom: 30px;
         }
         
-        .experience-item, .education-item {
-            page-break-inside: auto;
-            margin-bottom: 25px;
+        .logo {
+            margin-bottom: 10px;
         }
         
-        /* Force page breaks when needed */
-        .page-break-before {
-            page-break-before: always;
-        }
-        
-        .page-break-after {
-            page-break-after: always;
-        }
-        
-        /* Logo Section */
-        .logo-section {
-            text-align: center;
-            margin-bottom: 40px;
-            padding-top: 20px;
-        }
-        
-        .mp-logo {
-            font-family: 'EB Garamond', serif;
-            font-size: 48pt;
-            font-weight: 700;
-            color: #2c3e50;
-            letter-spacing: 12px;
-            margin-bottom: 5px;
-            line-height: 1;
+        .logo img {
+            max-width: 80px;
+            height: auto;
         }
         
         .company-name {
             font-family: 'EB Garamond', serif;
-            font-size: 12pt;
-            color: #7f8c8d;
-            letter-spacing: 3px;
-            text-transform: uppercase;
+            font-size: 10pt;
+            font-weight: 600;
+            color: #2c3e50;
+            letter-spacing: 2px;
+            margin-bottom: 20px;
         }
         
-        /* Name Section */
-        .name-section {
-            text-align: center;
-            margin-bottom: 30px;
-        }
-        
-        .full-name {
+        .candidate-name {
             font-family: 'EB Garamond', serif;
             font-size: 24pt;
             font-weight: 700;
             color: #2c3e50;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            margin-bottom: 10px;
+            margin-bottom: 15px;
         }
         
-        .contact-details {
+        .contact-info {
             font-size: 11pt;
             color: #2c3e50;
+            margin-bottom: 30px;
         }
         
         /* Section Headers */
         .section-header {
-            font-family: 'EB Garamond', serif;
+            font-family: 'Arial', sans-serif;
             font-size: 12pt;
             font-weight: 700;
             color: #2c3e50;
             text-transform: uppercase;
             letter-spacing: 1px;
+            margin-bottom: 10px;
             border-bottom: 2px solid #3498db;
             padding-bottom: 5px;
-            margin: 30px 0 15px 0;
-            page-break-after: avoid;
+        }
+        
+        .section {
+            margin-bottom: 25px;
         }
         
         /* Professional Summary */
-        .professional-summary {
-            margin-bottom: 25px;
-            text-align: justify;
-            page-break-inside: auto;
-        }
-        
-        .professional-summary p {
+        .summary {
             font-size: 11pt;
-            line-height: 1.4;
-            margin-bottom: 8px;
+            line-height: 1.5;
+            margin-bottom: 20px;
         }
         
-        /* Skills Grid */
-        .skills-section {
-            margin-bottom: 25px;
-            page-break-inside: auto;
+        /* Skills Section - Two Columns */
+        .skills-container {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
         }
         
-        .skills-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 30px;
-            margin-top: 10px;
+        .skills-column {
+            width: 48%;
         }
         
-        .skills-column ul {
+        .skills-list {
             list-style: none;
             padding: 0;
-            margin: 0;
         }
         
-        .skills-column li {
+        .skills-list li {
             font-size: 11pt;
-            margin-bottom: 8px;
-            padding-left: 20px;
+            margin-bottom: 5px;
+            padding-left: 15px;
             position: relative;
         }
         
-        .skills-column li:before {
+        .skills-list li:before {
             content: "•";
-            color: #3498db;
+            color: #2c3e50;
             font-weight: bold;
             position: absolute;
             left: 0;
         }
         
         /* Experience Section */
-        .experience-section {
-            margin-bottom: 25px;
-            page-break-inside: auto;
-        }
-        
         .experience-item {
             margin-bottom: 20px;
-            page-break-inside: auto;
         }
         
-        .company-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 5px;
-            page-break-inside: avoid;
-        }
-        
-        .company-name {
-            font-family: 'EB Garamond', serif;
+        .job-header {
+            font-weight: 700;
             font-size: 12pt;
-            font-weight: 600;
-            color: #2c3e50;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        
-        .dates {
-            font-size: 11pt;
-            color: #2c3e50;
-            text-align: right;
-            font-style: italic;
-        }
-        
-        .job-title {
-            font-size: 11pt;
-            font-weight: 500;
             color: #2c3e50;
             margin-bottom: 8px;
         }
         
-        .responsibilities {
-            margin-left: 0;
+        .job-details {
+            font-size: 11pt;
+            line-height: 1.4;
         }
         
-        .responsibilities ul {
+        .job-details ul {
             list-style: none;
             padding: 0;
-            margin: 0;
+            margin-top: 8px;
         }
         
-        .responsibilities li {
+        .job-details li {
             margin-bottom: 4px;
-            font-size: 11pt;
-            font-weight: 400;
-            line-height: 1.3;
-            padding-left: 20px;
+            padding-left: 15px;
             position: relative;
         }
         
-        .responsibilities li:before {
+        .job-details li:before {
             content: "•";
-            color: #3498db;
+            color: #2c3e50;
             font-weight: bold;
             position: absolute;
             left: 0;
         }
         
         /* Education Section */
-        .education-section {
-            margin-bottom: 25px;
-            page-break-inside: auto;
-        }
-        
         .education-item {
             margin-bottom: 15px;
-            page-break-inside: auto;
         }
         
         .education-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
+            font-weight: 700;
+            font-size: 12pt;
+            color: #2c3e50;
             margin-bottom: 5px;
         }
         
-        .school-name {
-            font-family: 'EB Garamond', serif;
-            font-size: 12pt;
-            font-weight: 700;
-            color: #2c3e50;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        
-        .degree {
-            font-size: 11pt;
-            font-style: italic;
-            color: #2c3e50;
-            margin-bottom: 8px;
-        }
-        
         .education-details {
-            margin-left: 0;
-        }
-        
-        .education-details ul {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-        }
-        
-        .education-details li {
-            margin-bottom: 4px;
             font-size: 11pt;
-            line-height: 1.3;
-            padding-left: 20px;
-            position: relative;
+            color: #2c3e50;
         }
         
-        .education-details li:before {
-            content: "•";
-            color: #3498db;
-            font-weight: bold;
-            position: absolute;
-            left: 0;
+        /* Page Break Controls */
+        .section {
+            page-break-inside: avoid;
+            margin-bottom: 25px;
         }
         
-        /* Interests Section */
-        .interests-section {
-            margin-bottom: 30px;
+        .experience-item, .education-item {
+            page-break-inside: avoid;
+            margin-bottom: 20px;
+        }
+        
+        h1, h2, h3 {
+            page-break-after: avoid;
+        }
+        
+        /* Ensure content flows to multiple pages */
+        body {
             page-break-inside: auto;
         }
         
-        .interests ul {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-        }
-        
-        .interests li {
-            margin-bottom: 6px;
-            font-size: 11pt;
-            line-height: 1.3;
-            padding-left: 20px;
-            position: relative;
-        }
-        
-        .interests li:before {
-            content: "•";
-            color: #3498db;
-            font-weight: bold;
-            position: absolute;
-            left: 0;
-        }
-        
-        .track-record-note {
-            margin-top: 15px;
-            font-size: 11pt;
-            font-style: italic;
-            color: #7f8c8d;
-            text-align: center;
-        }
-        
-        /* Footer */
-        .footer {
-            text-align: center;
-            margin-top: 50px;
-            padding-top: 20px;
-            border-top: 1px solid #ddd;
-            page-break-inside: avoid;
-        }
-        
-        .footer-text {
-            font-family: 'EB Garamond', serif;
-            font-size: 14pt;
-            font-weight: 600;
-            color: #2c3e50;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-        }
-        
-        /* Print Media Queries for Better Pagination */
+        /* Print styles */
         @media print {
             body {
                 width: 100% !important;
@@ -358,16 +203,17 @@
                 padding: 0 !important;
                 font-size: 11pt !important;
                 line-height: 1.4 !important;
+                page-break-inside: auto !important;
             }
             
             .section {
                 page-break-inside: auto !important;
-                margin-bottom: 20px !important;
+                margin-bottom: 25px !important;
             }
             
             .experience-item, .education-item {
                 page-break-inside: auto !important;
-                margin-bottom: 15px !important;
+                margin-bottom: 20px !important;
             }
             
             .section-header {
@@ -382,73 +228,49 @@
     </style>
 </head>
 <body>
-    <div class="page-content">
-        <!-- Logo Section -->
-        <div class="logo-section">
-            <div class="mp-logo">MP</div>
-            <div class="company-name">MAWNEY PARTNERS</div>
+    <div class="header">
+        <div class="logo">
+            {TOP_LOGO_BASE64}
         </div>
-        
-        <!-- Name Section -->
-        <div class="name-section">
-            <div class="full-name">{NAME}</div>
-            <div class="contact-details">{CONTACT_INFO}</div>
-        </div>
-        
-        <!-- Professional Summary -->
-        <div class="section">
-            <div class="section-header">Professional Summary</div>
-            <div class="professional-summary">
-                {PROFESSIONAL_SUMMARY}
-            </div>
-        </div>
-        
-        <!-- Skills Section -->
-        <div class="skills-section">
-            <div class="section-header">Significant Expertise in the Following:</div>
-            <div class="skills-grid">
-                <div class="skills-column">
-                    <ul>
-                        {SKILLS_COLUMN_1}
-                    </ul>
-                </div>
-                <div class="skills-column">
-                    <ul>
-                        {SKILLS_COLUMN_2}
-                    </ul>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Professional Experience -->
-        <div class="experience-section">
-            <div class="section-header">Professional Experience</div>
-            {EXPERIENCE_ITEMS}
-        </div>
-        
-        <!-- Education -->
-        <div class="education-section">
-            <div class="section-header">Education</div>
-            {EDUCATION_ITEMS}
-        </div>
-        
-        <!-- Interests -->
-        <div class="interests-section">
-            <div class="section-header">Interests</div>
-            <div class="interests">
-                <ul>
-                    {INTERESTS_ITEMS}
+        <div class="company-name">MAWNEY PARTNERS</div>
+        <div class="candidate-name">{NAME}</div>
+        <div class="contact-info">{CONTACT_INFO}</div>
+    </div>
+    
+    <div class="section">
+        <div class="section-header">PROFESSIONAL SUMMARY</div>
+        <div class="summary">{PROFESSIONAL_SUMMARY}</div>
+    </div>
+    
+    <div class="section">
+        <div class="section-header">SIGNIFICANT EXPERTISE IN THE FOLLOWING:</div>
+        <div class="skills-container">
+            <div class="skills-column">
+                <ul class="skills-list">
+                    {SKILLS_COLUMN_1}
                 </ul>
             </div>
-            <div class="track-record-note">
-                Proven track record of delivering results in challenging environments.
+            <div class="skills-column">
+                <ul class="skills-list">
+                    {SKILLS_COLUMN_2}
+                </ul>
             </div>
         </div>
-        
-        <!-- Footer -->
-        <div class="footer">
-            <div class="footer-text">MAWNEY Partners</div>
-        </div>
+    </div>
+    
+    <div class="section">
+        <div class="section-header">PROFESSIONAL EXPERIENCE</div>
+        {EXPERIENCE_ITEMS}
+    </div>
+    
+    <div class="section">
+        <div class="section-header">EDUCATION</div>
+        {EDUCATION_ITEMS}
+    </div>
+    
+    <div class="section">
+        <div class="section-header">INTERESTS</div>
+        <div class="summary">{INTERESTS_ITEMS}</div>
     </div>
 </body>
 </html>

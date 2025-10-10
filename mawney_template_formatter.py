@@ -551,18 +551,14 @@ class MawneyTemplateFormatter:
                     </ul>
                     '''
                 
-                item_html = f'''
-                <div class="experience-item">
-                    <div class="company-header">
-                        <div class="company-name">{company}</div>
-                        <div class="dates">{dates}</div>
+                    item_html = f'''
+                    <div class="experience-item">
+                        <div class="job-header">{title}, {company}, {exp.get('location', '')} {dates}</div>
+                        <div class="job-details">
+                            {responsibility_list}
+                        </div>
                     </div>
-                    <div class="job-title">{title}</div>
-                    <div class="responsibilities">
-                        {responsibility_list}
-                    </div>
-                </div>
-                '''
+                    '''
                 items.append(item_html)
         
         return '\n'.join(items)
@@ -608,58 +604,36 @@ class MawneyTemplateFormatter:
         return '\n'.join([f'<li>{interest}</li>' for interest in interests])
     
     def _get_logo_base64(self) -> str:
-        """Get Mawney Partners CV logos from local assets"""
+        """Get Mawney Partners MP logo from local assets"""
         try:
-            # Try to get both CV logos from the local assets folder
-            cv_logo_1_path = os.path.join(os.path.dirname(__file__), 'assets', 'cv logo 1.png')
-            cv_logo_2_path = os.path.join(os.path.dirname(__file__), 'assets', 'cv logo 2.png')
+            # Try to get the MP logo from the local assets folder
+            mp_logo_path = os.path.join(os.path.dirname(__file__), 'assets', 'cv logo 1.png')
             
-            logos_html = ""
-            
-            # Add CV logo 1
-            if os.path.exists(cv_logo_1_path):
-                with open(cv_logo_1_path, 'rb') as f:
-                    logo_1_data = f.read()
-                logo_1_base64 = base64.b64encode(logo_1_data).decode('utf-8')
+            if os.path.exists(mp_logo_path):
+                with open(mp_logo_path, 'rb') as f:
+                    logo_data = f.read()
+                logo_base64 = base64.b64encode(logo_data).decode('utf-8')
                 
-                logos_html += f'''
-                <div style="text-align: center; margin-bottom: 20px;">
-                    <img src="data:image/png;base64,{logo_1_base64}" alt="Mawney Partners CV Logo 1" style="max-width: 150px; height: auto;" />
-                </div>
+                logo_html = f'''
+                <img src="data:image/png;base64,{logo_base64}" alt="Mawney Partners" style="max-width: 80px; height: auto;" />
                 '''
-                logger.info("Using actual CV logo 1 from assets")
-            
-            # Add CV logo 2
-            if os.path.exists(cv_logo_2_path):
-                with open(cv_logo_2_path, 'rb') as f:
-                    logo_2_data = f.read()
-                logo_2_base64 = base64.b64encode(logo_2_data).decode('utf-8')
-                
-                logos_html += f'''
-                <div style="text-align: center; margin-bottom: 30px;">
-                    <img src="data:image/png;base64,{logo_2_base64}" alt="Mawney Partners CV Logo 2" style="max-width: 200px; height: auto;" />
-                </div>
-                '''
-                logger.info("Using actual CV logo 2 from assets")
-            
-            if logos_html:
-                return logos_html
+                logger.info("Using actual MP logo from assets")
+                return logo_html
             else:
-                # Fallback to text logo if images not found
-                logger.warning("CV logos not found, using text fallback")
+                # Fallback to text logo if image not found
+                logger.warning("MP logo not found, using text fallback")
                 return '''
-                <div style="text-align: center; margin-bottom: 30px;">
-                    <div style="font-family: 'EB Garamond', serif; font-size: 36pt; font-weight: 700; color: #2c3e50; letter-spacing: 8px;">
-                        MP
-                    </div>
-                    <div style="font-family: 'EB Garamond', serif; font-size: 8pt; color: #7f8c8d; letter-spacing: 2px; margin-top: -5px;">
-                        MAWNEY PARTNERS
-                    </div>
+                <div style="font-family: 'EB Garamond', serif; font-size: 36pt; font-weight: 700; color: #2c3e50; letter-spacing: 8px;">
+                    MP
                 </div>
                 '''
         except Exception as e:
-            logger.error(f"Error getting CV logos: {e}")
-            return ""
+            logger.error(f"Error getting MP logo: {e}")
+            return '''
+            <div style="font-family: 'EB Garamond', serif; font-size: 36pt; font-weight: 700; color: #2c3e50; letter-spacing: 8px;">
+                MP
+            </div>
+            '''
     
     def _extract_text_from_html(self, html: str) -> str:
         """Extract plain text from HTML"""
