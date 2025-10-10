@@ -766,16 +766,17 @@ I can also help you prepare for interviews or create a tailored cover letter!"""
         try:
             logger.info(f"🎯 AI Assistant _format_cv called with query: {query[:100]}...")
             logger.info(f"🎯 Using new Mawney Partners template formatter")
-            # Extract CV information from query or context
-            cv_data = self._extract_cv_data(query, context)
             
-            # Convert dictionary to text for parsing
+            # Check if we have file context with actual CV content
             cv_text = ""
-            if isinstance(cv_data, dict):
-                # Extract text content from the dictionary
-                cv_text = query  # Use the original query as the CV content
+            if context and context.get('file_context'):
+                # Use actual file content if available
+                cv_text = context['file_context']
+                logger.info(f"🎯 Using file context for CV formatting: {len(cv_text)} characters")
             else:
-                cv_text = str(cv_data)
+                # Fallback to query text, but provide a helpful message
+                cv_text = query
+                logger.warning(f"🎯 No file context available, using query text: {query}")
             
             # Use the new Mawney Partners template formatter
             template_formatter = MawneyTemplateFormatter()
@@ -790,7 +791,7 @@ I can also help you prepare for interviews or create a tailored cover letter!"""
                 )
             else:
                 return AIResponse(
-                    text=f"I couldn't format your CV: {formatted_result.get('error', 'Unknown error')}",
+                    text=f"I couldn't format your CV: {formatted_result.get('error', 'Unknown error')}. Please upload a CV file for proper formatting.",
                     type="error",
                     confidence=0.0
                 )
@@ -798,7 +799,7 @@ I can also help you prepare for interviews or create a tailored cover letter!"""
         except Exception as e:
             logger.error(f"Error formatting CV: {e}")
             return AIResponse(
-                text="I couldn't format your CV. Please provide more details about your experience and qualifications.",
+                text="I couldn't format your CV. Please upload a CV file for proper formatting.",
                 type="error",
                 confidence=0.0
             )
