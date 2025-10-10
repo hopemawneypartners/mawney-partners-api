@@ -218,8 +218,8 @@ class FileAnalyzer:
         """Clean and normalize extracted PDF text with aggressive word separation"""
         import re
         
-        # CRITICAL: Preserve line breaks for CV structure!
-        # Only replace multiple spaces/tabs on the same line
+        # CRITICAL: Force structure into CV format by adding line breaks strategically
+        # First, fix concatenations
         text = re.sub(r'[ \t]+', ' ', text)
         
         # Add line breaks before CV section headers to preserve structure
@@ -247,6 +247,25 @@ class FileAnalyzer:
         
         # Add line breaks before bullet points
         text = re.sub(r'([a-z])([•▪▫‣⁃])', r'\1\n\2', text, flags=re.IGNORECASE)
+        
+        # CRITICAL: Force structure by adding line breaks before common patterns
+        # Add line breaks before job titles (common patterns)
+        text = re.sub(r'([a-z])([A-Z][A-Z\s]+(?:ASSOCIATE|ANALYST|MANAGER|DIRECTOR|OFFICER|SPECIALIST))', r'\1\n\n\2', text, flags=re.IGNORECASE)
+        
+        # Add line breaks before email addresses
+        text = re.sub(r'([a-z])([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', r'\1\n\2', text)
+        
+        # Add line breaks before phone numbers
+        text = re.sub(r'([a-z])((?:Tel|Phone|Mobile|Mob)[:\s]*[+\d\s\-\(\)]+)', r'\1\n\2', text, flags=re.IGNORECASE)
+        
+        # Add line breaks before addresses (common patterns)
+        text = re.sub(r'([a-z])(\d+\s+[A-Za-z\s]+(?:Way|Street|Road|Avenue|Lane|Drive|Close|Crescent))', r'\1\n\2', text)
+        
+        # Add line breaks before location patterns
+        text = re.sub(r'([a-z])([A-Z][a-z]+,\s*[A-Z]{2,3}\s+\d{4,5})', r'\1\n\2', text)
+        
+        # Add line breaks before common job description patterns
+        text = re.sub(r'([a-z])(MANAGING|DEVELOPING|ANALYZING|CREATING|IMPLEMENTING)', r'\1\n\n\2', text)
         
         # Fix common PDF extraction issues
         text = text.replace('ﬁ', 'fi')
