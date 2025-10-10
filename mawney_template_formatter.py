@@ -6,9 +6,9 @@ Uses the exact HTML template to match the design shown in examples
 
 import re
 import logging
+import os
 from typing import Dict, List, Optional, Any
 import base64
-import os
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -116,7 +116,7 @@ class MawneyTemplateFormatter:
             }
     
     def _parse_cv_data(self, cv_data: str) -> Dict[str, Any]:
-        """Parse CV data to extract structured information"""
+        """Parse CV data to extract structured information with improved parsing"""
         lines = [line.strip() for line in cv_data.split('\n') if line.strip()]
         
         parsed = {
@@ -131,21 +131,31 @@ class MawneyTemplateFormatter:
             'interests': []
         }
         
-        # Extract name (usually first line or most prominent text)
+        # Extract name with better pattern matching
         if lines:
-            # Look for name patterns
             name_candidates = []
-            for line in lines[:5]:  # Check first 5 lines
-                if len(line.split()) >= 2 and len(line.split()) <= 4:  # Likely a name
-                    if not any(word.lower() in ['cv', 'resume', 'curriculum', 'vitae'] for word in line.split()):
-                        name_candidates.append(line)
+            for i, line in enumerate(lines[:8]):  # Check first 8 lines
+                # Skip obvious headers
+                if any(keyword in line.lower() for keyword in ['curriculum', 'vitae', 'resume', 'cv', 'page', 'document']):
+                    continue
+                
+                words = line.split()
+                # Look for proper name patterns (2-3 words, title case, no special chars)
+                if 2 <= len(words) <= 4:
+                    if all(word[0].isupper() for word in words if word and word[0].isalpha()):
+                        if not any(char in line for char in ['@', '+', '(', ')', '-', '/', '\\']):
+                            name_candidates.append(line)
             
             if name_candidates:
                 parsed['name'] = name_candidates[0]
             else:
-                parsed['name'] = lines[0]
+                # Fallback to first substantial line
+                for line in lines[:5]:
+                    if len(line) > 5 and len(line.split()) >= 2:
+                        parsed['name'] = line
+                        break
         
-        # Extract contact info
+        # Extract contact info with improved patterns
         full_text = ' '.join(lines)
         
         # Email extraction
@@ -153,18 +163,24 @@ class MawneyTemplateFormatter:
         if email_match:
             parsed['email'] = email_match.group(0)
         
-        # Phone extraction
+        # Phone extraction with better patterns
         phone_patterns = [
-            r'\+?[\d\s\-\(\)]{10,}',  # General phone pattern
-            r'\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b',  # US phone
-            r'\b\+44[\s\-]?\d{2,4}[\s\-]?\d{3,4}[\s\-]?\d{3,4}\b'  # UK phone
+            r'\+44[\s\-]?\d{2,4}[\s\-]?\d{3,4}[\s\-]?\d{3,4}',  # UK phone
+            r'\+1[\s\-]?\d{3}[\s\-]?\d{3}[\s\-]?\d{4}',  # US phone
+            r'\b\d{4}[\s\-]?\d{3}[\s\-]?\d{3}\b',  # UK mobile
+            r'\b\d{3}[\s\-]?\d{3}[\s\-]?\d{4}\b',  # US phone
+            r'\+?[\d\s\-\(\)]{10,}'  # General phone pattern
         ]
         
         for pattern in phone_patterns:
             phone_match = re.search(pattern, full_text)
             if phone_match:
-                parsed['phone'] = phone_match.group(0).strip()
-                break
+                phone = phone_match.group(0).strip()
+                # Clean up phone number
+                phone = re.sub(r'[^\d\+\s\-\(\)]', '', phone)
+                if len(phone) >= 10:  # Valid phone length
+                    parsed['phone'] = phone
+                    break
         
         # Location extraction
         location_keywords = ['england', 'uk', 'united kingdom', 'london', 'manchester', 'birmingham', 'leeds', 'sheffield', 'bristol', 'newcastle', 'liverpool']
@@ -381,21 +397,36 @@ class MawneyTemplateFormatter:
         return '\n'.join([f'<li>{interest}</li>' for interest in interests])
     
     def _get_logo_base64(self) -> str:
-        """Get MP logo as base64 - using simple text logo for now"""
+        """Get MP logo as base64 from iOS assets"""
         try:
-            # For now, use a simple text-based MP logo
-            # In production, this would load the actual MP logo image
-            logger.info("Using text-based MP logo")
-            return '''
-            <div style="text-align: center; margin-bottom: 30px;">
-                <div style="font-family: 'EB Garamond', serif; font-size: 36pt; font-weight: 700; color: #2c3e50; letter-spacing: 8px;">
-                    MP
+            # Try to get the actual MP logo from iOS assets
+            logo_path = os.path.join(os.path.dirname(__file__), '..', '..', 'MP APP', 'MP APP 2', 'Assets.xcassets', 'logo.imageset', 'logo.png')
+            
+            if os.path.exists(logo_path):
+                with open(logo_path, 'rb') as f:
+                    logo_data = f.read()
+                import base64
+                logo_base64 = base64.b64encode(logo_data).decode('utf-8')
+                
+                logger.info("Using actual MP logo from assets")
+                return f'''
+                <div style="text-align: center; margin-bottom: 30px;">
+                    <img src="data:image/png;base64,{logo_base64}" alt="Mawney Partners Logo" style="max-width: 200px; height: auto;" />
                 </div>
-                <div style="font-family: 'EB Garamond', serif; font-size: 8pt; color: #7f8c8d; letter-spacing: 2px; margin-top: -5px;">
-                    MAWNEY PARTNERS
+                '''
+            else:
+                # Fallback to text logo if image not found
+                logger.warning("MP logo not found, using text fallback")
+                return '''
+                <div style="text-align: center; margin-bottom: 30px;">
+                    <div style="font-family: 'EB Garamond', serif; font-size: 36pt; font-weight: 700; color: #2c3e50; letter-spacing: 8px;">
+                        MP
+                    </div>
+                    <div style="font-family: 'EB Garamond', serif; font-size: 8pt; color: #7f8c8d; letter-spacing: 2px; margin-top: -5px;">
+                        MAWNEY PARTNERS
+                    </div>
                 </div>
-            </div>
-            '''
+                '''
         except Exception as e:
             logger.error(f"Error getting logo: {e}")
             return ""
