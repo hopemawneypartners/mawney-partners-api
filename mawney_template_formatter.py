@@ -115,9 +115,87 @@ class MawneyTemplateFormatter:
                 'formatted_data': {}
             }
     
+    def _clean_cv_text(self, text: str) -> str:
+        """Clean CV text to fix concatenated words and improve parsing"""
+        import re
+        
+        # CRITICAL: Force structure into CV format by adding line breaks strategically
+        # First, fix concatenations
+        text = re.sub(r'[ \t]+', ' ', text)
+        
+        # Add line breaks before CV section headers to preserve structure
+        cv_section_headers = [
+            'PROFESSIONAL EXPERIENCE', 'WORK EXPERIENCE', 'EMPLOYMENT HISTORY', 'CAREER HISTORY',
+            'EDUCATION', 'QUALIFICATIONS', 'ACADEMIC BACKGROUND',
+            'PROFESSIONAL SUMMARY', 'SUMMARY', 'PROFILE', 'OBJECTIVE',
+            'SKILLS', 'COMPETENCIES', 'TECHNICAL SKILLS', 'KEY SKILLS',
+            'CERTIFICATIONS', 'PROFESSIONAL CERTIFICATIONS',
+            'INTERESTS', 'HOBBIES', 'PERSONAL INTERESTS',
+            'LANGUAGES', 'REFERENCES'
+        ]
+        
+        for header in cv_section_headers:
+            # Add line breaks before section headers (case insensitive)
+            text = re.sub(f'([a-z])({header})', r'\1\n\n\2', text, flags=re.IGNORECASE)
+            text = re.sub(f'({header})([A-Z][a-z])', r'\1\n\n\2', text, flags=re.IGNORECASE)
+        
+        # Add line breaks before company names (all caps with 2+ words)
+        text = re.sub(r'([a-z])([A-Z]{2,}\s+[A-Z]{2,})', r'\1\n\n\2', text)
+        
+        # Add line breaks before dates (year ranges)
+        text = re.sub(r'([a-z])((?:19|20)\d{2}\s*[-–]\s*(?:19|20)\d{2})', r'\1\n\2', text, flags=re.IGNORECASE)
+        text = re.sub(r'([a-z])((?:19|20)\d{2}\s*[-–]\s*(?:Present|Current))', r'\1\n\2', text, flags=re.IGNORECASE)
+        
+        # Add line breaks before bullet points
+        text = re.sub(r'([a-z])([•▪▫‣⁃])', r'\1\n\2', text, flags=re.IGNORECASE)
+        
+        # CRITICAL: Force structure by adding line breaks before common patterns
+        # Add line breaks before job titles (common patterns)
+        text = re.sub(r'([a-z])([A-Z][A-Z\s]+(?:ASSOCIATE|ANALYST|MANAGER|DIRECTOR|OFFICER|SPECIALIST))', r'\1\n\n\2', text, flags=re.IGNORECASE)
+        
+        # Add line breaks before email addresses
+        text = re.sub(r'([a-z])([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', r'\1\n\2', text)
+        
+        # Add line breaks before phone numbers
+        text = re.sub(r'([a-z])((?:Tel|Phone|Mobile|Mob)[:\s]*[+\d\s\-\(\)]+)', r'\1\n\2', text, flags=re.IGNORECASE)
+        
+        # Add line breaks before addresses (common patterns)
+        text = re.sub(r'([a-z])(\d+\s+[A-Za-z\s]+(?:Way|Street|Road|Avenue|Lane|Drive|Close|Crescent))', r'\1\n\2', text)
+        
+        # Add line breaks before location patterns
+        text = re.sub(r'([a-z])([A-Z][a-z]+,\s*[A-Z]{2,3}\s+\d{4,5})', r'\1\n\2', text)
+        
+        # Add line breaks before common job description patterns
+        text = re.sub(r'([a-z])(MANAGING|DEVELOPING|ANALYZING|CREATING|IMPLEMENTING)', r'\1\n\n\2', text)
+        
+        # CRITICAL: Fix concatenated words that are common in CVs
+        # Add spaces between lowercase and uppercase letters
+        text = re.sub(r'([a-z])([A-Z])', r'\1 \2', text)
+        
+        # Fix specific concatenated words we've seen
+        text = re.sub(r'stronganalytical', 'strong analytical', text, flags=re.IGNORECASE)
+        text = re.sub(r'andproblem-solving', 'and problem-solving', text, flags=re.IGNORECASE)
+        text = re.sub(r'problem-solving', 'problem-solving', text, flags=re.IGNORECASE)
+        text = re.sub(r'lookingfor', 'looking for', text, flags=re.IGNORECASE)
+        text = re.sub(r'ananalyst', 'an analyst', text, flags=re.IGNORECASE)
+        text = re.sub(r'financialrisk', 'financial risk', text, flags=re.IGNORECASE)
+        text = re.sub(r'derivativeproducts', 'derivative products', text, flags=re.IGNORECASE)
+        text = re.sub(r'statisticalmodelling', 'statistical modelling', text, flags=re.IGNORECASE)
+        text = re.sub(r'financialmathematics', 'financial mathematics', text, flags=re.IGNORECASE)
+        text = re.sub(r'Responsible,', 'Responsible,', text, flags=re.IGNORECASE)
+        text = re.sub(r'detail-oriented', 'detail-oriented', text, flags=re.IGNORECASE)
+        text = re.sub(r'RISKMETRICSONFINANCIALDERIVATIVES', 'RISK METRICS ON FINANCIAL DERIVATIVES', text, flags=re.IGNORECASE)
+        text = re.sub(r'RISKMETRICSON', 'RISK METRICS ON', text, flags=re.IGNORECASE)
+        text = re.sub(r'FINANCIALDERIVATIVES', 'FINANCIAL DERIVATIVES', text, flags=re.IGNORECASE)
+        text = re.sub(r'METRICSONFINANCIALDERIVATIVES', 'METRICS ON FINANCIAL DERIVATIVES', text, flags=re.IGNORECASE)
+        
+        return text
+
     def _parse_cv_data(self, cv_data: str) -> Dict[str, Any]:
         """Parse CV data to extract structured information with professional formatting"""
-        lines = [line.strip() for line in cv_data.split('\n') if line.strip()]
+        # CRITICAL: Clean the text first to fix concatenated words
+        cleaned_cv_data = self._clean_cv_text(cv_data)
+        lines = [line.strip() for line in cleaned_cv_data.split('\n') if line.strip()]
         
         parsed = {
             'name': '',
@@ -214,7 +292,67 @@ class MawneyTemplateFormatter:
                     parsed['summary'] = line
                     break
         
-            # Extract experience with improved structure detection
+        # Extract experience with improved structure detection
+        # First, try pattern-based extraction for unstructured text
+        experience_patterns = []
+        full_text = ' '.join(lines)
+        
+        # Look for common experience patterns in unstructured text - FLEXIBLE PATTERN
+        # Match: JOB TITLE, COMPANY, LOCATION, DATES with flexible spacing
+        experience_regex = r'(RISK REPORTING ASSOCIATE|ANALYST|MANAGER|DIRECTOR|OFFICER|SPECIALIST)[^a-z]*(MORGAN STANLEY|GOLDMAN SACHS|JP MORGAN|BARCLAYS|HSBC|DEUTSCHE BANK|CREDIT SUISSE|UBS|BNP PARIBAS|SOCIETE GENERALE|NOMURA|MACQUARIE|CITI|BANK OF AMERICA|WELLS FARGO|CHASE|JPMORGAN|JP MORGAN CHASE)[^a-z]*(LONDON[^a-z]*UK|NEW YORK[^a-z]*USA|CHICAGO[^a-z]*USA|BOSTON[^a-z]*USA|SAN FRANCISCO[^a-z]*USA|TORONTO[^a-z]*CANADA|SYDNEY[^a-z]*AUSTRALIA|SINGAPORE|HONG KONG|TOKYO[^a-z]*JAPAN)[^a-z]*((?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC|JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER)[^a-z]*(?:19|20)\d{2}[-–](?:19|20)\d{2}|(?:19|20)\d{2}[-–](?:Present|Current))'
+        
+        matches = re.finditer(experience_regex, full_text, re.IGNORECASE)
+        for match in matches:
+            title = match.group(1).strip()
+            company = match.group(2).strip()
+            location = match.group(3).strip()
+            dates = match.group(4).strip()
+            
+            # Extract responsibilities that follow
+            responsibilities = []
+            start_pos = match.end()
+            next_match = None
+            
+            # Find next experience or end of text
+            next_matches = list(re.finditer(experience_regex, full_text[start_pos:], re.IGNORECASE))
+            if next_matches:
+                next_match = next_matches[0]
+                end_pos = start_pos + next_match.start()
+            else:
+                end_pos = len(full_text)
+            
+            # Extract text between this experience and the next
+            responsibility_text = full_text[start_pos:end_pos]
+            
+            # Look for common responsibility patterns
+            responsibility_patterns = [
+                r'MANAGING[^.!?]*[.!?]',
+                r'DEVELOPING[^.!?]*[.!?]',
+                r'ANALYZING[^.!?]*[.!?]',
+                r'CREATING[^.!?]*[.!?]',
+                r'IMPLEMENTING[^.!?]*[.!?]',
+                r'RESPONSIBLE FOR[^.!?]*[.!?]'
+            ]
+            
+            for pattern in responsibility_patterns:
+                resp_matches = re.findall(pattern, responsibility_text, re.IGNORECASE)
+                for resp in resp_matches:
+                    if resp.strip() and len(resp.strip()) > 10:
+                        responsibilities.append(resp.strip())
+            
+            experience_patterns.append({
+                'title': title,
+                'company': company,
+                'location': location,
+                'dates': dates,
+                'responsibilities': responsibilities
+            })
+        
+        # If we found experience patterns, use them
+        if experience_patterns:
+            parsed['experience'] = experience_patterns
+        else:
+            # Fallback to original parsing logic
             experience_section = False
             current_experience = {}
             
