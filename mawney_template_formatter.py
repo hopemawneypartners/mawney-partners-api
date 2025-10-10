@@ -116,7 +116,7 @@ class MawneyTemplateFormatter:
             }
     
     def _parse_cv_data(self, cv_data: str) -> Dict[str, Any]:
-        """Parse CV data to extract structured information with improved parsing"""
+        """Parse CV data to extract structured information with professional formatting"""
         lines = [line.strip() for line in cv_data.split('\n') if line.strip()]
         
         parsed = {
@@ -214,41 +214,60 @@ class MawneyTemplateFormatter:
                     parsed['summary'] = line
                     break
         
-        # Extract experience with better structure detection
+        # Extract experience with professional structure detection
         experience_section = False
         current_experience = {}
         
-        for line in lines:
+        for i, line in enumerate(lines):
             line_lower = line.lower()
+            
+            # Start experience section
             if any(keyword in line_lower for keyword in ['professional experience', 'work experience', 'employment', 'experience']):
                 experience_section = True
                 continue
+            
+            # End experience section
             elif experience_section and any(keyword in line_lower for keyword in ['education', 'skills', 'interests', 'languages', 'certification']):
                 if current_experience:
                     parsed['experience'].append(current_experience)
                 break
+            
+            # Process experience content
             elif experience_section and line:
-                # Check if this is a company name (usually in caps or has dates)
+                # Check if this is a company name (uppercase, financial keywords, etc.)
                 if self._is_company_line(line):
+                    # Save previous experience if exists
                     if current_experience:
                         parsed['experience'].append(current_experience)
+                    
+                    # Start new experience
                     current_experience = {
                         'company': line,
                         'title': '',
                         'dates': '',
                         'responsibilities': []
                     }
+                
+                # Check if this is a job title (usually after company name)
                 elif current_experience and not current_experience['title'] and len(line) > 5:
-                    current_experience['title'] = line
-                elif current_experience and (line.startswith(('•', '-', '*', '◦')) or line.strip().startswith(' ') or len(line) > 20):
-                    # Clean up bullet points and indented content
-                    clean_line = line.strip('•-*◦ ')
-                    if clean_line and len(clean_line) > 5:
-                        current_experience['responsibilities'].append(clean_line)
-                elif current_experience and any(year in line for year in ['2024', '2023', '2022', '2021', '2020', '2019', '2018']):
-                    # Extract dates
+                    # Skip if it looks like a date or location
+                    if not re.search(r'\b(19|20)\d{2}\b', line) and not any(loc in line_lower for loc in ['london', 'uk', 'england']):
+                        current_experience['title'] = line
+                
+                # Check if this is a date line
+                elif current_experience and re.search(r'\b(19|20)\d{2}\b', line):
                     current_experience['dates'] = line
+                
+                # Check if this is a responsibility/bullet point
+                elif current_experience and (line.startswith(('•', '-', '*', '◦', '·')) or 
+                                           line.strip().startswith(' ') or 
+                                           len(line) > 30):
+                    # Clean up bullet points and indented content
+                    clean_line = line.strip('•-*◦· ')
+                    if clean_line and len(clean_line) > 10:  # Substantial content
+                        current_experience['responsibilities'].append(clean_line)
         
+        # Add final experience
         if current_experience:
             parsed['experience'].append(current_experience)
         
@@ -287,10 +306,36 @@ class MawneyTemplateFormatter:
     def _is_company_line(self, line: str) -> bool:
         """Check if line is likely a company name"""
         line_clean = line.strip()
-        return (line_clean.isupper() and len(line_clean) > 3 or 
-                any(word in line_clean.lower() for word in ['inc', 'llc', 'ltd', 'corp', 'partners', 'capital', 'management', 'bank', 'group', 'plc', 'investment', 'global']) or
-                re.search(r'\b\d{4}\b', line_clean) or  # Contains year
-                any(char in line_clean for char in ['&', ',']) and len(line_clean.split()) >= 2)  # Multi-word with separators
+        
+        # Check for uppercase company names (like "HSBC INVESTMENT BANKING", "ARROW GLOBAL")
+        if line_clean.isupper() and len(line_clean) > 5:
+            return True
+        
+        # Check for company keywords
+        company_keywords = [
+            'inc', 'llc', 'ltd', 'corp', 'partners', 'capital', 'management', 
+            'bank', 'group', 'plc', 'investment', 'global', 'fund', 'advisory',
+            'consulting', 'finance', 'financial', 'holdings', 'limited'
+        ]
+        
+        if any(word in line_clean.lower() for word in company_keywords):
+            return True
+        
+        # Check for multi-word companies with separators
+        if any(char in line_clean for char in ['&', ',']) and len(line_clean.split()) >= 2:
+            return True
+        
+        # Check for financial institutions (common patterns)
+        financial_patterns = [
+            r'\b[A-Z]{2,}\s+(BANK|INVESTMENT|CAPITAL|FUND)\b',
+            r'\b[A-Z]{2,}\s+[A-Z]{2,}\s+(GROUP|PARTNERS|HOLDINGS)\b'
+        ]
+        
+        for pattern in financial_patterns:
+            if re.search(pattern, line_clean):
+                return True
+        
+        return False
     
     def _is_school_line(self, line: str) -> bool:
         """Check if line is likely a school name"""
@@ -338,29 +383,37 @@ class MawneyTemplateFormatter:
         return '\n'.join([f'<li>{skill}</li>' for skill in skills])
     
     def _format_experience_items(self, data: Dict[str, Any]) -> str:
-        """Format experience items"""
+        """Format experience items with professional structure"""
         items = []
         for exp in data.get('experience', []):
-            company = exp.get('company', '')
-            title = exp.get('title', '')
-            dates = exp.get('dates', '')
+            company = exp.get('company', '').strip()
+            title = exp.get('title', '').strip()
+            dates = exp.get('dates', '').strip()
             responsibilities = exp.get('responsibilities', [])
             
-            item_html = f'''
-            <div class="experience-item">
-                <div class="company-header">
-                    <div class="company-name">{company}</div>
-                    <div class="dates">{dates}</div>
-                </div>
-                <div class="job-title">{title}</div>
-                <div class="responsibilities">
+            # Only add if we have substantial content
+            if company or title or responsibilities:
+                responsibility_list = ''
+                if responsibilities:
+                    responsibility_list = f'''
                     <ul>
-                        {''.join([f'<li>{resp}</li>' for resp in responsibilities])}
+                        {''.join([f'<li>{resp.strip()}</li>' for resp in responsibilities if resp.strip()])}
                     </ul>
+                    '''
+                
+                item_html = f'''
+                <div class="experience-item">
+                    <div class="company-header">
+                        <div class="company-name">{company}</div>
+                        <div class="dates">{dates}</div>
+                    </div>
+                    <div class="job-title">{title}</div>
+                    <div class="responsibilities">
+                        {responsibility_list}
+                    </div>
                 </div>
-            </div>
-            '''
-            items.append(item_html)
+                '''
+                items.append(item_html)
         
         return '\n'.join(items)
     
