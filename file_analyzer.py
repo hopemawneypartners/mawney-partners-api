@@ -282,6 +282,21 @@ class FileAnalyzer:
         text = re.sub(r'experienceof', 'experience of', text, flags=re.IGNORECASE)
         text = re.sub(r'statisticalanalysis', 'statistical analysis', text, flags=re.IGNORECASE)
         
+        # Fix more complex concatenations
+        text = re.sub(r'managingfinancial', 'managing financial', text, flags=re.IGNORECASE)
+        text = re.sub(r'riskmetrics', 'risk metrics', text, flags=re.IGNORECASE)
+        text = re.sub(r'financialrisk', 'financial risk', text, flags=re.IGNORECASE)
+        text = re.sub(r'riskanalysis', 'risk analysis', text, flags=re.IGNORECASE)
+        text = re.sub(r'riskautomation', 'risk automation', text, flags=re.IGNORECASE)
+        text = re.sub(r'riskcommittee', 'risk committee', text, flags=re.IGNORECASE)
+        text = re.sub(r'developingcalculating', 'developing calculating', text, flags=re.IGNORECASE)
+        text = re.sub(r'valueatrisk', 'value at risk', text, flags=re.IGNORECASE)
+        text = re.sub(r'marketfactors', 'market factors', text, flags=re.IGNORECASE)
+        text = re.sub(r'derivativeproducts', 'derivative products', text, flags=re.IGNORECASE)
+        text = re.sub(r'researchedthe', 'researched the', text, flags=re.IGNORECASE)
+        text = re.sub(r'universitiesand', 'universities and', text, flags=re.IGNORECASE)
+        text = re.sub(r'businessschool', 'business school', text, flags=re.IGNORECASE)
+        
         # Fix common date patterns
         text = re.sub(r'(\d{4})\s*-\s*(\d{4})', r'\1 - \2', text)
         text = re.sub(r'(\w{3})\s*(\d{4})', r'\1 \2', text)

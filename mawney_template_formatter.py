@@ -214,62 +214,70 @@ class MawneyTemplateFormatter:
                     parsed['summary'] = line
                     break
         
-        # Extract experience with professional structure detection
-        experience_section = False
-        current_experience = {}
-        
-        for i, line in enumerate(lines):
-            line_lower = line.lower()
+            # Extract experience with improved structure detection
+            experience_section = False
+            current_experience = {}
             
-            # Start experience section
-            if any(keyword in line_lower for keyword in ['professional experience', 'work experience', 'employment', 'experience']):
-                experience_section = True
-                continue
-            
-            # End experience section
-            elif experience_section and any(keyword in line_lower for keyword in ['education', 'skills', 'interests', 'languages', 'certification']):
-                if current_experience:
-                    parsed['experience'].append(current_experience)
-                break
-            
-            # Process experience content
-            elif experience_section and line:
-                # Check if this is a company name (uppercase, financial keywords, etc.)
-                if self._is_company_line(line):
-                    # Save previous experience if exists
+            for i, line in enumerate(lines):
+                line_lower = line.lower()
+                
+                # Start experience section
+                if any(keyword in line_lower for keyword in ['professional experience', 'work experience', 'employment', 'experience']):
+                    experience_section = True
+                    continue
+                
+                # End experience section
+                elif experience_section and any(keyword in line_lower for keyword in ['education', 'skills', 'interests', 'languages', 'certification']):
                     if current_experience:
                         parsed['experience'].append(current_experience)
+                    break
+                
+                # Process experience content
+                elif experience_section and line:
+                    # Check if this is a company name (uppercase, financial keywords, etc.)
+                    if self._is_company_line(line):
+                        # Save previous experience if exists
+                        if current_experience:
+                            parsed['experience'].append(current_experience)
+                        
+                        # Start new experience
+                        current_experience = {
+                            'company': line,
+                            'title': '',
+                            'dates': '',
+                            'responsibilities': []
+                        }
                     
-                    # Start new experience
-                    current_experience = {
-                        'company': line,
-                        'title': '',
-                        'dates': '',
-                        'responsibilities': []
-                    }
-                
-                # Check if this is a job title (usually after company name)
-                elif current_experience and not current_experience['title'] and len(line) > 5:
-                    # Skip if it looks like a date or location
-                    if not re.search(r'\b(19|20)\d{2}\b', line) and not any(loc in line_lower for loc in ['london', 'uk', 'england']):
-                        current_experience['title'] = line
-                
-                # Check if this is a date line
-                elif current_experience and re.search(r'\b(19|20)\d{2}\b', line):
-                    current_experience['dates'] = line
-                
-                # Check if this is a responsibility/bullet point
-                elif current_experience and (line.startswith(('•', '-', '*', '◦', '·')) or 
-                                           line.strip().startswith(' ') or 
-                                           len(line) > 30):
-                    # Clean up bullet points and indented content
-                    clean_line = line.strip('•-*◦· ')
-                    if clean_line and len(clean_line) > 10:  # Substantial content
-                        current_experience['responsibilities'].append(clean_line)
-        
-        # Add final experience
-        if current_experience:
-            parsed['experience'].append(current_experience)
+                    # Check if this is a job title (usually after company name)
+                    elif current_experience and not current_experience['title'] and len(line) > 5:
+                        # Skip if it looks like a date or location
+                        if not re.search(r'\b(19|20)\d{2}\b', line) and not any(loc in line_lower for loc in ['london', 'uk', 'england']):
+                            current_experience['title'] = line
+                    
+                    # Check if this is a date line
+                    elif current_experience and re.search(r'\b(19|20)\d{2}\b', line):
+                        current_experience['dates'] = line
+                    
+                    # Check if this is a responsibility/bullet point
+                    elif current_experience and (line.startswith(('•', '-', '*', '◦', '·')) or 
+                                               line.strip().startswith(' ') or 
+                                               len(line) > 30):
+                        # Clean up bullet points and indented content
+                        clean_line = line.strip('•-*◦· ')
+                        if clean_line and len(clean_line) > 10:  # Substantial content
+                            # Split very long lines into multiple responsibilities
+                            if len(clean_line) > 200:
+                                # Try to split on common patterns
+                                parts = re.split(r'[.!?]\s+', clean_line)
+                                for part in parts:
+                                    if part.strip() and len(part.strip()) > 10:
+                                        current_experience['responsibilities'].append(part.strip())
+                            else:
+                                current_experience['responsibilities'].append(clean_line)
+            
+            # Add final experience
+            if current_experience:
+                parsed['experience'].append(current_experience)
         
         # Extract education
         education_section = False
