@@ -188,6 +188,10 @@ class MawneyTemplateFormatter:
         text = re.sub(r'RISKMETRICSON', 'RISK METRICS ON', text, flags=re.IGNORECASE)
         text = re.sub(r'FINANCIALDERIVATIVES', 'FINANCIAL DERIVATIVES', text, flags=re.IGNORECASE)
         text = re.sub(r'METRICSONFINANCIALDERIVATIVES', 'METRICS ON FINANCIAL DERIVATIVES', text, flags=re.IGNORECASE)
+        text = re.sub(r'METRICSONFINANCIAL', 'METRICS ON FINANCIAL', text, flags=re.IGNORECASE)
+        text = re.sub(r'andproblem-solving', 'and problem-solving', text, flags=re.IGNORECASE)
+        text = re.sub(r'andproblem', 'and problem', text, flags=re.IGNORECASE)
+        text = re.sub(r'andanalytical', 'and analytical', text, flags=re.IGNORECASE)
         
         return text
 
