@@ -458,11 +458,11 @@ class MawneyTemplateFormatter:
         return '\n'.join([f'<li>{interest}</li>' for interest in interests])
     
     def _get_logo_base64(self) -> str:
-        """Get Mawney Partners CV logos from iOS assets"""
+        """Get Mawney Partners CV logos from local assets"""
         try:
-            # Try to get both CV logos from the correct assets folder
-            cv_logo_1_path = os.path.join(os.path.dirname(__file__), '..', '..', 'MP APP', 'MP APP 2', 'assets', 'cv logo 1.png')
-            cv_logo_2_path = os.path.join(os.path.dirname(__file__), '..', '..', 'MP APP', 'MP APP 2', 'assets', 'cv logo 2.png')
+            # Try to get both CV logos from the local assets folder
+            cv_logo_1_path = os.path.join(os.path.dirname(__file__), 'assets', 'cv logo 1.png')
+            cv_logo_2_path = os.path.join(os.path.dirname(__file__), 'assets', 'cv logo 2.png')
             
             logos_html = ""
             
