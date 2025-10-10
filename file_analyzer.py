@@ -282,7 +282,7 @@ class FileAnalyzer:
         text = re.sub(r'experienceof', 'experience of', text, flags=re.IGNORECASE)
         text = re.sub(r'statisticalanalysis', 'statistical analysis', text, flags=re.IGNORECASE)
         
-        # Fix more complex concatenations
+        # Fix more complex concatenations - AGGRESSIVE FIXES
         text = re.sub(r'managingfinancial', 'managing financial', text, flags=re.IGNORECASE)
         text = re.sub(r'riskmetrics', 'risk metrics', text, flags=re.IGNORECASE)
         text = re.sub(r'financialrisk', 'financial risk', text, flags=re.IGNORECASE)
@@ -296,6 +296,23 @@ class FileAnalyzer:
         text = re.sub(r'researchedthe', 'researched the', text, flags=re.IGNORECASE)
         text = re.sub(r'universitiesand', 'universities and', text, flags=re.IGNORECASE)
         text = re.sub(r'businessschool', 'business school', text, flags=re.IGNORECASE)
+        
+        # CRITICAL: Fix the specific concatenations we're seeing
+        text = re.sub(r'researchedtheuniversitiesandbusinesssci', 'researched the universities and business school', text, flags=re.IGNORECASE)
+        text = re.sub(r'researchedtheuniversitiesandbusinesssc]', 'researched the universities and business school', text, flags=re.IGNORECASE)
+        text = re.sub(r'managingfinancialriskmetricsonfinanci', 'managing financial risk metrics on financial', text, flags=re.IGNORECASE)
+        text = re.sub(r'riskanalysisautomation', 'risk analysis automation', text, flags=re.IGNORECASE)
+        text = re.sub(r'riskcommittee', 'risk committee', text, flags=re.IGNORECASE)
+        text = re.sub(r'developingcalculating', 'developing calculating', text, flags=re.IGNORECASE)
+        text = re.sub(r'analysingreports', 'analysing reports', text, flags=re.IGNORECASE)
+        text = re.sub(r'keyfinancialrisk', 'key financial risk', text, flags=re.IGNORECASE)
+        text = re.sub(r'valueatrisk', 'value at risk', text, flags=re.IGNORECASE)
+        text = re.sub(r'sensitivitiestomarket', 'sensitivities to market', text, flags=re.IGNORECASE)
+        text = re.sub(r'marketfactorsfor', 'market factors for', text, flags=re.IGNORECASE)
+        text = re.sub(r'variousderivatives', 'various derivatives', text, flags=re.IGNORECASE)
+        text = re.sub(r'equitiescredit', 'equities credit', text, flags=re.IGNORECASE)
+        text = re.sub(r'creditcorporate', 'credit corporate', text, flags=re.IGNORECASE)
+        text = re.sub(r'commoditiesand', 'commodities and', text, flags=re.IGNORECASE)
         
         # Fix common date patterns
         text = re.sub(r'(\d{4})\s*-\s*(\d{4})', r'\1 - \2', text)
