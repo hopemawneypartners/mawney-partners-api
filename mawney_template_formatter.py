@@ -405,45 +405,45 @@ class MawneyTemplateFormatter:
         return '\n'.join([f'<li>{interest}</li>' for interest in interests])
     
     def _get_logo_base64(self) -> str:
-        """Get Mawney Partners logos from iOS assets"""
+        """Get Mawney Partners CV logos from iOS assets"""
         try:
-            # Try to get both logos from iOS assets
-            logo_path = os.path.join(os.path.dirname(__file__), '..', '..', 'MP APP', 'MP APP 2', 'Assets.xcassets', 'logo.imageset', 'logo.png')
-            long_logo_path = os.path.join(os.path.dirname(__file__), '..', '..', 'MP APP', 'MP APP 2', 'Assets.xcassets', 'long logo white.imageset', 'long logo white.png')
+            # Try to get both CV logos from the correct assets folder
+            cv_logo_1_path = os.path.join(os.path.dirname(__file__), '..', '..', 'MP APP', 'MP APP 2', 'assets', 'cv logo 1.png')
+            cv_logo_2_path = os.path.join(os.path.dirname(__file__), '..', '..', 'MP APP', 'MP APP 2', 'assets', 'cv logo 2.png')
             
             logos_html = ""
             
-            # Add main logo
-            if os.path.exists(logo_path):
-                with open(logo_path, 'rb') as f:
-                    logo_data = f.read()
-                logo_base64 = base64.b64encode(logo_data).decode('utf-8')
+            # Add CV logo 1
+            if os.path.exists(cv_logo_1_path):
+                with open(cv_logo_1_path, 'rb') as f:
+                    logo_1_data = f.read()
+                logo_1_base64 = base64.b64encode(logo_1_data).decode('utf-8')
                 
                 logos_html += f'''
                 <div style="text-align: center; margin-bottom: 20px;">
-                    <img src="data:image/png;base64,{logo_base64}" alt="Mawney Partners Logo" style="max-width: 150px; height: auto;" />
+                    <img src="data:image/png;base64,{logo_1_base64}" alt="Mawney Partners CV Logo 1" style="max-width: 150px; height: auto;" />
                 </div>
                 '''
-                logger.info("Using actual MP logo from assets")
+                logger.info("Using actual CV logo 1 from assets")
             
-            # Add long logo
-            if os.path.exists(long_logo_path):
-                with open(long_logo_path, 'rb') as f:
-                    long_logo_data = f.read()
-                long_logo_base64 = base64.b64encode(long_logo_data).decode('utf-8')
+            # Add CV logo 2
+            if os.path.exists(cv_logo_2_path):
+                with open(cv_logo_2_path, 'rb') as f:
+                    logo_2_data = f.read()
+                logo_2_base64 = base64.b64encode(logo_2_data).decode('utf-8')
                 
                 logos_html += f'''
                 <div style="text-align: center; margin-bottom: 30px;">
-                    <img src="data:image/png;base64,{long_logo_base64}" alt="Mawney Partners Long Logo" style="max-width: 250px; height: auto;" />
+                    <img src="data:image/png;base64,{logo_2_base64}" alt="Mawney Partners CV Logo 2" style="max-width: 200px; height: auto;" />
                 </div>
                 '''
-                logger.info("Using actual MP long logo from assets")
+                logger.info("Using actual CV logo 2 from assets")
             
             if logos_html:
                 return logos_html
             else:
                 # Fallback to text logo if images not found
-                logger.warning("MP logos not found, using text fallback")
+                logger.warning("CV logos not found, using text fallback")
                 return '''
                 <div style="text-align: center; margin-bottom: 30px;">
                     <div style="font-family: 'EB Garamond', serif; font-size: 36pt; font-weight: 700; color: #2c3e50; letter-spacing: 8px;">
@@ -455,7 +455,7 @@ class MawneyTemplateFormatter:
                 </div>
                 '''
         except Exception as e:
-            logger.error(f"Error getting logos: {e}")
+            logger.error(f"Error getting CV logos: {e}")
             return ""
     
     def _extract_text_from_html(self, html: str) -> str:
