@@ -190,30 +190,40 @@ class MawneyTemplateFormatter:
                 parsed['location'] = line
                 break
         
-        # Extract professional summary
+        # Extract professional summary - look for actual CV content, not auto-populated
         summary_started = False
         current_summary = []
         
         for line in lines:
-            if any(keyword in line.lower() for keyword in ['professional summary', 'profile', 'overview']):
+            line_lower = line.lower()
+            if any(keyword in line_lower for keyword in ['professional summary', 'profile', 'overview', 'objective']):
                 summary_started = True
                 continue
-            elif summary_started and any(keyword in line.lower() for keyword in ['experience', 'education', 'skills']):
+            elif summary_started and any(keyword in line_lower for keyword in ['experience', 'education', 'skills', 'work']):
                 break
-            elif summary_started and line:
+            elif summary_started and line and len(line) > 20:  # Substantial content
                 current_summary.append(line)
         
-        parsed['summary'] = ' '.join(current_summary)
+        # Only use actual CV summary, not auto-populated content
+        if current_summary and not any(generic in ' '.join(current_summary).lower() for generic in ['postgraduate and certified', 'looking for an analyst position', 'financial risk management']):
+            parsed['summary'] = ' '.join(current_summary)
+        else:
+            # Extract first substantial paragraph as summary if no dedicated summary section
+            for line in lines[2:8]:  # Check lines 3-8 for potential summary
+                if len(line) > 50 and not any(keyword in line.lower() for keyword in ['experience', 'education', 'skills', 'work', 'contact']):
+                    parsed['summary'] = line
+                    break
         
-        # Extract experience
+        # Extract experience with better structure detection
         experience_section = False
         current_experience = {}
         
         for line in lines:
-            if any(keyword in line.lower() for keyword in ['professional experience', 'work experience', 'employment']):
+            line_lower = line.lower()
+            if any(keyword in line_lower for keyword in ['professional experience', 'work experience', 'employment', 'experience']):
                 experience_section = True
                 continue
-            elif experience_section and any(keyword in line.lower() for keyword in ['education', 'skills', 'interests']):
+            elif experience_section and any(keyword in line_lower for keyword in ['education', 'skills', 'interests', 'languages', 'certification']):
                 if current_experience:
                     parsed['experience'].append(current_experience)
                 break
@@ -228,10 +238,16 @@ class MawneyTemplateFormatter:
                         'dates': '',
                         'responsibilities': []
                     }
-                elif current_experience and not current_experience['title']:
+                elif current_experience and not current_experience['title'] and len(line) > 5:
                     current_experience['title'] = line
-                elif current_experience and line.startswith(('•', '-', '*')) or line.startswith(' '):
-                    current_experience['responsibilities'].append(line.strip('•-* '))
+                elif current_experience and (line.startswith(('•', '-', '*', '◦')) or line.strip().startswith(' ') or len(line) > 20):
+                    # Clean up bullet points and indented content
+                    clean_line = line.strip('•-*◦ ')
+                    if clean_line and len(clean_line) > 5:
+                        current_experience['responsibilities'].append(clean_line)
+                elif current_experience and any(year in line for year in ['2024', '2023', '2022', '2021', '2020', '2019', '2018']):
+                    # Extract dates
+                    current_experience['dates'] = line
         
         if current_experience:
             parsed['experience'].append(current_experience)
@@ -270,25 +286,17 @@ class MawneyTemplateFormatter:
     
     def _is_company_line(self, line: str) -> bool:
         """Check if line is likely a company name"""
-        return (line.isupper() or 
-                any(word in line.lower() for word in ['inc', 'llc', 'ltd', 'corp', 'partners', 'capital', 'management']) or
-                re.search(r'\b\d{4}\b', line))  # Contains year
+        line_clean = line.strip()
+        return (line_clean.isupper() and len(line_clean) > 3 or 
+                any(word in line_clean.lower() for word in ['inc', 'llc', 'ltd', 'corp', 'partners', 'capital', 'management', 'bank', 'group', 'plc', 'investment', 'global']) or
+                re.search(r'\b\d{4}\b', line_clean) or  # Contains year
+                any(char in line_clean for char in ['&', ',']) and len(line_clean.split()) >= 2)  # Multi-word with separators
     
     def _is_school_line(self, line: str) -> bool:
         """Check if line is likely a school name"""
         return (any(word in line.lower() for word in ['university', 'college', 'school', 'institute']) or
                 line.isupper())
     
-    def _get_logo_base64(self) -> str:
-        """Get the MP logo as base64"""
-        logo_path = os.path.join(os.path.dirname(__file__), 'assets', 'cv logo 1.png')
-        try:
-            with open(logo_path, 'rb') as f:
-                logo_data = f.read()
-                return base64.b64encode(logo_data).decode('utf-8')
-        except Exception as e:
-            logger.error(f"Error loading logo: {e}")
-            return ""
     
     def _format_contact_info(self, data: Dict[str, Any]) -> str:
         """Format contact information"""
@@ -397,26 +405,45 @@ class MawneyTemplateFormatter:
         return '\n'.join([f'<li>{interest}</li>' for interest in interests])
     
     def _get_logo_base64(self) -> str:
-        """Get MP logo as base64 from iOS assets"""
+        """Get Mawney Partners logos from iOS assets"""
         try:
-            # Try to get the actual MP logo from iOS assets
+            # Try to get both logos from iOS assets
             logo_path = os.path.join(os.path.dirname(__file__), '..', '..', 'MP APP', 'MP APP 2', 'Assets.xcassets', 'logo.imageset', 'logo.png')
+            long_logo_path = os.path.join(os.path.dirname(__file__), '..', '..', 'MP APP', 'MP APP 2', 'Assets.xcassets', 'long logo white.imageset', 'long logo white.png')
             
+            logos_html = ""
+            
+            # Add main logo
             if os.path.exists(logo_path):
                 with open(logo_path, 'rb') as f:
                     logo_data = f.read()
-                import base64
                 logo_base64 = base64.b64encode(logo_data).decode('utf-8')
                 
-                logger.info("Using actual MP logo from assets")
-                return f'''
-                <div style="text-align: center; margin-bottom: 30px;">
-                    <img src="data:image/png;base64,{logo_base64}" alt="Mawney Partners Logo" style="max-width: 200px; height: auto;" />
+                logos_html += f'''
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <img src="data:image/png;base64,{logo_base64}" alt="Mawney Partners Logo" style="max-width: 150px; height: auto;" />
                 </div>
                 '''
+                logger.info("Using actual MP logo from assets")
+            
+            # Add long logo
+            if os.path.exists(long_logo_path):
+                with open(long_logo_path, 'rb') as f:
+                    long_logo_data = f.read()
+                long_logo_base64 = base64.b64encode(long_logo_data).decode('utf-8')
+                
+                logos_html += f'''
+                <div style="text-align: center; margin-bottom: 30px;">
+                    <img src="data:image/png;base64,{long_logo_base64}" alt="Mawney Partners Long Logo" style="max-width: 250px; height: auto;" />
+                </div>
+                '''
+                logger.info("Using actual MP long logo from assets")
+            
+            if logos_html:
+                return logos_html
             else:
-                # Fallback to text logo if image not found
-                logger.warning("MP logo not found, using text fallback")
+                # Fallback to text logo if images not found
+                logger.warning("MP logos not found, using text fallback")
                 return '''
                 <div style="text-align: center; margin-bottom: 30px;">
                     <div style="font-family: 'EB Garamond', serif; font-size: 36pt; font-weight: 700; color: #2c3e50; letter-spacing: 8px;">
@@ -428,7 +455,7 @@ class MawneyTemplateFormatter:
                 </div>
                 '''
         except Exception as e:
-            logger.error(f"Error getting logo: {e}")
+            logger.error(f"Error getting logos: {e}")
             return ""
     
     def _extract_text_from_html(self, html: str) -> str:
