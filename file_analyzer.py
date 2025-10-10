@@ -271,6 +271,25 @@ class FileAnalyzer:
         text = text.replace('ﬁ', 'fi')
         text = text.replace('ﬂ', 'fl')
         text = text.replace('ﬀ', 'ff')
+        
+        # CRITICAL: Fix concatenated words that are common in CVs
+        # Add spaces between lowercase and uppercase letters
+        text = re.sub(r'([a-z])([A-Z])', r'\1 \2', text)
+        
+        # Fix specific concatenated words we've seen
+        text = re.sub(r'stronganalytical', 'strong analytical', text, flags=re.IGNORECASE)
+        text = re.sub(r'problem-solving', 'problem-solving', text, flags=re.IGNORECASE)
+        text = re.sub(r'lookingfor', 'looking for', text, flags=re.IGNORECASE)
+        text = re.sub(r'ananalyst', 'an analyst', text, flags=re.IGNORECASE)
+        text = re.sub(r'financialrisk', 'financial risk', text, flags=re.IGNORECASE)
+        text = re.sub(r'derivativeproducts', 'derivative products', text, flags=re.IGNORECASE)
+        text = re.sub(r'statisticalmodelling', 'statistical modelling', text, flags=re.IGNORECASE)
+        text = re.sub(r'financialmathematics', 'financial mathematics', text, flags=re.IGNORECASE)
+        text = re.sub(r'Responsible,', 'Responsible,', text, flags=re.IGNORECASE)
+        text = re.sub(r'detail-oriented', 'detail-oriented', text, flags=re.IGNORECASE)
+        text = re.sub(r'RISKMETRICSONFINANCIALDERIVATIVES', 'RISK METRICS ON FINANCIAL DERIVATIVES', text, flags=re.IGNORECASE)
+        text = re.sub(r'RISKMETRICSON', 'RISK METRICS ON', text, flags=re.IGNORECASE)
+        text = re.sub(r'FINANCIALDERIVATIVES', 'FINANCIAL DERIVATIVES', text, flags=re.IGNORECASE)
         text = text.replace('ﬃ', 'ffi')
         text = text.replace('ﬄ', 'ffl')
         
