@@ -39,6 +39,17 @@ class MawneyTemplateFormatter:
             top_logo_base64 = self._get_top_logo_base64()
             bottom_logo_base64 = self._get_bottom_logo_base64()
             
+        except Exception as e:
+            logger.error(f"Error loading template: {e}")
+            return {
+                'success': False,
+                'error': f"Template loading failed: {str(e)}",
+                'html_version': '',
+                'text_version': '',
+                'download_url': '',
+                'download_filename': ''
+            }
+        
         # Fill in the template using safe string replacement to avoid Python format conflicts
         formatted_html = template
         formatted_html = formatted_html.replace('{TOP_LOGO_BASE64}', top_logo_base64)
