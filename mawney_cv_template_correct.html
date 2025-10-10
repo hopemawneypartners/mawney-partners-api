@@ -28,10 +28,19 @@
             margin: 2cm;
         }
         
-        /* Header Section - Just the name */
+        /* Header Section with MP logo */
         .header {
             text-align: center;
             margin-bottom: 30px;
+        }
+        
+        .top-logo {
+            margin-bottom: 15px;
+        }
+        
+        .top-logo img {
+            max-width: 80px;
+            height: auto;
         }
         
         .candidate-name {
@@ -149,6 +158,21 @@
             color: #2c3e50;
         }
         
+        /* Footer with MAWNEY Partners logo */
+        .footer {
+            position: fixed;
+            bottom: 2cm;
+            left: 2cm;
+            right: 2cm;
+            text-align: center;
+            z-index: 1000;
+        }
+        
+        .bottom-logo img {
+            max-width: 120px;
+            height: auto;
+        }
+        
         /* Page Break Controls */
         .section {
             page-break-inside: avoid;
@@ -220,6 +244,9 @@
 </head>
 <body>
     <div class="header">
+        <div class="top-logo">
+            {TOP_LOGO_BASE64}
+        </div>
         <div class="candidate-name">{NAME}</div>
         <div class="contact-info">{CONTACT_INFO}</div>
     </div>
@@ -244,6 +271,12 @@
         <ul class="skills-list">
             {SKILLS_LIST}
         </ul>
+    </div>
+    
+    <div class="footer">
+        <div class="bottom-logo">
+            {BOTTOM_LOGO_BASE64}
+        </div>
     </div>
 </body>
 </html>

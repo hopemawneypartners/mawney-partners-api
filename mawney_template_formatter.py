@@ -35,10 +35,14 @@ class MawneyTemplateFormatter:
             
             logger.info(f"Template loaded, length: {len(template)} characters")
             
-            # No logo needed for Mawney Partners CV format
+            # Get both logos for Mawney Partners CV format
+            top_logo_base64 = self._get_top_logo_base64()
+            bottom_logo_base64 = self._get_bottom_logo_base64()
             
         # Fill in the template using safe string replacement to avoid Python format conflicts
         formatted_html = template
+        formatted_html = formatted_html.replace('{TOP_LOGO_BASE64}', top_logo_base64)
+        formatted_html = formatted_html.replace('{BOTTOM_LOGO_BASE64}', bottom_logo_base64)
         formatted_html = formatted_html.replace('{NAME}', parsed_data.get('name', ''))
         formatted_html = formatted_html.replace('{CONTACT_INFO}', self._format_contact_info(parsed_data))
         formatted_html = formatted_html.replace('{PROFESSIONAL_SUMMARY}', self._format_professional_summary(parsed_data))
@@ -597,35 +601,67 @@ class MawneyTemplateFormatter:
         
         return '\n'.join([f'<li>{interest}</li>' for interest in interests])
     
-    def _get_logo_base64(self) -> str:
-        """Get Mawney Partners MP logo from local assets"""
+    def _get_top_logo_base64(self) -> str:
+        """Get top MP logo (cv logo 1.png) from local assets"""
         try:
-            # Try to get the MP logo from the local assets folder
-            mp_logo_path = os.path.join(os.path.dirname(__file__), 'assets', 'cv logo 1.png')
+            # Try to get the top MP logo from the local assets folder
+            top_logo_path = os.path.join(os.path.dirname(__file__), 'assets', 'cv logo 1.png')
             
-            if os.path.exists(mp_logo_path):
-                with open(mp_logo_path, 'rb') as f:
+            if os.path.exists(top_logo_path):
+                with open(top_logo_path, 'rb') as f:
                     logo_data = f.read()
                 logo_base64 = base64.b64encode(logo_data).decode('utf-8')
                 
                 logo_html = f'''
-                <img src="data:image/png;base64,{logo_base64}" alt="Mawney Partners" style="max-width: 80px; height: auto;" />
+                <img src="data:image/png;base64,{logo_base64}" alt="MP" style="max-width: 80px; height: auto;" />
                 '''
-                logger.info("Using actual MP logo from assets")
+                logger.info("Using actual top MP logo from assets")
                 return logo_html
             else:
                 # Fallback to text logo if image not found
-                logger.warning("MP logo not found, using text fallback")
+                logger.warning("Top MP logo not found, using text fallback")
                 return '''
                 <div style="font-family: 'EB Garamond', serif; font-size: 36pt; font-weight: 700; color: #2c3e50; letter-spacing: 8px;">
                     MP
                 </div>
                 '''
         except Exception as e:
-            logger.error(f"Error getting MP logo: {e}")
+            logger.error(f"Error getting top MP logo: {e}")
             return '''
             <div style="font-family: 'EB Garamond', serif; font-size: 36pt; font-weight: 700; color: #2c3e50; letter-spacing: 8px;">
                 MP
+            </div>
+            '''
+    
+    def _get_bottom_logo_base64(self) -> str:
+        """Get bottom MAWNEY Partners logo (cv logo 2.png) from local assets"""
+        try:
+            # Try to get the bottom MAWNEY Partners logo from the local assets folder
+            bottom_logo_path = os.path.join(os.path.dirname(__file__), 'assets', 'cv logo 2.png')
+            
+            if os.path.exists(bottom_logo_path):
+                with open(bottom_logo_path, 'rb') as f:
+                    logo_data = f.read()
+                logo_base64 = base64.b64encode(logo_data).decode('utf-8')
+                
+                logo_html = f'''
+                <img src="data:image/png;base64,{logo_base64}" alt="MAWNEY Partners" style="max-width: 120px; height: auto;" />
+                '''
+                logger.info("Using actual bottom MAWNEY Partners logo from assets")
+                return logo_html
+            else:
+                # Fallback to text logo if image not found
+                logger.warning("Bottom MAWNEY Partners logo not found, using text fallback")
+                return '''
+                <div style="font-family: 'Arial', sans-serif; font-size: 12pt; font-weight: 700; color: #2c3e50; letter-spacing: 1px;">
+                    MAWNEY PARTNERS
+                </div>
+                '''
+        except Exception as e:
+            logger.error(f"Error getting bottom MAWNEY Partners logo: {e}")
+            return '''
+            <div style="font-family: 'Arial', sans-serif; font-size: 12pt; font-weight: 700; color: #2c3e50; letter-spacing: 1px;">
+                MAWNEY PARTNERS
             </div>
             '''
     
