@@ -2752,8 +2752,10 @@ def download_cv(filename):
         }), 500
 
 if __name__ == '__main__':
-    # Force restart to pick up new template
+    # Force restart to pick up new template and text parsing fixes
     port = int(os.environ.get('PORT', 5001))
     print(f"🚀 Starting Mawney Partners API with AI Assistant on port {port}")
     print("🧠 AI Assistant system loaded with advanced capabilities...")
+    print("📝 Text parsing fixes deployed - strategic line breaks for CV structure")
+    print("📄 Template pagination fixes deployed - improved margins and spacing")
     app.run(host='0.0.0.0', port=port, debug=False)
