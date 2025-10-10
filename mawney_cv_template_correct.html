@@ -20,43 +20,28 @@
             background: white;
             width: 100%;
             max-width: none;
+            padding: 2cm;
         }
         
         @page {
             size: A4;
-            margin: 2cm 2.5cm;
+            margin: 2cm;
         }
         
-        /* Header Section */
+        /* Header Section - Just the name */
         .header {
             text-align: center;
             margin-bottom: 30px;
         }
         
-        .logo {
-            margin-bottom: 10px;
-        }
-        
-        .logo img {
-            max-width: 80px;
-            height: auto;
-        }
-        
-        .company-name {
-            font-family: 'EB Garamond', serif;
-            font-size: 10pt;
-            font-weight: 600;
-            color: #2c3e50;
-            letter-spacing: 2px;
-            margin-bottom: 20px;
-        }
-        
         .candidate-name {
             font-family: 'EB Garamond', serif;
-            font-size: 24pt;
+            font-size: 28pt;
             font-weight: 700;
             color: #2c3e50;
-            margin-bottom: 15px;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }
         
         .contact-info {
@@ -68,61 +53,29 @@
         /* Section Headers */
         .section-header {
             font-family: 'Arial', sans-serif;
-            font-size: 12pt;
+            font-size: 14pt;
             font-weight: 700;
             color: #2c3e50;
             text-transform: uppercase;
             letter-spacing: 1px;
-            margin-bottom: 10px;
-            border-bottom: 2px solid #3498db;
-            padding-bottom: 5px;
+            margin-bottom: 15px;
+            margin-top: 25px;
         }
         
         .section {
             margin-bottom: 25px;
         }
         
-        /* Professional Summary */
-        .summary {
+        /* Profile/Summary Section */
+        .profile {
             font-size: 11pt;
             line-height: 1.5;
             margin-bottom: 20px;
         }
         
-        /* Skills Section - Two Columns */
-        .skills-container {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 20px;
-        }
-        
-        .skills-column {
-            width: 48%;
-        }
-        
-        .skills-list {
-            list-style: none;
-            padding: 0;
-        }
-        
-        .skills-list li {
-            font-size: 11pt;
-            margin-bottom: 5px;
-            padding-left: 15px;
-            position: relative;
-        }
-        
-        .skills-list li:before {
-            content: "•";
-            color: #2c3e50;
-            font-weight: bold;
-            position: absolute;
-            left: 0;
-        }
-        
         /* Experience Section */
         .experience-item {
-            margin-bottom: 20px;
+            margin-bottom: 25px;
         }
         
         .job-header {
@@ -150,6 +103,28 @@
         }
         
         .job-details li:before {
+            content: "•";
+            color: #2c3e50;
+            font-weight: bold;
+            position: absolute;
+            left: 0;
+        }
+        
+        /* Skills Section */
+        .skills-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .skills-list li {
+            font-size: 11pt;
+            margin-bottom: 5px;
+            padding-left: 15px;
+            position: relative;
+        }
+        
+        .skills-list li:before {
             content: "•";
             color: #2c3e50;
             font-weight: bold;
@@ -194,16 +169,23 @@
             page-break-inside: auto;
         }
         
-        /* Print styles */
+        /* Print styles for proper pagination */
         @media print {
+            @page {
+                size: A4;
+                margin: 2cm;
+            }
+            
             body {
                 width: 100% !important;
                 max-width: none !important;
                 margin: 0 !important;
-                padding: 0 !important;
+                padding: 2cm !important;
                 font-size: 11pt !important;
                 line-height: 1.4 !important;
                 page-break-inside: auto !important;
+                height: auto !important;
+                overflow: visible !important;
             }
             
             .section {
@@ -220,6 +202,15 @@
                 page-break-after: avoid !important;
             }
             
+            /* Force page breaks when needed */
+            .page-break-before {
+                page-break-before: always !important;
+            }
+            
+            .page-break-after {
+                page-break-after: always !important;
+            }
+            
             * {
                 -webkit-print-color-adjust: exact !important;
                 color-adjust: exact !important;
@@ -229,37 +220,17 @@
 </head>
 <body>
     <div class="header">
-        <div class="logo">
-            {TOP_LOGO_BASE64}
-        </div>
-        <div class="company-name">MAWNEY PARTNERS</div>
         <div class="candidate-name">{NAME}</div>
         <div class="contact-info">{CONTACT_INFO}</div>
     </div>
     
     <div class="section">
-        <div class="section-header">PROFESSIONAL SUMMARY</div>
-        <div class="summary">{PROFESSIONAL_SUMMARY}</div>
+        <div class="section-header">PROFILE</div>
+        <div class="profile">{PROFESSIONAL_SUMMARY}</div>
     </div>
     
     <div class="section">
-        <div class="section-header">SIGNIFICANT EXPERTISE IN THE FOLLOWING:</div>
-        <div class="skills-container">
-            <div class="skills-column">
-                <ul class="skills-list">
-                    {SKILLS_COLUMN_1}
-                </ul>
-            </div>
-            <div class="skills-column">
-                <ul class="skills-list">
-                    {SKILLS_COLUMN_2}
-                </ul>
-            </div>
-        </div>
-    </div>
-    
-    <div class="section">
-        <div class="section-header">PROFESSIONAL EXPERIENCE</div>
+        <div class="section-header">WORK EXPERIENCE</div>
         {EXPERIENCE_ITEMS}
     </div>
     
@@ -269,8 +240,10 @@
     </div>
     
     <div class="section">
-        <div class="section-header">INTERESTS</div>
-        <div class="summary">{INTERESTS_ITEMS}</div>
+        <div class="section-header">KEY SKILLS & COMPETENCIES</div>
+        <ul class="skills-list">
+            {SKILLS_LIST}
+        </ul>
     </div>
 </body>
 </html>
