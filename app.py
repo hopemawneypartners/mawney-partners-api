@@ -2758,4 +2758,5 @@ if __name__ == '__main__':
     print("🧠 AI Assistant system loaded with advanced capabilities...")
     print("📝 Text parsing fixes deployed - strategic line breaks for CV structure")
     print("📄 Template pagination fixes deployed - improved margins and spacing")
+    print("🎨 Logo fixes deployed - top MP logo and bottom MAWNEY Partners logo")
     app.run(host='0.0.0.0', port=port, debug=False)
