@@ -1859,20 +1859,25 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
                 "has_file": False
             }
         
-        # Format the CV using the ENHANCED V8 Mawney Partners template with final parsing fixes
+        # Format the CV using the ENHANCED V9 Mawney Partners template with pagination fixes
         try:
-            from enhanced_cv_formatter_v8 import enhanced_cv_formatter_v8
-            formatted_result = enhanced_cv_formatter_v8.format_cv_with_template(cv_content, filename)
+            from enhanced_cv_formatter_v9 import enhanced_cv_formatter_v9
+            formatted_result = enhanced_cv_formatter_v9.format_cv_with_template(cv_content, filename)
         except ImportError:
             try:
-                # Fallback to V7 enhanced formatter
-                from enhanced_cv_formatter_v7 import enhanced_cv_formatter_v7
-                formatted_result = enhanced_cv_formatter_v7.format_cv_with_template(cv_content, filename)
+                # Fallback to V8 enhanced formatter
+                from enhanced_cv_formatter_v8 import enhanced_cv_formatter_v8
+                formatted_result = enhanced_cv_formatter_v8.format_cv_with_template(cv_content, filename)
             except ImportError:
                 try:
-                    # Fallback to V6 enhanced formatter
-                    from enhanced_cv_formatter_v6 import enhanced_cv_formatter_v6
-                    formatted_result = enhanced_cv_formatter_v6.format_cv_with_template(cv_content, filename)
+                    # Fallback to V7 enhanced formatter
+                    from enhanced_cv_formatter_v7 import enhanced_cv_formatter_v7
+                    formatted_result = enhanced_cv_formatter_v7.format_cv_with_template(cv_content, filename)
+                except ImportError:
+                    try:
+                        # Fallback to V6 enhanced formatter
+                        from enhanced_cv_formatter_v6 import enhanced_cv_formatter_v6
+                        formatted_result = enhanced_cv_formatter_v6.format_cv_with_template(cv_content, filename)
             except ImportError:
                 try:
                     # Fallback to V5 enhanced formatter
