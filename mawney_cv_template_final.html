@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CV - Mawney Partners</title>
+    <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        html, body {
+            font-family: 'EB Garamond', serif;
+            font-size: 11pt;
+            line-height: 1.4;
+            color: #2c3e50;
+            background: white;
+        }
+        
+        /* A4 Page Settings */
+        @page {
+            size: A4;
+            margin: 2cm;
+        }
+        
+        .cv-container {
+            width: 21cm;
+            max-width: 21cm;
+            margin: 0 auto;
+            padding: 2cm;
+            min-height: 29.7cm;
+            background: white;
+        }
+        
+        /* Header */
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .top-logo {
+            margin-bottom: 15px;
+        }
+        
+        .top-logo img {
+            max-width: 80px;
+            height: auto;
+            display: block;
+            margin: 0 auto;
+        }
+        
+        .candidate-name {
+            font-family: 'EB Garamond', serif;
+            font-size: 11pt;
+            font-weight: 700;
+            color: #2c3e50;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .contact-info {
+            font-size: 11pt;
+            color: #2c3e50;
+            margin-bottom: 25px;
+        }
+        
+        /* Section Headers */
+        .section-header {
+            font-family: 'EB Garamond', serif;
+            font-size: 11pt;
+            font-weight: 700;
+            color: #2c3e50;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 15px;
+            margin-top: 25px;
+            border-bottom: 1px solid #2c3e50;
+            padding-bottom: 5px;
+        }
+        
+        /* Experience Section */
+        .experience-item {
+            margin-bottom: 20px;
+            page-break-inside: avoid;
+        }
+        
+        .job-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 8px;
+        }
+        
+        .job-title-company {
+            flex: 1;
+            font-family: 'EB Garamond', serif;
+            font-size: 11pt;
+            font-weight: 700;
+            color: #2c3e50;
+            text-transform: uppercase;
+        }
+        
+        .job-dates {
+            font-family: 'EB Garamond', serif;
+            font-size: 11pt;
+            font-weight: 700;
+            color: #2c3e50;
+            text-align: right;
+            margin-left: 20px;
+            white-space: nowrap;
+        }
+        
+        .job-details {
+            font-size: 11pt;
+            line-height: 1.4;
+            margin-left: 0;
+        }
+        
+        .job-details ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .job-details li {
+            margin-bottom: 4px;
+            padding-left: 15px;
+            position: relative;
+        }
+        
+        .job-details li:before {
+            content: "•";
+            color: #2c3e50;
+            font-weight: bold;
+            position: absolute;
+            left: 0;
+        }
+        
+        /* Education Section */
+        .education-item {
+            margin-bottom: 18px;
+            page-break-inside: avoid;
+        }
+        
+        .education-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 6px;
+        }
+        
+        .education-header .job-title-company {
+            text-transform: uppercase;
+        }
+        
+        .education-details {
+            font-size: 11pt;
+            color: #2c3e50;
+            line-height: 1.4;
+        }
+        
+        .education-details ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .education-details li {
+            margin-bottom: 3px;
+            padding-left: 15px;
+            position: relative;
+        }
+        
+        .education-details li:before {
+            content: "•";
+            color: #2c3e50;
+            font-weight: bold;
+            position: absolute;
+            left: 0;
+        }
+        
+        /* Skills Section */
+        .skills-section {
+            margin-bottom: 20px;
+        }
+        
+        .skills-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .skills-list li {
+            margin-bottom: 4px;
+            padding-left: 15px;
+            position: relative;
+            font-size: 11pt;
+            line-height: 1.4;
+        }
+        
+        .skills-list li:before {
+            content: "•";
+            color: #2c3e50;
+            font-weight: bold;
+            position: absolute;
+            left: 0;
+        }
+        
+        /* Footer */
+        .footer {
+            position: fixed;
+            bottom: 1.5cm;
+            right: 2cm;
+            text-align: right;
+        }
+        
+        .bottom-logo img {
+            max-width: 110px;
+            height: auto;
+            display: block;
+            margin-left: auto;
+        }
+        
+        /* Print Styles */
+        @media print {
+            @page {
+                size: A4;
+                margin: 2cm;
+            }
+            
+            .cv-container {
+                width: 100%;
+                max-width: 100%;
+                margin: 0;
+                padding: 0;
+            }
+            
+            .footer {
+                position: fixed;
+                bottom: 1.5cm;
+                right: 2cm;
+            }
+            
+            /* Ensure proper page breaks */
+            .experience-item, .education-item {
+                page-break-inside: auto;
+            }
+            
+            .section-header {
+                page-break-after: avoid;
+            }
+        }
+        
+        /* Screen Styles */
+        @media screen {
+            body {
+                background: #f5f5f5;
+                padding: 20px;
+            }
+            
+            .cv-container {
+                box-shadow: 0 0 10px rgba(0,0,0,0.1);
+                margin-bottom: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="cv-container">
+        <div class="header">
+            <div class="top-logo">
+                {TOP_LOGO_BASE64}
+            </div>
+            <div class="candidate-name">{NAME}</div>
+            <div class="contact-info">{CONTACT_INFO}</div>
+        </div>
+        
+        <div class="section-header">WORK EXPERIENCE</div>
+        {EXPERIENCE_ITEMS}
+        
+        <div class="section-header">EDUCATION</div>
+        {EDUCATION_ITEMS}
+        
+        <div class="section-header">KEY SKILLS & COMPETENCIES</div>
+        {SKILLS_LIST}
+        
+        <div class="footer">
+            <div class="bottom-logo">
+                {BOTTOM_LOGO_BASE64}
+            </div>
+        </div>
+    </div>
+</body>
+</html>
