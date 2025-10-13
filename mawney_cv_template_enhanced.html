@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mawney Partners CV</title>
+    <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        /* A4 Page Settings - CRITICAL FOR PAGINATION */
+        @page {
+            size: A4;
+            margin: 2cm;
+        }
+        
+        body {
+            font-family: 'EB Garamond', serif;
+            font-size: 11pt;
+            line-height: 1.4;
+            color: #2c3e50;
+            background: white;
+            margin: 0;
+            padding: 2cm;
+            width: 21cm;  /* A4 width */
+            max-width: 21cm;
+        }
+        
+        /* Header Section with MP logo */
+        .header {
+            text-align: center;
+            margin-bottom: 25px;
+            page-break-after: avoid;
+        }
+        
+        .top-logo {
+            margin-bottom: 12px;
+        }
+        
+        .top-logo img {
+            max-width: 80px;
+            height: auto;
+        }
+        
+        .candidate-name {
+            font-family: 'EB Garamond', serif;
+            font-size: 26pt;
+            font-weight: 700;
+            color: #2c3e50;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .contact-info {
+            font-size: 10pt;
+            color: #2c3e50;
+            margin-bottom: 25px;
+        }
+        
+        /* Section Headers */
+        .section-header {
+            font-family: 'Arial', sans-serif;
+            font-size: 13pt;
+            font-weight: 700;
+            color: #2c3e50;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 12px;
+            margin-top: 20px;
+            page-break-after: avoid;  /* Keep header with content */
+        }
+        
+        .section {
+            margin-bottom: 20px;
+            page-break-inside: auto;  /* Allow breaking inside sections */
+        }
+        
+        /* Profile/Summary Section */
+        .profile {
+            font-size: 11pt;
+            line-height: 1.5;
+            margin-bottom: 18px;
+            page-break-inside: avoid;
+        }
+        
+        .profile p {
+            margin-bottom: 8px;
+        }
+        
+        /* Experience Section - CRITICAL FOR PAGINATION */
+        .experience-item {
+            margin-bottom: 18px;
+            page-break-inside: avoid;  /* Try to keep each experience item together */
+        }
+        
+        .job-header {
+            font-weight: 700;
+            font-size: 11.5pt;
+            color: #2c3e50;
+            margin-bottom: 6px;
+            page-break-after: avoid;  /* Keep header with details */
+        }
+        
+        .job-details {
+            font-size: 11pt;
+            line-height: 1.4;
+        }
+        
+        .job-details ul {
+            list-style: none;
+            padding: 0;
+            margin-top: 6px;
+        }
+        
+        .job-details li {
+            margin-bottom: 4px;
+            padding-left: 15px;
+            position: relative;
+        }
+        
+        .job-details li:before {
+            content: "•";
+            color: #2c3e50;
+            font-weight: bold;
+            position: absolute;
+            left: 0;
+        }
+        
+        /* Skills Section */
+        .skills-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            column-count: 2;
+            column-gap: 20px;
+        }
+        
+        .skills-list li {
+            font-size: 10pt;
+            margin-bottom: 4px;
+            padding-left: 12px;
+            position: relative;
+            break-inside: avoid;
+        }
+        
+        .skills-list li:before {
+            content: "•";
+            color: #2c3e50;
+            font-weight: bold;
+            position: absolute;
+            left: 0;
+        }
+        
+        /* Education Section */
+        .education-item {
+            margin-bottom: 15px;
+            page-break-inside: avoid;
+        }
+        
+        .education-header {
+            font-weight: 700;
+            font-size: 11.5pt;
+            color: #2c3e50;
+            margin-bottom: 4px;
+        }
+        
+        .education-details {
+            font-size: 11pt;
+            color: #2c3e50;
+            line-height: 1.4;
+        }
+        
+        .education-details ul {
+            list-style: none;
+            padding: 0;
+            margin-top: 6px;
+        }
+        
+        .education-details li {
+            margin-bottom: 3px;
+            padding-left: 12px;
+            position: relative;
+        }
+        
+        .education-details li:before {
+            content: "•";
+            color: #2c3e50;
+            font-weight: bold;
+            position: absolute;
+            left: 0;
+        }
+        
+        /* Footer with MAWNEY Partners logo */
+        .footer {
+            position: fixed;
+            bottom: 1.5cm;
+            left: 2cm;
+            right: 2cm;
+            text-align: center;
+            z-index: 1000;
+        }
+        
+        .bottom-logo img {
+            max-width: 110px;
+            height: auto;
+            opacity: 0.8;
+        }
+        
+        /* Page Break Controls - CRITICAL */
+        h1, h2, h3, .section-header {
+            page-break-after: avoid;
+            break-after: avoid;
+        }
+        
+        /* Orphan and widow control */
+        p, li {
+            orphans: 2;
+            widows: 2;
+        }
+        
+        /* Print styles for proper pagination */
+        @media print {
+            @page {
+                size: A4;
+                margin: 2cm;
+            }
+            
+            body {
+                width: 21cm !important;
+                max-width: 21cm !important;
+                margin: 0 !important;
+                padding: 2cm !important;
+                font-size: 11pt !important;
+                line-height: 1.4 !important;
+                page-break-inside: auto !important;
+                height: auto !important;
+                overflow: visible !important;
+            }
+            
+            /* Allow sections to break across pages */
+            .section {
+                page-break-inside: auto !important;
+                margin-bottom: 20px !important;
+            }
+            
+            /* Try to keep items together but allow breaking if needed */
+            .experience-item {
+                page-break-inside: avoid !important;
+                margin-bottom: 18px !important;
+            }
+            
+            .education-item {
+                page-break-inside: avoid !important;
+                margin-bottom: 15px !important;
+            }
+            
+            /* Keep headers with their content */
+            .section-header {
+                page-break-after: avoid !important;
+                break-after: avoid !important;
+            }
+            
+            .job-header, .education-header {
+                page-break-after: avoid !important;
+                break-after: avoid !important;
+            }
+            
+            /* Ensure colors print correctly */
+            * {
+                -webkit-print-color-adjust: exact !important;
+                color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+            
+            /* Footer on every page */
+            .footer {
+                display: block;
+                position: fixed;
+                bottom: 1.5cm;
+                left: 2cm;
+                right: 2cm;
+                text-align: center;
+            }
+        }
+        
+        /* Screen display (for preview) */
+        @media screen {
+            body {
+                background: #f5f5f5;
+                padding: 20px;
+            }
+            
+            /* Create page-like appearance on screen */
+            .page-container {
+                background: white;
+                width: 21cm;
+                min-height: 29.7cm;  /* A4 height */
+                margin: 0 auto 20px;
+                padding: 2cm;
+                box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="top-logo">
+            {TOP_LOGO_BASE64}
+        </div>
+        <div class="candidate-name">{NAME}</div>
+        <div class="contact-info">{CONTACT_INFO}</div>
+    </div>
+    
+    <div class="section">
+        <div class="section-header">PROFILE</div>
+        <div class="profile">{PROFESSIONAL_SUMMARY}</div>
+    </div>
+    
+    <div class="section">
+        <div class="section-header">WORK EXPERIENCE</div>
+        {EXPERIENCE_ITEMS}
+    </div>
+    
+    <div class="section">
+        <div class="section-header">EDUCATION</div>
+        {EDUCATION_ITEMS}
+    </div>
+    
+    <div class="section">
+        <div class="section-header">KEY SKILLS & COMPETENCIES</div>
+        <ul class="skills-list">
+            {SKILLS_LIST}
+        </ul>
+    </div>
+    
+    <div class="footer">
+        <div class="bottom-logo">
+            {BOTTOM_LOGO_BASE64}
+        </div>
+    </div>
+</body>
+</html>
+
