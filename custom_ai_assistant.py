@@ -1859,15 +1859,15 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
                 "has_file": False
             }
         
-        # Format the CV using the ENHANCED V17 Mawney Partners template with forced pagination
+        # Format the CV using the ENHANCED V18 Mawney Partners template with aggressive pagination
         try:
-            from enhanced_cv_formatter_v17 import enhanced_cv_formatter_v17
-            formatted_result = enhanced_cv_formatter_v17.format_cv_with_template(cv_content, filename)
+            from enhanced_cv_formatter_v18 import enhanced_cv_formatter_v18
+            formatted_result = enhanced_cv_formatter_v18.format_cv_with_template(cv_content, filename)
         except ImportError:
             try:
-                # Fallback to V16 enhanced formatter
-                from enhanced_cv_formatter_v16 import enhanced_cv_formatter_v16
-                formatted_result = enhanced_cv_formatter_v16.format_cv_with_template(cv_content, filename)
+                # Fallback to V17 enhanced formatter
+                from enhanced_cv_formatter_v17 import enhanced_cv_formatter_v17
+                formatted_result = enhanced_cv_formatter_v17.format_cv_with_template(cv_content, filename)
             except ImportError:
                 # Fallback to original formatter
                 logger.warning("Enhanced CV formatters not available, using original")
