@@ -323,7 +323,7 @@ class EnhancedCVFormatterV3:
         if line.isupper() and len(clean_line) > 5:
             # This is a company name
             return {
-                'company': clean_line,
+                'company': clean_line.upper(),  # Convert company name to uppercase
                 'title': '',
                 'dates': dates,
                 'location': location,
@@ -406,7 +406,7 @@ class EnhancedCVFormatterV3:
                     
                     # Start new education
                     current_education = {
-                        'school': line,
+                        'school': line.upper(),  # Convert institution name to uppercase
                         'degree': '',
                         'dates': '',
                         'details': []
@@ -491,10 +491,8 @@ class EnhancedCVFormatterV3:
         return html
     
     def _format_contact_info(self, data: Dict[str, Any]) -> str:
-        """Format contact information"""
+        """Format contact information - only email and location, no phone number"""
         contact_parts = []
-        if data.get('phone'):
-            contact_parts.append(self._escape_html(data['phone']))
         if data.get('email'):
             contact_parts.append(self._escape_html(data['email']))
         if data.get('location'):

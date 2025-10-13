@@ -20,7 +20,7 @@
         
         body {
             font-family: 'EB Garamond', serif;
-            font-size: 11pt;
+            font-size: 11pt !important;
             line-height: 1.4;
             color: #2c3e50;
             background: white;
@@ -28,6 +28,11 @@
             padding: 2cm;
             width: 21cm;  /* A4 width */
             max-width: 21cm;
+        }
+        
+        /* Force 11pt font size on ALL text elements */
+        * {
+            font-size: 11pt !important;
         }
         
         /* Header Section with MP logo - CENTRAL POSITIONING */
@@ -51,7 +56,7 @@
         
         .candidate-name {
             font-family: 'EB Garamond', serif;
-            font-size: 26pt;
+            font-size: 11pt !important;
             font-weight: 700;
             color: #2c3e50;
             margin-bottom: 15px;
@@ -60,7 +65,7 @@
         }
         
         .contact-info {
-            font-size: 10pt;
+            font-size: 11pt !important;
             color: #2c3e50;
             margin-bottom: 25px;
         }
@@ -68,7 +73,7 @@
         /* Section Headers - ALL IN GARAMOND FONT - CRITICAL FIX */
         .section-header {
             font-family: 'EB Garamond', Garamond, serif !important;
-            font-size: 13pt !important;
+            font-size: 11pt !important;
             font-weight: 700 !important;
             color: #2c3e50 !important;
             text-transform: uppercase !important;
@@ -109,7 +114,7 @@
         .job-header {
             font-family: 'EB Garamond', Garamond, serif;
             font-weight: 700;
-            font-size: 11.5pt;
+            font-size: 11pt !important;
             color: #2c3e50;
             margin-bottom: 6px;
             page-break-after: avoid;  /* Keep header with details */
@@ -120,19 +125,21 @@
         
         .job-title-company {
             flex: 1;
+            font-size: 11pt !important;
+            text-transform: uppercase !important;
         }
         
         .job-dates {
             font-family: 'EB Garamond', Garamond, serif;
             font-weight: 700;
-            font-size: 11.5pt;
+            font-size: 11pt !important;
             color: #2c3e50;
             text-align: right;
             margin-left: 20px;
         }
         
         .job-details {
-            font-size: 11pt;
+            font-size: 11pt !important;
             line-height: 1.4;
         }
         
@@ -190,13 +197,17 @@
         .education-header {
             font-family: 'EB Garamond', Garamond, serif;
             font-weight: 700;
-            font-size: 11.5pt;
+            font-size: 11pt !important;
             color: #2c3e50;
             margin-bottom: 4px;
         }
         
+        .education-header .job-title-company {
+            text-transform: uppercase !important;
+        }
+        
         .education-details {
-            font-size: 11pt;
+            font-size: 11pt !important;
             color: #2c3e50;
             line-height: 1.4;
         }
