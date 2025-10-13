@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>CV Document</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 1cm;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 10pt;
+            line-height: 1.2;
+            margin: 0;
+            padding: 1cm;
+            width: 19cm;
+        }
+        .page-break {
+            page-break-before: always;
+        }
+    </style>
+</head>
+<body>
+    <div style="text-align: center; margin-bottom: 20px;">
+        <img src="data:image/png;base64,{TOP_LOGO_BASE64}" alt="Logo" style="max-width: 80px; height: auto;">
+        <h1 style="margin: 10px 0; font-size: 16pt;">{NAME}</h1>
+        <p style="margin: 5px 0;">{EMAIL}</p>
+        <p style="margin: 5px 0;">{LOCATION}</p>
+    </div>
+
+    {WORK_EXPERIENCE}
+
+    {EDUCATION}
+
+    {LANGUAGES}
+
+    {COMPUTER_SKILLS}
+
+    {EXTRA_CURRICULAR}
+
+    <div style="text-align: right; margin-top: 20px;">
+        <img src="data:image/png;base64,{BOTTOM_LOGO_BASE64}" alt="Logo" style="max-width: 60px; height: auto;">
+    </div>
+
+    <!-- Force page break -->
+    <div class="page-break"></div>
+    
+    <div style="text-align: center; margin-bottom: 20px;">
+        <h2 style="font-size: 14pt;">ADDITIONAL INFORMATION</h2>
+    </div>
+    
+    <p>This CV has been formatted using the Mawney Partners template. The document is designed to flow across multiple pages as needed.</p>
+    
+    <h3 style="font-size: 12pt; margin-top: 20px;">KEY SKILLS</h3>
+    <ul>
+        <li>Financial Risk Management</li>
+        <li>Statistical Analysis</li>
+        <li>Derivatives and Financial Products</li>
+        <li>Risk Metrics and Reporting</li>
+        <li>Team Collaboration</li>
+        <li>Problem Solving</li>
+        <li>Regulatory Compliance</li>
+        <li>Data Analysis</li>
+    </ul>
+    
+    <h3 style="font-size: 12pt; margin-top: 20px;">TECHNICAL SKILLS</h3>
+    <ul>
+        <li>Excel and Financial Modeling</li>
+        <li>Python and R for Statistical Analysis</li>
+        <li>SQL for Database Management</li>
+        <li>Bloomberg Terminal</li>
+        <li>Risk Management Systems</li>
+        <li>Microsoft Office Suite</li>
+        <li>Statistical Software Packages</li>
+    </ul>
+
+    <div style="text-align: right; margin-top: 20px;">
+        <img src="data:image/png;base64,{BOTTOM_LOGO_BASE64}" alt="Logo" style="max-width: 60px; height: auto;">
+    </div>
+
+    <!-- Force another page break -->
+    <div class="page-break"></div>
+    
+    <div style="text-align: center; margin-bottom: 20px;">
+        <h2 style="font-size: 14pt;">PROFESSIONAL DEVELOPMENT</h2>
+    </div>
+    
+    <p>The candidate has demonstrated continuous professional development through various certifications and ongoing learning initiatives in the field of financial risk management.</p>
+    
+    <h3 style="font-size: 12pt; margin-top: 20px;">CERTIFICATIONS</h3>
+    <ul>
+        <li>Financial Risk Manager (FRM)</li>
+        <li>Professional Risk Manager (PRM)</li>
+        <li>Chartered Financial Analyst (CFA)</li>
+    </ul>
+    
+    <h3 style="font-size: 12pt; margin-top: 20px;">CONTINUING EDUCATION</h3>
+    <ul>
+        <li>Advanced Risk Management Courses</li>
+        <li>Derivatives and Structured Products</li>
+        <li>Regulatory Compliance Training</li>
+        <li>Financial Modeling Workshops</li>
+    </ul>
+
+    <div style="text-align: right; margin-top: 20px;">
+        <img src="data:image/png;base64,{BOTTOM_LOGO_BASE64}" alt="Logo" style="max-width: 60px; height: auto;">
+    </div>
+</body>
+</html>
