@@ -1943,10 +1943,11 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
             "has_file": True,
             "file_info": file_result,
             "download_url": file_result.get('download_url'),
-            "filename": file_result.get('filename'),
+            "download_filename": file_result.get('filename'),  # iOS app expects this key
+            "filename": file_result.get('filename'),  # Keep for compatibility
             "file_format": file_format,
             "file_base64": file_base64,
-            "html_content": html_content  # Keep HTML for preview
+            "html_content": html_content  # iOS app uses this to create PDF client-side
         }
         
     except Exception as e:
