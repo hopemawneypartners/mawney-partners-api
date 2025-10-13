@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>CV Document</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 2cm;
+        }
+        
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'EB Garamond', Garamond, serif;
+            font-size: 11pt;
+            line-height: 1.4;
+            color: #000;
+            background: #fff;
+        }
+    </style>
+</head>
+<body style="width: 21cm; max-width: 21cm; min-width: 21cm; margin: 0 auto; padding: 2cm; box-sizing: border-box; overflow-x: hidden;">
+    <!-- Page 1 -->
+    <div style="width: 17cm; max-width: 17cm; min-height: 25.7cm; margin: 0 auto; page-break-after: auto;">
+        
+        <!-- Header -->
+        <div style="text-align: center; margin-bottom: 1cm;">
+            <div style="margin-bottom: 0.5cm;">
+                <img src="data:image/png;base64,{TOP_LOGO_BASE64}" alt="Company Logo" style="max-width: 100px; height: auto; display: block; margin: 0 auto;">
+            </div>
+            <div style="font-size: 16pt; font-weight: bold; text-align: center; margin-bottom: 0.5cm;">{NAME}</div>
+        </div>
+
+        <!-- Contact Information -->
+        <div style="text-align: center; font-size: 11pt; margin-bottom: 1cm;">
+            {EMAIL}<br>
+            {LOCATION}
+        </div>
+
+        <!-- Work Experience -->
+        {WORK_EXPERIENCE}
+
+        <!-- Education -->
+        {EDUCATION}
+
+        <!-- Languages (conditional) -->
+        {LANGUAGES}
+
+        <!-- Computer Skills (conditional) -->
+        {COMPUTER_SKILLS}
+
+        <!-- Extra Curricular (conditional) -->
+        {EXTRA_CURRICULAR}
+
+        <!-- Footer -->
+        <div style="margin-top: 1cm; text-align: right;">
+            <img src="data:image/png;base64,{BOTTOM_LOGO_BASE64}" alt="Company Logo" style="max-width: 60px; height: auto; display: inline-block;">
+        </div>
+        
+    </div>
+</body>
+</html>
