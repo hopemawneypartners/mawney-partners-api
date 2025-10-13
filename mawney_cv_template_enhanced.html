@@ -18,16 +18,34 @@
             margin: 2cm;
         }
         
+        /* Ensure proper A4 width and height */
+        html, body {
+            width: 21cm !important;
+            max-width: 21cm !important;
+            margin: 0 auto !important;
+            padding: 0 !important;
+        }
+        
+        .container {
+            width: 21cm;
+            max-width: 21cm;
+            margin: 0 auto;
+            padding: 2cm;
+            box-sizing: border-box;
+        }
+        
         body {
             font-family: 'EB Garamond', serif;
             font-size: 11pt !important;
             line-height: 1.4;
             color: #2c3e50;
             background: white;
-            margin: 0;
+            margin: 0 auto;
             padding: 2cm;
             width: 21cm;  /* A4 width */
             max-width: 21cm;
+            min-height: 29.7cm;  /* A4 height */
+            box-sizing: border-box;
         }
         
         /* Force 11pt font size on ALL text elements */
@@ -287,14 +305,14 @@
                 margin-bottom: 20px !important;
             }
             
-            /* Try to keep items together but allow breaking if needed */
+            /* Allow items to break across pages if needed for better flow */
             .experience-item {
-                page-break-inside: avoid !important;
+                page-break-inside: auto !important;
                 margin-bottom: 18px !important;
             }
             
             .education-item {
-                page-break-inside: avoid !important;
+                page-break-inside: auto !important;
                 margin-bottom: 15px !important;
             }
             
@@ -347,7 +365,8 @@
     </style>
 </head>
 <body>
-    <div class="header">
+    <div class="page-container">
+        <div class="header">
         <div class="top-logo">
             {TOP_LOGO_BASE64}
         </div>
@@ -372,9 +391,10 @@
         </ul>
     </div>
     
-    <div class="footer">
-        <div class="bottom-logo">
-            {BOTTOM_LOGO_BASE64}
+        <div class="footer">
+            <div class="bottom-logo">
+                {BOTTOM_LOGO_BASE64}
+            </div>
         </div>
     </div>
 </body>
