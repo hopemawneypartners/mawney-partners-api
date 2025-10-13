@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=210mm, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>CV Document - Page 1</title>
+    <style>
+        @page {
+            size: A4 portrait;
+            margin: 0;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Times New Roman', serif;
+            font-size: 11pt;
+            line-height: 1.3;
+            width: 210mm;
+            height: 297mm;
+            margin: 0;
+            padding: 20mm;
+            background: white;
+            position: relative;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 20pt;
+        }
+        
+        .logo {
+            width: 60pt;
+            height: auto;
+            margin-bottom: 10pt;
+        }
+        
+        .name {
+            font-size: 16pt;
+            font-weight: bold;
+            margin-bottom: 5pt;
+        }
+        
+        .contact {
+            font-size: 11pt;
+            margin-bottom: 15pt;
+        }
+        
+        .section {
+            margin-bottom: 15pt;
+        }
+        
+        .section-title {
+            font-size: 12pt;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-bottom: 8pt;
+            border-bottom: 1pt solid black;
+            padding-bottom: 2pt;
+        }
+        
+        .job-item {
+            margin-bottom: 10pt;
+        }
+        
+        .job-header {
+            display: table;
+            width: 100%;
+            margin-bottom: 3pt;
+        }
+        
+        .job-title {
+            font-weight: bold;
+            display: table-cell;
+            width: 70%;
+        }
+        
+        .job-date {
+            font-weight: bold;
+            display: table-cell;
+            width: 30%;
+            text-align: right;
+            vertical-align: top;
+        }
+        
+        .job-company {
+            font-weight: bold;
+            margin-bottom: 3pt;
+        }
+        
+        .job-description {
+            margin-left: 10pt;
+        }
+        
+        .footer-logo {
+            position: absolute;
+            bottom: 20mm;
+            right: 20mm;
+            width: 40pt;
+            height: auto;
+        }
+        
+        .page-indicator {
+            position: absolute;
+            bottom: 15mm;
+            left: 20mm;
+            font-size: 10pt;
+            color: #666;
+        }
+        
+        /* Force content to fit exactly on one page */
+        .content-wrapper {
+            height: 257mm;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body>
+    <div class="content-wrapper">
+        <div class="header">
+            <img src="data:image/png;base64,{TOP_LOGO_BASE64}" alt="Logo" class="logo">
+            <div class="name">{NAME}</div>
+            <div class="contact">{EMAIL} | {LOCATION}</div>
+        </div>
+
+        <div class="section">
+            <div class="section-title">Work Experience</div>
+            {WORK_EXPERIENCE}
+        </div>
+
+        <div class="section">
+            <div class="section-title">Education</div>
+            {EDUCATION}
+        </div>
+
+        {LANGUAGES}
+
+        {COMPUTER_SKILLS}
+
+        {EXTRA_CURRICULAR}
+    </div>
+
+    <img src="data:image/png;base64,{BOTTOM_LOGO_BASE64}" alt="Logo" class="footer-logo">
+    <div class="page-indicator">Page 1 of 3</div>
+</body>
+</html>
+
+<!-- PAGE BREAK FORCE -->
+<div style="page-break-before: always; height: 1px; width: 1px; overflow: hidden;"></div>
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=210mm, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>CV Document - Page 2</title>
+    <style>
+        @page {
+            size: A4 portrait;
+            margin: 0;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Times New Roman', serif;
+            font-size: 11pt;
+            line-height: 1.3;
+            width: 210mm;
+            height: 297mm;
+            margin: 0;
+            padding: 20mm;
+            background: white;
+            position: relative;
+        }
+        
+        .section {
+            margin-bottom: 15pt;
+        }
+        
+        .section-title {
+            font-size: 12pt;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-bottom: 8pt;
+            border-bottom: 1pt solid black;
+            padding-bottom: 2pt;
+        }
+        
+        .job-item {
+            margin-bottom: 10pt;
+        }
+        
+        .job-header {
+            display: table;
+            width: 100%;
+            margin-bottom: 3pt;
+        }
+        
+        .job-title {
+            font-weight: bold;
+            display: table-cell;
+            width: 70%;
+        }
+        
+        .job-date {
+            font-weight: bold;
+            display: table-cell;
+            width: 30%;
+            text-align: right;
+            vertical-align: top;
+        }
+        
+        .job-company {
+            font-weight: bold;
+            margin-bottom: 3pt;
+        }
+        
+        .job-description {
+            margin-left: 10pt;
+        }
+        
+        .footer-logo {
+            position: absolute;
+            bottom: 20mm;
+            right: 20mm;
+            width: 40pt;
+            height: auto;
+        }
+        
+        .page-indicator {
+            position: absolute;
+            bottom: 15mm;
+            left: 20mm;
+            font-size: 10pt;
+            color: #666;
+        }
+        
+        .content-wrapper {
+            height: 257mm;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body>
+    <div class="content-wrapper">
+        <div class="section">
+            <div class="section-title">Additional Skills</div>
+            <div class="job-item">
+                <div class="job-header">
+                    <div class="job-title">Financial Analysis</div>
+                    <div class="job-date">Advanced</div>
+                </div>
+                <div class="job-company">Quantitative Methods & Risk Assessment</div>
+                <div class="job-description">
+                    • Advanced Excel modeling and financial forecasting<br>
+                    • Risk assessment and portfolio analysis<br>
+                    • Financial statement analysis and valuation<br>
+                    • Monte Carlo simulation and scenario modeling<br>
+                    • Stress testing and regulatory compliance<br>
+                    • Derivatives pricing and hedging strategies
+                </div>
+            </div>
+            
+            <div class="job-item">
+                <div class="job-header">
+                    <div class="job-title">Technical Proficiency</div>
+                    <div class="job-date">Expert</div>
+                </div>
+                <div class="job-company">Programming & Data Analysis</div>
+                <div class="job-description">
+                    • Python programming for data analysis and modeling<br>
+                    • SQL database management and optimization<br>
+                    • Statistical modeling and regression analysis<br>
+                    • Bloomberg Terminal and market data platforms<br>
+                    • VBA automation and Excel macros<br>
+                    • MATLAB for quantitative finance applications
+                </div>
+            </div>
+            
+            <div class="job-item">
+                <div class="job-header">
+                    <div class="job-title">Project Management</div>
+                    <div class="job-date">Intermediate</div>
+                </div>
+                <div class="job-company">Leadership & Coordination</div>
+                <div class="job-description">
+                    • Cross-functional team collaboration and leadership<br>
+                    • Process improvement and optimization initiatives<br>
+                    • Stakeholder communication and executive reporting<br>
+                    • Risk management framework implementation<br>
+                    • Regulatory compliance and audit coordination
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <img src="data:image/png;base64,{BOTTOM_LOGO_BASE64}" alt="Logo" class="footer-logo">
+    <div class="page-indicator">Page 2 of 3</div>
+</body>
+</html>
+
+<!-- PAGE BREAK FORCE -->
+<div style="page-break-before: always; height: 1px; width: 1px; overflow: hidden;"></div>
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=210mm, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>CV Document - Page 3</title>
+    <style>
+        @page {
+            size: A4 portrait;
+            margin: 0;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Times New Roman', serif;
+            font-size: 11pt;
+            line-height: 1.3;
+            width: 210mm;
+            height: 297mm;
+            margin: 0;
+            padding: 20mm;
+            background: white;
+            position: relative;
+        }
+        
+        .section {
+            margin-bottom: 15pt;
+        }
+        
+        .section-title {
+            font-size: 12pt;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-bottom: 8pt;
+            border-bottom: 1pt solid black;
+            padding-bottom: 2pt;
+        }
+        
+        .job-item {
+            margin-bottom: 10pt;
+        }
+        
+        .job-header {
+            display: table;
+            width: 100%;
+            margin-bottom: 3pt;
+        }
+        
+        .job-title {
+            font-weight: bold;
+            display: table-cell;
+            width: 70%;
+        }
+        
+        .job-date {
+            font-weight: bold;
+            display: table-cell;
+            width: 30%;
+            text-align: right;
+            vertical-align: top;
+        }
+        
+        .job-company {
+            font-weight: bold;
+            margin-bottom: 3pt;
+        }
+        
+        .job-description {
+            margin-left: 10pt;
+        }
+        
+        .footer-logo {
+            position: absolute;
+            bottom: 20mm;
+            right: 20mm;
+            width: 40pt;
+            height: auto;
+        }
+        
+        .page-indicator {
+            position: absolute;
+            bottom: 15mm;
+            left: 20mm;
+            font-size: 10pt;
+            color: #666;
+        }
+        
+        .content-wrapper {
+            height: 257mm;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body>
+    <div class="content-wrapper">
+        <div class="section">
+            <div class="section-title">Professional Development</div>
+            <div class="job-item">
+                <div class="job-header">
+                    <div class="job-title">Certifications</div>
+                    <div class="job-date">2020-2023</div>
+                </div>
+                <div class="job-company">Risk Management & Finance</div>
+                <div class="job-description">
+                    • Financial Risk Manager (FRM) - Global Association of Risk Professionals<br>
+                    • Chartered Financial Analyst (CFA) - CFA Institute<br>
+                    • Professional Risk Manager (PRM) - PRMIA<br>
+                    • Certified Treasury Professional (CTP) - AFP<br>
+                    • Advanced Certificate in Risk Management - Institute of Risk Management
+                </div>
+            </div>
+            
+            <div class="job-item">
+                <div class="job-header">
+                    <div class="job-title">Continuing Education</div>
+                    <div class="job-date">2021-2022</div>
+                </div>
+                <div class="job-company">Advanced Training & Development</div>
+                <div class="job-description">
+                    • Advanced Risk Management - London Business School<br>
+                    • Derivatives and Structured Products - Wharton School<br>
+                    • Machine Learning in Finance - MIT<br>
+                    • Blockchain and Cryptocurrency - Stanford University<br>
+                    • Quantitative Risk Management - Imperial College London
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-title">Key Achievements</div>
+            <div class="job-item">
+                <div class="job-header">
+                    <div class="job-title">Process Improvement</div>
+                    <div class="job-date">2022-2023</div>
+                </div>
+                <div class="job-company">Operational Excellence</div>
+                <div class="job-description">
+                    • Implemented automated reporting system reducing manual work by 80%<br>
+                    • Developed risk assessment framework adopted across all departments<br>
+                    • Led cross-functional team of 8 analysts for quarterly risk reviews<br>
+                    • Reduced report generation time from 4 hours to 30 minutes<br>
+                    • Improved risk model accuracy by 15% through enhanced data validation
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-title">Professional Memberships</div>
+            <div class="job-item">
+                <div class="job-description">
+                    • Global Association of Risk Professionals (GARP)<br>
+                    • CFA Institute<br>
+                    • Professional Risk Managers' International Association (PRMIA)<br>
+                    • Risk Management Association (RMA)<br>
+                    • Institute of Risk Management (IRM)
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <img src="data:image/png;base64,{BOTTOM_LOGO_BASE64}" alt="Logo" class="footer-logo">
+    <div class="page-indicator">Page 3 of 3</div>
+</body>
+</html>
