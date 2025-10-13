@@ -1875,13 +1875,25 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
                 "has_file": False
             }
         
-        # Generate HTML file and get base64 content for direct download
+        # Generate PDF file and get base64 content for direct download
         html_content = formatted_result.get('html_version', '')
-        file_result = cv_file_generator.generate_html_file(html_content, f"formatted_{filename}")
         
-        # Get HTML as base64 for iOS app
+        # Try to generate PDF, fallback to HTML if pdfkit not available
+        file_result = cv_file_generator.generate_pdf_file(html_content, f"formatted_{filename.replace('.pdf', '')}")
+        
+        # Get file as base64 for iOS app download
         import base64
-        html_base64 = base64.b64encode(html_content.encode('utf-8')).decode('utf-8')
+        if file_result.get('success') and file_result.get('format') == 'pdf':
+            # PDF was generated successfully
+            with open(file_result.get('filepath'), 'rb') as f:
+                pdf_base64 = base64.b64encode(f.read()).decode('utf-8')
+            file_base64 = pdf_base64
+            file_format = 'pdf'
+        else:
+            # Fallback to HTML
+            html_base64 = base64.b64encode(html_content.encode('utf-8')).decode('utf-8')
+            file_base64 = html_base64
+            file_format = 'html'
         
         # Create response
         response = "📄 **CV Formatted in Mawney Partners Style**\n\n"
@@ -1895,7 +1907,7 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
             response += "✅ **Your formatted CV is ready for download!**\n\n"
             response += f"📥 **File:** {file_result['filename']}\n"
             response += f"📊 **Size:** {file_result['file_size']:,} bytes\n"
-            response += f"🔗 **Format:** HTML (ready to save as PDF)\n\n"
+            response += f"🔗 **Format:** {file_format.upper()}\n\n"
         
         # Add sections found
         sections_found = formatted_result.get('sections_found', [])
@@ -1913,10 +1925,16 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
         
         # Add download instructions
         response += "💡 **Next Steps:**\n"
-        response += "• Download the formatted CV file above\n"
-        response += "• Open in your web browser\n"
-        response += "• Print to PDF or save directly\n"
-        response += "• Edit in your preferred document editor if needed\n\n"
+        if file_format == 'pdf':
+            response += "• Download the PDF file above\n"
+            response += "• Open with any PDF viewer\n"
+            response += "• Print or share directly\n"
+            response += "• Edit if needed using a PDF editor\n\n"
+        else:
+            response += "• Download the HTML file above\n"
+            response += "• Open in your web browser\n"
+            response += "• Print to PDF or save directly\n"
+            response += "• Edit in your preferred document editor if needed\n\n"
         
         response += "**Note:** This CV has been formatted with Garamond typography, your company logos (top & bottom), and professional Mawney Partners styling."
         
@@ -1926,8 +1944,9 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
             "file_info": file_result,
             "download_url": file_result.get('download_url'),
             "filename": file_result.get('filename'),
-            "html_content": html_content,
-            "html_base64": html_base64
+            "file_format": file_format,
+            "file_base64": file_base64,
+            "html_content": html_content  # Keep HTML for preview
         }
         
     except Exception as e:
