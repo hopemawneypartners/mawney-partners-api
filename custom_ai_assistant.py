@@ -1859,15 +1859,20 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
                 "has_file": False
             }
         
-        # Format the CV using the ENHANCED V9 Mawney Partners template with pagination fixes
+        # Format the CV using the ENHANCED V10 Mawney Partners template with work experience and education fixes
         try:
-            from enhanced_cv_formatter_v9 import enhanced_cv_formatter_v9
-            formatted_result = enhanced_cv_formatter_v9.format_cv_with_template(cv_content, filename)
+            from enhanced_cv_formatter_v10 import enhanced_cv_formatter_v10
+            formatted_result = enhanced_cv_formatter_v10.format_cv_with_template(cv_content, filename)
         except ImportError:
             try:
-                # Fallback to V8 enhanced formatter
-                from enhanced_cv_formatter_v8 import enhanced_cv_formatter_v8
-                formatted_result = enhanced_cv_formatter_v8.format_cv_with_template(cv_content, filename)
+                # Fallback to V9 enhanced formatter
+                from enhanced_cv_formatter_v9 import enhanced_cv_formatter_v9
+                formatted_result = enhanced_cv_formatter_v9.format_cv_with_template(cv_content, filename)
+            except ImportError:
+                try:
+                    # Fallback to V8 enhanced formatter
+                    from enhanced_cv_formatter_v8 import enhanced_cv_formatter_v8
+                    formatted_result = enhanced_cv_formatter_v8.format_cv_with_template(cv_content, filename)
             except ImportError:
                 try:
                     # Fallback to V7 enhanced formatter
