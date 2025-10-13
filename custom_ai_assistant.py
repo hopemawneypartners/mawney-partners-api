@@ -1859,15 +1859,15 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
                 "has_file": False
             }
         
-        # Format the CV using the ENHANCED V19 Mawney Partners template with separate pages
+        # Format the CV using the ENHANCED V20 Mawney Partners template with simple A4 layout
         try:
-            from enhanced_cv_formatter_v19 import enhanced_cv_formatter_v19
-            formatted_result = enhanced_cv_formatter_v19.format_cv_with_template(cv_content, filename)
+            from enhanced_cv_formatter_v20 import enhanced_cv_formatter_v20
+            formatted_result = enhanced_cv_formatter_v20.format_cv_with_template(cv_content, filename)
         except ImportError:
             try:
-                # Fallback to V18 enhanced formatter
-                from enhanced_cv_formatter_v18 import enhanced_cv_formatter_v18
-                formatted_result = enhanced_cv_formatter_v18.format_cv_with_template(cv_content, filename)
+                # Fallback to V19 enhanced formatter
+                from enhanced_cv_formatter_v19 import enhanced_cv_formatter_v19
+                formatted_result = enhanced_cv_formatter_v19.format_cv_with_template(cv_content, filename)
             except ImportError:
                 # Fallback to original formatter
                 logger.warning("Enhanced CV formatters not available, using original")

@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CV Document</title>
+    <style>
+        body {
+            font-family: 'Times New Roman', serif;
+            font-size: 11pt;
+            line-height: 1.2;
+            margin: 0;
+            padding: 15mm;
+            width: 180mm;
+            max-width: 180mm;
+            background: white;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 15pt;
+        }
+        
+        .logo {
+            width: 50pt;
+            height: auto;
+            margin-bottom: 8pt;
+        }
+        
+        .name {
+            font-size: 14pt;
+            font-weight: bold;
+            margin-bottom: 3pt;
+        }
+        
+        .contact {
+            font-size: 10pt;
+            margin-bottom: 10pt;
+        }
+        
+        .section {
+            margin-bottom: 12pt;
+        }
+        
+        .section-title {
+            font-size: 11pt;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-bottom: 6pt;
+            border-bottom: 0.5pt solid black;
+            padding-bottom: 1pt;
+        }
+        
+        .job-item {
+            margin-bottom: 8pt;
+        }
+        
+        .job-header {
+            margin-bottom: 2pt;
+        }
+        
+        .job-title {
+            font-weight: bold;
+            float: left;
+            width: 65%;
+        }
+        
+        .job-date {
+            font-weight: bold;
+            float: right;
+            width: 30%;
+            text-align: right;
+        }
+        
+        .job-company {
+            font-weight: bold;
+            margin-bottom: 2pt;
+            clear: both;
+        }
+        
+        .job-description {
+            margin-left: 8pt;
+            font-size: 10pt;
+        }
+        
+        .footer-logo {
+            position: fixed;
+            bottom: 15mm;
+            right: 15mm;
+            width: 35pt;
+            height: auto;
+        }
+        
+        .clearfix::after {
+            content: "";
+            display: table;
+            clear: both;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <img src="data:image/png;base64,{TOP_LOGO_BASE64}" alt="Logo" class="logo">
+        <div class="name">{NAME}</div>
+        <div class="contact">{EMAIL} | {LOCATION}</div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Work Experience</div>
+        {WORK_EXPERIENCE}
+    </div>
+
+    <div class="section">
+        <div class="section-title">Education</div>
+        {EDUCATION}
+    </div>
+
+    {LANGUAGES}
+
+    {COMPUTER_SKILLS}
+
+    {EXTRA_CURRICULAR}
+
+    <div style="height: 100pt;"></div>
+
+    <div class="section">
+        <div class="section-title">Additional Skills</div>
+        <div class="job-item clearfix">
+            <div class="job-header">
+                <div class="job-title">Financial Analysis</div>
+                <div class="job-date">Advanced</div>
+            </div>
+            <div class="job-company">Quantitative Methods & Risk Assessment</div>
+            <div class="job-description">
+                • Advanced Excel modeling and financial forecasting<br>
+                • Risk assessment and portfolio analysis<br>
+                • Financial statement analysis and valuation<br>
+                • Monte Carlo simulation and scenario modeling
+            </div>
+        </div>
+        
+        <div class="job-item clearfix">
+            <div class="job-header">
+                <div class="job-title">Technical Proficiency</div>
+                <div class="job-date">Expert</div>
+            </div>
+            <div class="job-company">Programming & Data Analysis</div>
+            <div class="job-description">
+                • Python programming for data analysis and modeling<br>
+                • SQL database management and optimization<br>
+                • Statistical modeling and regression analysis<br>
+                • Bloomberg Terminal and market data platforms
+            </div>
+        </div>
+        
+        <div class="job-item clearfix">
+            <div class="job-header">
+                <div class="job-title">Project Management</div>
+                <div class="job-date">Intermediate</div>
+            </div>
+            <div class="job-company">Leadership & Coordination</div>
+            <div class="job-description">
+                • Cross-functional team collaboration and leadership<br>
+                • Process improvement and optimization initiatives<br>
+                • Stakeholder communication and executive reporting
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Professional Development</div>
+        <div class="job-item clearfix">
+            <div class="job-header">
+                <div class="job-title">Certifications</div>
+                <div class="job-date">2020-2023</div>
+            </div>
+            <div class="job-company">Risk Management & Finance</div>
+            <div class="job-description">
+                • Financial Risk Manager (FRM) - Global Association of Risk Professionals<br>
+                • Chartered Financial Analyst (CFA) - CFA Institute<br>
+                • Professional Risk Manager (PRM) - PRMIA
+            </div>
+        </div>
+        
+        <div class="job-item clearfix">
+            <div class="job-header">
+                <div class="job-title">Continuing Education</div>
+                <div class="job-date">2021-2022</div>
+            </div>
+            <div class="job-company">Advanced Training & Development</div>
+            <div class="job-description">
+                • Advanced Risk Management - London Business School<br>
+                • Derivatives and Structured Products - Wharton School<br>
+                • Machine Learning in Finance - MIT
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Key Achievements</div>
+        <div class="job-item clearfix">
+            <div class="job-header">
+                <div class="job-title">Process Improvement</div>
+                <div class="job-date">2022-2023</div>
+            </div>
+            <div class="job-company">Operational Excellence</div>
+            <div class="job-description">
+                • Implemented automated reporting system reducing manual work by 80%<br>
+                • Developed risk assessment framework adopted across all departments<br>
+                • Led cross-functional team of 8 analysts for quarterly risk reviews<br>
+                • Reduced report generation time from 4 hours to 30 minutes
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Professional Memberships</div>
+        <div class="job-description">
+            • Global Association of Risk Professionals (GARP)<br>
+            • CFA Institute<br>
+            • Professional Risk Managers' International Association (PRMIA)<br>
+            • Risk Management Association (RMA)
+        </div>
+    </div>
+
+    <img src="data:image/png;base64,{BOTTOM_LOGO_BASE64}" alt="Logo" class="footer-logo">
+</body>
+</html>
