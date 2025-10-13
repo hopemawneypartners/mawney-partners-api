@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>CV Document</title>
+    <style>
+        /* Force reset everything */
+        * {
+            margin: 0 !important;
+            padding: 0 !important;
+            box-sizing: border-box !important;
+        }
+
+        html {
+            width: 100% !important;
+            height: 100% !important;
+            overflow-x: hidden !important;
+            zoom: 1 !important;
+            transform: scale(1) !important;
+        }
+
+        body {
+            width: 21cm !important;
+            max-width: 21cm !important;
+            min-width: 21cm !important;
+            height: auto !important;
+            margin: 0 auto !important;
+            padding: 2cm !important;
+            font-family: 'EB Garamond', Garamond, serif !important;
+            font-size: 11pt !important;
+            line-height: 1.4 !important;
+            color: #000 !important;
+            background: #fff !important;
+            overflow-x: hidden !important;
+            zoom: 1 !important;
+            transform: scale(1) !important;
+        }
+
+        /* A4 Page Setup */
+        @page {
+            size: A4 !important;
+            margin: 2cm !important;
+        }
+
+        /* Force proper scaling */
+        .cv-content {
+            width: 17cm !important;
+            max-width: 17cm !important;
+            min-width: 17cm !important;
+            margin: 0 auto !important;
+            padding: 0 !important;
+        }
+
+        /* Header */
+        .header {
+            text-align: center !important;
+            margin-bottom: 1cm !important;
+            page-break-after: avoid !important;
+        }
+
+        .logo img {
+            max-width: 100px !important;
+            height: auto !important;
+            display: block !important;
+            margin: 0 auto 0.5cm auto !important;
+        }
+
+        .name {
+            font-size: 16pt !important;
+            font-weight: bold !important;
+            text-align: center !important;
+            margin-bottom: 0.5cm !important;
+        }
+
+        .contact-info {
+            text-align: center !important;
+            font-size: 11pt !important;
+            margin-bottom: 1cm !important;
+        }
+
+        /* Section headers */
+        .section-header {
+            font-size: 12pt !important;
+            font-weight: bold !important;
+            text-transform: uppercase !important;
+            margin: 0.8cm 0 0.3cm 0 !important;
+            padding-bottom: 0.1cm !important;
+            border-bottom: 1px solid #000 !important;
+            page-break-after: avoid !important;
+        }
+
+        /* Experience items */
+        .experience-item {
+            margin-bottom: 0.6cm !important;
+            page-break-inside: auto !important;
+            break-inside: auto !important;
+        }
+
+        .job-header {
+            display: flex !important;
+            justify-content: space-between !important;
+            align-items: flex-start !important;
+            margin-bottom: 0.2cm !important;
+        }
+
+        .job-title-company {
+            font-weight: bold !important;
+            text-transform: uppercase !important;
+            font-size: 11pt !important;
+            flex: 1 !important;
+        }
+
+        .job-dates {
+            font-size: 11pt !important;
+            text-align: right !important;
+            white-space: nowrap !important;
+            margin-left: 1cm !important;
+        }
+
+        .job-description {
+            font-size: 11pt !important;
+            line-height: 1.3 !important;
+            margin-top: 0.1cm !important;
+        }
+
+        /* Education */
+        .education-item {
+            margin-bottom: 0.6cm !important;
+            page-break-inside: auto !important;
+            break-inside: auto !important;
+        }
+
+        .education-header {
+            display: flex !important;
+            justify-content: space-between !important;
+            align-items: flex-start !important;
+            margin-bottom: 0.2cm !important;
+        }
+
+        .education-title-company {
+            font-weight: bold !important;
+            text-transform: uppercase !important;
+            font-size: 11pt !important;
+            flex: 1 !important;
+        }
+
+        .education-dates {
+            font-size: 11pt !important;
+            text-align: right !important;
+            white-space: nowrap !important;
+            margin-left: 1cm !important;
+        }
+
+        .education-description {
+            font-size: 11pt !important;
+            line-height: 1.3 !important;
+            margin-top: 0.1cm !important;
+        }
+
+        /* Skills */
+        .skills-item {
+            margin-bottom: 0.4cm !important;
+            page-break-inside: auto !important;
+            break-inside: auto !important;
+        }
+
+        .skills-title {
+            font-weight: bold !important;
+            text-transform: uppercase !important;
+            font-size: 11pt !important;
+            margin-bottom: 0.1cm !important;
+        }
+
+        .skills-content {
+            font-size: 11pt !important;
+            line-height: 1.3 !important;
+        }
+
+        /* Footer */
+        .footer {
+            margin-top: 1cm !important;
+            text-align: right !important;
+            page-break-before: avoid !important;
+        }
+
+        .footer img {
+            max-width: 60px !important;
+            height: auto !important;
+            display: inline-block !important;
+        }
+
+        /* Print styles - CRITICAL for pagination */
+        @media print {
+            html, body {
+                width: 21cm !important;
+                max-width: 21cm !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                overflow: visible !important;
+                zoom: 1 !important;
+                transform: scale(1) !important;
+            }
+
+            body {
+                padding: 2cm !important;
+            }
+
+            .cv-content {
+                width: 17cm !important;
+                max-width: 17cm !important;
+            }
+
+            .experience-item,
+            .education-item,
+            .skills-item {
+                page-break-inside: auto !important;
+                break-inside: auto !important;
+            }
+
+            .section-header {
+                page-break-after: avoid !important;
+            }
+        }
+
+        /* Screen styles */
+        @media screen {
+            body {
+                background-color: #f5f5f5 !important;
+                padding: 1cm 0 !important;
+            }
+
+            .cv-content {
+                background: white !important;
+                box-shadow: 0 0 10px rgba(0,0,0,0.1) !important;
+                padding: 2cm !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="cv-content">
+        <!-- Header -->
+        <div class="header">
+            <div class="logo">
+                <img src="data:image/png;base64,{TOP_LOGO_BASE64}" alt="Company Logo">
+            </div>
+            <div class="name">{NAME}</div>
+        </div>
+
+        <!-- Contact Information -->
+        <div class="contact-info">
+            {EMAIL}<br>
+            {LOCATION}
+        </div>
+
+        <!-- Work Experience -->
+        {WORK_EXPERIENCE}
+
+        <!-- Education -->
+        {EDUCATION}
+
+        <!-- Languages (conditional) -->
+        {LANGUAGES}
+
+        <!-- Computer Skills (conditional) -->
+        {COMPUTER_SKILLS}
+
+        <!-- Extra Curricular (conditional) -->
+        {EXTRA_CURRICULAR}
+
+        <!-- Footer -->
+        <div class="footer">
+            <img src="data:image/png;base64,{BOTTOM_LOGO_BASE64}" alt="Company Logo">
+        </div>
+    </div>
+</body>
+</html>
