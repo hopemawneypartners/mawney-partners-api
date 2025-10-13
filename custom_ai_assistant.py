@@ -1874,7 +1874,8 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
                 template_formatter = MawneyTemplateFormatter()
                 formatted_result = template_formatter.format_cv_with_template(cv_content, filename)
         
-        if not formatted_result.get('success'):
+        # Check for success or presence of html_content (V16 doesn't have success key)
+        if not formatted_result.get('success', True) and not formatted_result.get('html_content'):
             return {
                 "text": f"I encountered an error formatting your CV: {formatted_result.get('error', 'Unknown error')}",
                 "has_file": False
