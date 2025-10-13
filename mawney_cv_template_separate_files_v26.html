@@ -1,0 +1,525 @@
+<!-- PAGE 1 DOCUMENT -->
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CV Document - Page 1</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 1cm;
+        }
+        
+        body {
+            font-family: 'Times New Roman', serif;
+            font-size: 11pt;
+            line-height: 1.2;
+            margin: 0;
+            padding: 20pt;
+            width: 100%;
+            background: white;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 20pt;
+        }
+        
+        .logo {
+            width: 60pt;
+            height: auto;
+            margin-bottom: 10pt;
+        }
+        
+        .name {
+            font-size: 16pt;
+            font-weight: bold;
+            margin-bottom: 5pt;
+        }
+        
+        .contact {
+            font-size: 11pt;
+            margin-bottom: 15pt;
+        }
+        
+        .section {
+            margin-bottom: 15pt;
+        }
+        
+        .section-title {
+            font-size: 12pt;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-bottom: 8pt;
+            border-bottom: 1pt solid black;
+            padding-bottom: 3pt;
+        }
+        
+        .job-item {
+            margin-bottom: 12pt;
+        }
+        
+        .job-header {
+            margin-bottom: 5pt;
+        }
+        
+        .job-title {
+            font-weight: bold;
+            float: left;
+            width: 70%;
+        }
+        
+        .job-date {
+            font-weight: bold;
+            float: right;
+            width: 25%;
+            text-align: right;
+        }
+        
+        .job-company {
+            font-weight: bold;
+            margin-bottom: 5pt;
+            clear: both;
+        }
+        
+        .job-description {
+            margin-left: 10pt;
+            font-size: 10pt;
+        }
+        
+        .clearfix::after {
+            content: "";
+            display: table;
+            clear: both;
+        }
+        
+        .page-indicator {
+            position: absolute;
+            bottom: 10pt;
+            right: 20pt;
+            font-size: 9pt;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <img src="data:image/png;base64,{TOP_LOGO_BASE64}" alt="Logo" class="logo">
+        <div class="name">{NAME}</div>
+        <div class="contact">{EMAIL} | {LOCATION}</div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Work Experience</div>
+        {WORK_EXPERIENCE}
+    </div>
+
+    <div class="section">
+        <div class="section-title">Education</div>
+        {EDUCATION}
+    </div>
+
+    {LANGUAGES}
+
+    <div class="page-indicator">Page 1 of 3</div>
+</body>
+</html>
+
+<!-- PAGE 2 DOCUMENT -->
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CV Document - Page 2</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 1cm;
+        }
+        
+        body {
+            font-family: 'Times New Roman', serif;
+            font-size: 11pt;
+            line-height: 1.2;
+            margin: 0;
+            padding: 20pt;
+            width: 100%;
+            background: white;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        .section {
+            margin-bottom: 15pt;
+        }
+        
+        .section-title {
+            font-size: 12pt;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-bottom: 8pt;
+            border-bottom: 1pt solid black;
+            padding-bottom: 3pt;
+        }
+        
+        .job-item {
+            margin-bottom: 12pt;
+        }
+        
+        .job-header {
+            margin-bottom: 5pt;
+        }
+        
+        .job-title {
+            font-weight: bold;
+            float: left;
+            width: 70%;
+        }
+        
+        .job-date {
+            font-weight: bold;
+            float: right;
+            width: 25%;
+            text-align: right;
+        }
+        
+        .job-company {
+            font-weight: bold;
+            margin-bottom: 5pt;
+            clear: both;
+        }
+        
+        .job-description {
+            margin-left: 10pt;
+            font-size: 10pt;
+        }
+        
+        .clearfix::after {
+            content: "";
+            display: table;
+            clear: both;
+        }
+        
+        .page-indicator {
+            position: absolute;
+            bottom: 10pt;
+            right: 20pt;
+            font-size: 9pt;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="section">
+        <div class="section-title">Computer Skills</div>
+        {COMPUTER_SKILLS}
+    </div>
+
+    <div class="section">
+        <div class="section-title">Additional Skills</div>
+        <div class="job-item clearfix">
+            <div class="job-header">
+                <div class="job-title">Financial Analysis</div>
+                <div class="job-date">Advanced</div>
+            </div>
+            <div class="job-company">Quantitative Methods & Risk Assessment</div>
+            <div class="job-description">
+                • Advanced Excel modeling and financial forecasting<br>
+                • Risk assessment and portfolio analysis<br>
+                • Financial statement analysis and valuation<br>
+                • Monte Carlo simulation and scenario modeling<br>
+                • Stress testing and regulatory compliance<br>
+                • Derivatives pricing and hedging strategies<br>
+                • Credit risk evaluation and monitoring<br>
+                • Market risk assessment and reporting<br>
+                • Operational risk management frameworks<br>
+                • Liquidity risk analysis and management<br>
+                • Value at Risk (VaR) calculation and monitoring<br>
+                • Expected Shortfall and stress testing methodologies<br>
+                • Regulatory capital calculations and reporting<br>
+                • Basel III compliance and implementation<br>
+                • IFRS 9 credit loss provisioning<br>
+                • CECL implementation and monitoring<br>
+                • Market risk factor analysis and decomposition<br>
+                • Credit spread analysis and modeling<br>
+                • Interest rate risk measurement and hedging<br>
+                • Foreign exchange risk assessment and management<br>
+                • Counterparty credit risk evaluation<br>
+                • Collateral management and optimization<br>
+                • Margin requirements and calculation<br>
+                • Model validation and backtesting<br>
+                • Scenario analysis and stress testing<br>
+                • Risk appetite framework development<br>
+                • Risk metrics dashboard creation<br>
+                • Regulatory reporting automation<br>
+                • Risk data aggregation and reconciliation<br>
+                • Model risk management and governance
+            </div>
+        </div>
+        
+        <div class="job-item clearfix">
+            <div class="job-header">
+                <div class="job-title">Technical Proficiency</div>
+                <div class="job-date">Expert</div>
+            </div>
+            <div class="job-company">Programming & Data Analysis</div>
+            <div class="job-description">
+                • Python programming for data analysis and modeling<br>
+                • SQL database management and optimization<br>
+                • Statistical modeling and regression analysis<br>
+                • Bloomberg Terminal and market data platforms<br>
+                • VBA automation and Excel macros<br>
+                • MATLAB for quantitative finance applications<br>
+                • R programming for statistical computing<br>
+                • SAS for advanced analytics<br>
+                • Power BI for business intelligence<br>
+                • Tableau for data visualization<br>
+                • Apache Spark for big data processing<br>
+                • Machine learning algorithms and implementation<br>
+                • Deep learning frameworks (TensorFlow, PyTorch)<br>
+                • Cloud computing platforms (AWS, Azure, GCP)<br>
+                • Docker containerization and deployment<br>
+                • Git version control and collaboration<br>
+                • Jupyter notebooks for data science<br>
+                • Pandas and NumPy for data manipulation<br>
+                • Scikit-learn for machine learning<br>
+                • Plotly and Matplotlib for visualization<br>
+                • Streamlit for web applications<br>
+                • FastAPI for RESTful services<br>
+                • PostgreSQL and MongoDB databases<br>
+                • Redis for caching and session management<br>
+                • Kubernetes for container orchestration<br>
+                • Terraform for infrastructure as code<br>
+                • Jenkins for CI/CD pipelines<br>
+                • Elasticsearch for search and analytics<br>
+                • Apache Kafka for real-time data streaming<br>
+                • Apache Airflow for workflow orchestration
+            </div>
+        </div>
+    </div>
+
+    <div class="page-indicator">Page 2 of 3</div>
+</body>
+</html>
+
+<!-- PAGE 3 DOCUMENT -->
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CV Document - Page 3</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 1cm;
+        }
+        
+        body {
+            font-family: 'Times New Roman', serif;
+            font-size: 11pt;
+            line-height: 1.2;
+            margin: 0;
+            padding: 20pt;
+            width: 100%;
+            background: white;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        .section {
+            margin-bottom: 15pt;
+        }
+        
+        .section-title {
+            font-size: 12pt;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-bottom: 8pt;
+            border-bottom: 1pt solid black;
+            padding-bottom: 3pt;
+        }
+        
+        .job-item {
+            margin-bottom: 12pt;
+        }
+        
+        .job-header {
+            margin-bottom: 5pt;
+        }
+        
+        .job-title {
+            font-weight: bold;
+            float: left;
+            width: 70%;
+        }
+        
+        .job-date {
+            font-weight: bold;
+            float: right;
+            width: 25%;
+            text-align: right;
+        }
+        
+        .job-company {
+            font-weight: bold;
+            margin-bottom: 5pt;
+            clear: both;
+        }
+        
+        .job-description {
+            margin-left: 10pt;
+            font-size: 10pt;
+        }
+        
+        .clearfix::after {
+            content: "";
+            display: table;
+            clear: both;
+        }
+        
+        .page-indicator {
+            position: absolute;
+            bottom: 10pt;
+            right: 20pt;
+            font-size: 9pt;
+            color: #666;
+        }
+        
+        .footer-logo {
+            position: absolute;
+            bottom: 10pt;
+            left: 20pt;
+            width: 40pt;
+            height: auto;
+        }
+    </style>
+</head>
+<body>
+    {EXTRA_CURRICULAR}
+
+    <div class="section">
+        <div class="section-title">Professional Development</div>
+        <div class="job-item clearfix">
+            <div class="job-header">
+                <div class="job-title">Certifications</div>
+                <div class="job-date">2020-2023</div>
+            </div>
+            <div class="job-company">Risk Management & Finance</div>
+            <div class="job-description">
+                • Financial Risk Manager (FRM) - Global Association of Risk Professionals<br>
+                • Chartered Financial Analyst (CFA) - CFA Institute<br>
+                • Professional Risk Manager (PRM) - PRMIA<br>
+                • Certified Treasury Professional (CTP) - AFP<br>
+                • Advanced Certificate in Risk Management - Institute of Risk Management<br>
+                • Certified Public Accountant (CPA) - American Institute of CPAs<br>
+                • Certified Internal Auditor (CIA) - Institute of Internal Auditors<br>
+                • Project Management Professional (PMP) - Project Management Institute<br>
+                • Certified Information Systems Auditor (CISA) - ISACA<br>
+                • Certified in Risk and Information Systems Control (CRISC) - ISACA<br>
+                • Certified Ethical Hacker (CEH) - EC-Council<br>
+                • AWS Certified Solutions Architect - Amazon Web Services<br>
+                • Microsoft Azure Fundamentals - Microsoft<br>
+                • Google Cloud Professional Data Engineer - Google Cloud<br>
+                • Certified Kubernetes Administrator (CKA) - Cloud Native Computing Foundation<br>
+                • Certified Data Management Professional (CDMP) - DAMA International<br>
+                • Certified Business Analysis Professional (CBAP) - IIBA<br>
+                • Certified Scrum Master (CSM) - Scrum Alliance<br>
+                • Professional Scrum Master (PSM) - Scrum.org<br>
+                • Certified Agile Leadership (CAL) - Scrum Alliance
+            </div>
+        </div>
+        
+        <div class="job-item clearfix">
+            <div class="job-header">
+                <div class="job-title">Continuing Education</div>
+                <div class="job-date">2021-2022</div>
+            </div>
+            <div class="job-company">Advanced Training & Development</div>
+            <div class="job-description">
+                • Advanced Risk Management - London Business School<br>
+                • Derivatives and Structured Products - Wharton School<br>
+                • Machine Learning in Finance - MIT<br>
+                • Blockchain and Cryptocurrency - Stanford University<br>
+                • Quantitative Risk Management - Imperial College London<br>
+                • Financial Engineering - Columbia University<br>
+                • Behavioral Finance - University of Chicago<br>
+                • International Banking and Finance - INSEAD<br>
+                • Artificial Intelligence in Financial Services - Oxford University<br>
+                • Cybersecurity Risk Management - Carnegie Mellon University<br>
+                • Data Science and Analytics - Harvard University<br>
+                • Digital Transformation in Banking - University of Cambridge<br>
+                • Sustainable Finance and ESG Investing - University of Zurich<br>
+                • Fintech Innovation and Disruption - University of California Berkeley<br>
+                • Regulatory Technology (RegTech) - University of Edinburgh<br>
+                • Climate Risk in Financial Services - University of Oxford<br>
+                • Quantum Computing Applications in Finance - MIT<br>
+                • Advanced Statistical Methods - Stanford University<br>
+                • Financial Market Microstructure - University of Chicago<br>
+                • International Financial Regulation - Georgetown University
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Key Achievements</div>
+        <div class="job-item clearfix">
+            <div class="job-header">
+                <div class="job-title">Process Improvement</div>
+                <div class="job-date">2022-2023</div>
+            </div>
+            <div class="job-company">Operational Excellence</div>
+            <div class="job-description">
+                • Implemented automated reporting system reducing manual work by 80%<br>
+                • Developed risk assessment framework adopted across all departments<br>
+                • Led cross-functional team of 8 analysts for quarterly risk reviews<br>
+                • Reduced report generation time from 4 hours to 30 minutes<br>
+                • Improved risk model accuracy by 15% through enhanced data validation<br>
+                • Streamlined compliance processes saving 40 hours per month<br>
+                • Enhanced data quality controls reducing errors by 60%<br>
+                • Implemented real-time risk monitoring dashboard<br>
+                • Automated regulatory reporting reducing manual effort by 70%<br>
+                • Optimized database queries improving system performance by 40%<br>
+                • Developed machine learning models for credit risk prediction<br>
+                • Implemented cloud-based risk analytics platform<br>
+                • Created self-service analytics tools for business users<br>
+                • Established data governance framework and policies<br>
+                • Led digital transformation initiative for risk management<br>
+                • Reduced operational risk incidents by 45% through process automation<br>
+                • Improved audit readiness reducing preparation time by 60%<br>
+                • Enhanced stakeholder satisfaction scores by 25%<br>
+                • Delivered $2M in cost savings through process optimization<br>
+                • Increased team productivity by 35% through tool implementation
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Professional Memberships</div>
+        <div class="job-description">
+            • Global Association of Risk Professionals (GARP)<br>
+            • CFA Institute<br>
+            • Professional Risk Managers' International Association (PRMIA)<br>
+            • Risk Management Association (RMA)<br>
+            • Institute of Risk Management (IRM)<br>
+            • American Finance Association (AFA)<br>
+            • International Association of Financial Engineers (IAFE)<br>
+            • Society for Risk Analysis (SRA)<br>
+            • Financial Data Exchange (FDX)<br>
+            • Open Risk Management Consortium<br>
+            • Quantitative Risk Management Society<br>
+            • International Swaps and Derivatives Association (ISDA)<br>
+            • European Banking Authority (EBA) Working Groups<br>
+            • Basel Committee on Banking Supervision Working Groups<br>
+            • International Association of Insurance Supervisors (IAIS)
+        </div>
+    </div>
+
+    <div class="page-indicator">Page 3 of 3</div>
+    <img src="data:image/png;base64,{BOTTOM_LOGO_BASE64}" alt="Logo" class="footer-logo">
+</body>
+</html>
