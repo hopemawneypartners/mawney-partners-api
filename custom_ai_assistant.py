@@ -1859,15 +1859,15 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
                 "has_file": False
             }
         
-        # Format the CV using the ENHANCED V20 Mawney Partners template with simple A4 layout
+        # Format the CV using the ENHANCED V21 Mawney Partners template with overflow force
         try:
-            from enhanced_cv_formatter_v20 import enhanced_cv_formatter_v20
-            formatted_result = enhanced_cv_formatter_v20.format_cv_with_template(cv_content, filename)
+            from enhanced_cv_formatter_v21 import enhanced_cv_formatter_v21
+            formatted_result = enhanced_cv_formatter_v21.format_cv_with_template(cv_content, filename)
         except ImportError:
             try:
-                # Fallback to V19 enhanced formatter
-                from enhanced_cv_formatter_v19 import enhanced_cv_formatter_v19
-                formatted_result = enhanced_cv_formatter_v19.format_cv_with_template(cv_content, filename)
+                # Fallback to V20 enhanced formatter
+                from enhanced_cv_formatter_v20 import enhanced_cv_formatter_v20
+                formatted_result = enhanced_cv_formatter_v20.format_cv_with_template(cv_content, filename)
             except ImportError:
                 # Fallback to original formatter
                 logger.warning("Enhanced CV formatters not available, using original")

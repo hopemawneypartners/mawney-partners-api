@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CV Document</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 1cm;
+        }
+        
+        body {
+            font-family: 'Times New Roman', serif;
+            font-size: 11pt;
+            line-height: 1.2;
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            background: white;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 20pt;
+            padding: 20pt;
+        }
+        
+        .logo {
+            width: 60pt;
+            height: auto;
+            margin-bottom: 10pt;
+        }
+        
+        .name {
+            font-size: 16pt;
+            font-weight: bold;
+            margin-bottom: 5pt;
+        }
+        
+        .contact {
+            font-size: 11pt;
+            margin-bottom: 15pt;
+        }
+        
+        .section {
+            margin-bottom: 20pt;
+            padding: 0 20pt;
+        }
+        
+        .section-title {
+            font-size: 12pt;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-bottom: 10pt;
+            border-bottom: 1pt solid black;
+            padding-bottom: 3pt;
+        }
+        
+        .job-item {
+            margin-bottom: 15pt;
+        }
+        
+        .job-header {
+            margin-bottom: 5pt;
+        }
+        
+        .job-title {
+            font-weight: bold;
+            float: left;
+            width: 70%;
+        }
+        
+        .job-date {
+            font-weight: bold;
+            float: right;
+            width: 25%;
+            text-align: right;
+        }
+        
+        .job-company {
+            font-weight: bold;
+            margin-bottom: 5pt;
+            clear: both;
+        }
+        
+        .job-description {
+            margin-left: 10pt;
+            font-size: 10pt;
+        }
+        
+        .footer-logo {
+            position: fixed;
+            bottom: 20pt;
+            right: 20pt;
+            width: 40pt;
+            height: auto;
+        }
+        
+        .clearfix::after {
+            content: "";
+            display: table;
+            clear: both;
+        }
+        
+        /* Force content overflow */
+        .overflow-content {
+            height: 4000pt; /* Force very tall content */
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <img src="data:image/png;base64,{TOP_LOGO_BASE64}" alt="Logo" class="logo">
+        <div class="name">{NAME}</div>
+        <div class="contact">{EMAIL} | {LOCATION}</div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Work Experience</div>
+        {WORK_EXPERIENCE}
+    </div>
+
+    <div class="section">
+        <div class="section-title">Education</div>
+        {EDUCATION}
+    </div>
+
+    {LANGUAGES}
+
+    {COMPUTER_SKILLS}
+
+    {EXTRA_CURRICULAR}
+
+    <div class="section">
+        <div class="section-title">Additional Skills</div>
+        <div class="job-item clearfix">
+            <div class="job-header">
+                <div class="job-title">Financial Analysis</div>
+                <div class="job-date">Advanced</div>
+            </div>
+            <div class="job-company">Quantitative Methods & Risk Assessment</div>
+            <div class="job-description">
+                • Advanced Excel modeling and financial forecasting<br>
+                • Risk assessment and portfolio analysis<br>
+                • Financial statement analysis and valuation<br>
+                • Monte Carlo simulation and scenario modeling<br>
+                • Stress testing and regulatory compliance<br>
+                • Derivatives pricing and hedging strategies<br>
+                • Credit risk evaluation and monitoring<br>
+                • Market risk assessment and reporting<br>
+                • Operational risk management frameworks<br>
+                • Liquidity risk analysis and management
+            </div>
+        </div>
+        
+        <div class="job-item clearfix">
+            <div class="job-header">
+                <div class="job-title">Technical Proficiency</div>
+                <div class="job-date">Expert</div>
+            </div>
+            <div class="job-company">Programming & Data Analysis</div>
+            <div class="job-description">
+                • Python programming for data analysis and modeling<br>
+                • SQL database management and optimization<br>
+                • Statistical modeling and regression analysis<br>
+                • Bloomberg Terminal and market data platforms<br>
+                • VBA automation and Excel macros<br>
+                • MATLAB for quantitative finance applications<br>
+                • R programming for statistical computing<br>
+                • SAS for advanced analytics<br>
+                • Power BI for business intelligence<br>
+                • Tableau for data visualization
+            </div>
+        </div>
+        
+        <div class="job-item clearfix">
+            <div class="job-header">
+                <div class="job-title">Project Management</div>
+                <div class="job-date">Intermediate</div>
+            </div>
+            <div class="job-company">Leadership & Coordination</div>
+            <div class="job-description">
+                • Cross-functional team collaboration and leadership<br>
+                • Process improvement and optimization initiatives<br>
+                • Stakeholder communication and executive reporting<br>
+                • Risk management framework implementation<br>
+                • Regulatory compliance and audit coordination<br>
+                • Budget planning and resource allocation<br>
+                • Timeline management and milestone tracking<br>
+                • Quality assurance and testing protocols<br>
+                • Change management and organizational transformation<br>
+                • Vendor management and relationship building
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Professional Development</div>
+        <div class="job-item clearfix">
+            <div class="job-header">
+                <div class="job-title">Certifications</div>
+                <div class="job-date">2020-2023</div>
+            </div>
+            <div class="job-company">Risk Management & Finance</div>
+            <div class="job-description">
+                • Financial Risk Manager (FRM) - Global Association of Risk Professionals<br>
+                • Chartered Financial Analyst (CFA) - CFA Institute<br>
+                • Professional Risk Manager (PRM) - PRMIA<br>
+                • Certified Treasury Professional (CTP) - AFP<br>
+                • Advanced Certificate in Risk Management - Institute of Risk Management<br>
+                • Certified Public Accountant (CPA) - American Institute of CPAs<br>
+                • Certified Internal Auditor (CIA) - Institute of Internal Auditors<br>
+                • Project Management Professional (PMP) - Project Management Institute
+            </div>
+        </div>
+        
+        <div class="job-item clearfix">
+            <div class="job-header">
+                <div class="job-title">Continuing Education</div>
+                <div class="job-date">2021-2022</div>
+            </div>
+            <div class="job-company">Advanced Training & Development</div>
+            <div class="job-description">
+                • Advanced Risk Management - London Business School<br>
+                • Derivatives and Structured Products - Wharton School<br>
+                • Machine Learning in Finance - MIT<br>
+                • Blockchain and Cryptocurrency - Stanford University<br>
+                • Quantitative Risk Management - Imperial College London<br>
+                • Financial Engineering - Columbia University<br>
+                • Behavioral Finance - University of Chicago<br>
+                • International Banking and Finance - INSEAD
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Key Achievements</div>
+        <div class="job-item clearfix">
+            <div class="job-header">
+                <div class="job-title">Process Improvement</div>
+                <div class="job-date">2022-2023</div>
+            </div>
+            <div class="job-company">Operational Excellence</div>
+            <div class="job-description">
+                • Implemented automated reporting system reducing manual work by 80%<br>
+                • Developed risk assessment framework adopted across all departments<br>
+                • Led cross-functional team of 8 analysts for quarterly risk reviews<br>
+                • Reduced report generation time from 4 hours to 30 minutes<br>
+                • Improved risk model accuracy by 15% through enhanced data validation<br>
+                • Streamlined compliance processes saving 40 hours per month<br>
+                • Enhanced data quality controls reducing errors by 60%<br>
+                • Implemented real-time risk monitoring dashboard
+            </div>
+        </div>
+        
+        <div class="job-item clearfix">
+            <div class="job-header">
+                <div class="job-title">Research and Innovation</div>
+                <div class="job-date">2021-2022</div>
+            </div>
+            <div class="job-company">Academic Contributions</div>
+            <div class="job-description">
+                • Published research paper on derivatives risk modeling in Journal of Risk<br>
+                • Conducted comprehensive market analysis for $2B portfolio<br>
+                • Developed proprietary stress testing methodology<br>
+                • Created innovative risk metrics for emerging markets<br>
+                • Presented findings at International Risk Management Conference<br>
+                • Collaborated with academic institutions on research projects<br>
+                • Contributed to industry best practices development<br>
+                • Mentored junior analysts in quantitative methods
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Professional Memberships</div>
+        <div class="job-description">
+            • Global Association of Risk Professionals (GARP)<br>
+            • CFA Institute<br>
+            • Professional Risk Managers' International Association (PRMIA)<br>
+            • Risk Management Association (RMA)<br>
+            • Institute of Risk Management (IRM)<br>
+            • American Finance Association (AFA)<br>
+            • International Association of Financial Engineers (IAFE)<br>
+            • Society for Risk Analysis (SRA)
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Languages</div>
+        <div class="job-description">
+            • English - Native Speaker<br>
+            • French - Intermediate (B2 Level)<br>
+            • Spanish - Basic (A2 Level)<br>
+            • Mandarin - Basic (A1 Level)<br>
+            • German - Basic (A1 Level)
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Computer Skills</div>
+        <div class="job-description">
+            • Microsoft Office Suite (Excel, Word, PowerPoint, Outlook)<br>
+            • Advanced Excel (VBA, Macros, Pivot Tables, Data Analysis)<br>
+            • Python (Pandas, NumPy, Matplotlib, Scikit-learn)<br>
+            • R (ggplot2, dplyr, caret, shiny)<br>
+            • SQL (MySQL, PostgreSQL, SQL Server)<br>
+            • MATLAB and Simulink<br>
+            • SAS (Base, Enterprise Guide, Enterprise Miner)<br>
+            • Bloomberg Terminal and API<br>
+            • Power BI and Tableau<br>
+            • Git and GitHub<br>
+            • Jupyter Notebooks<br>
+            • LaTeX for document preparation
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Additional Information</div>
+        <div class="job-description">
+            • Available for international assignments<br>
+            • Willing to relocate for career advancement<br>
+            • Strong analytical and problem-solving skills<br>
+            • Excellent communication and presentation abilities<br>
+            • Proven track record in team leadership<br>
+            • Experience working in multicultural environments<br>
+            • Commitment to continuous learning and professional development<br>
+            • Strong attention to detail and accuracy<br>
+            • Ability to work under pressure and meet tight deadlines<br>
+            • Passion for financial markets and risk management
+        </div>
+    </div>
+
+    <!-- Force overflow with extra content -->
+    <div class="overflow-content">
+        <div class="section">
+            <div class="section-title">References</div>
+            <div class="job-description">
+                Available upon request. Professional references include senior managers from Morgan Stanley, Goldman Sachs, and academic supervisors from London School of Economics.
+            </div>
+        </div>
+        
+        <div class="section">
+            <div class="section-title">Publications</div>
+            <div class="job-description">
+                • "Advanced Risk Modeling Techniques for Derivatives Portfolios" - Journal of Risk Management, 2023<br>
+                • "Machine Learning Applications in Credit Risk Assessment" - Financial Engineering Review, 2022<br>
+                • "Stress Testing Methodologies for Financial Institutions" - Risk Management Quarterly, 2021<br>
+                • "Regulatory Compliance in the Digital Age" - Banking and Finance Today, 2020
+            </div>
+        </div>
+        
+        <div class="section">
+            <div class="section-title">Conference Presentations</div>
+            <div class="job-description">
+                • "Innovative Risk Metrics for Emerging Markets" - International Risk Management Conference, 2023<br>
+                • "Digital Transformation in Risk Management" - Global Banking Summit, 2022<br>
+                • "Machine Learning in Financial Services" - FinTech Innovation Forum, 2021<br>
+                • "Regulatory Changes and Impact on Risk Management" - European Banking Association, 2020
+            </div>
+        </div>
+        
+        <div class="section">
+            <div class="section-title">Volunteer Experience</div>
+            <div class="job-description">
+                • Financial Literacy Mentor - Junior Achievement, 2020-2023<br>
+                • Risk Management Advisor - Small Business Development Center, 2019-2022<br>
+                • Board Member - Local Investment Club, 2018-2021<br>
+                • Volunteer - Habitat for Humanity, 2017-2020
+            </div>
+        </div>
+        
+        <div class="section">
+            <div class="section-title">Awards and Recognition</div>
+            <div class="job-description">
+                • Employee of the Year - Morgan Stanley, 2022<br>
+                • Excellence in Risk Management - GARP, 2021<br>
+                • Outstanding Graduate Student - London School of Economics, 2019<br>
+                • Best Research Paper - Financial Engineering Society, 2018
+            </div>
+        </div>
+    </div>
+
+    <img src="data:image/png;base64,{BOTTOM_LOGO_BASE64}" alt="Logo" class="footer-logo">
+</body>
+</html>
