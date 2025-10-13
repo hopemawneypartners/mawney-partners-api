@@ -1859,15 +1859,20 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
                 "has_file": False
             }
         
-        # Format the CV using the ENHANCED Mawney Partners template with AI parsing
+        # Format the CV using the ENHANCED V2 Mawney Partners template with improved parsing
         try:
-            from enhanced_cv_formatter import enhanced_cv_formatter
-            formatted_result = enhanced_cv_formatter.format_cv_with_template(cv_content, filename)
+            from enhanced_cv_formatter_v2 import enhanced_cv_formatter_v2
+            formatted_result = enhanced_cv_formatter_v2.format_cv_with_template(cv_content, filename)
         except ImportError:
-            # Fallback to original formatter
-            logger.warning("Enhanced CV formatter not available, using original")
-            template_formatter = MawneyTemplateFormatter()
-            formatted_result = template_formatter.format_cv_with_template(cv_content, filename)
+            try:
+                # Fallback to V1 enhanced formatter
+                from enhanced_cv_formatter import enhanced_cv_formatter
+                formatted_result = enhanced_cv_formatter.format_cv_with_template(cv_content, filename)
+            except ImportError:
+                # Fallback to original formatter
+                logger.warning("Enhanced CV formatters not available, using original")
+                template_formatter = MawneyTemplateFormatter()
+                formatted_result = template_formatter.format_cv_with_template(cv_content, filename)
         
         if not formatted_result.get('success'):
             return {
