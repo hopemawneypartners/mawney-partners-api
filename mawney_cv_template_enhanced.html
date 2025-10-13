@@ -65,17 +65,22 @@
             margin-bottom: 25px;
         }
         
-        /* Section Headers - ALL IN GARAMOND FONT */
+        /* Section Headers - ALL IN GARAMOND FONT - CRITICAL FIX */
         .section-header {
-            font-family: 'EB Garamond', Garamond, serif;
-            font-size: 13pt;
-            font-weight: 700;
-            color: #2c3e50;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 12px;
-            margin-top: 20px;
-            page-break-after: avoid;  /* Keep header with content */
+            font-family: 'EB Garamond', Garamond, serif !important;
+            font-size: 13pt !important;
+            font-weight: 700 !important;
+            color: #2c3e50 !important;
+            text-transform: uppercase !important;
+            letter-spacing: 1px !important;
+            margin-bottom: 12px !important;
+            margin-top: 20px !important;
+            page-break-after: avoid !important;  /* Keep header with content */
+        }
+        
+        /* Force Garamond on ALL headers */
+        h1, h2, h3, h4, h5, h6 {
+            font-family: 'EB Garamond', Garamond, serif !important;
         }
         
         .section {
