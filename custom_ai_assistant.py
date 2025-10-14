@@ -1859,15 +1859,15 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
                 "has_file": False
             }
         
-        # Format the CV using the ENHANCED V29 Mawney Partners template with explicit page breaks
+        # Format the CV using the ENHANCED V30 Mawney Partners template with simple single-page layout
         try:
-            from enhanced_cv_formatter_v29 import enhanced_cv_formatter_v29
-            formatted_result = enhanced_cv_formatter_v29.format_cv_with_template(cv_content, filename)
+            from enhanced_cv_formatter_v30 import enhanced_cv_formatter_v30
+            formatted_result = enhanced_cv_formatter_v30.format_cv_with_template(cv_content, filename)
         except ImportError:
             try:
-                # Fallback to V28 enhanced formatter
-                from enhanced_cv_formatter_v28 import enhanced_cv_formatter_v28
-                formatted_result = enhanced_cv_formatter_v28.format_cv_with_template(cv_content, filename)
+                # Fallback to V29 enhanced formatter
+                from enhanced_cv_formatter_v29 import enhanced_cv_formatter_v29
+                formatted_result = enhanced_cv_formatter_v29.format_cv_with_template(cv_content, filename)
             except ImportError:
                 # Fallback to original formatter
                 logger.warning("Enhanced CV formatters not available, using original")
