@@ -819,3 +819,4 @@ class EnhancedCVFormatterV10:
 
 # Create global instance
 enhanced_cv_formatter_v10 = EnhancedCVFormatterV10()
+

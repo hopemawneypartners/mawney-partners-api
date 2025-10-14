@@ -2,67 +2,74 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=595px, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>CV Document</title>
     <style>
-        @page {
-            size: A4;
-            margin: 1cm;
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
         
         body {
             font-family: 'Times New Roman', serif;
             font-size: 11pt;
-            line-height: 1.2;
+            line-height: 1.3;
+            width: 595px;
             margin: 0;
             padding: 0;
-            width: 100%;
             background: white;
+            color: #000;
+        }
+        
+        .page-container {
+            width: 595px;
+            min-height: 2500px;
+            padding: 40px;
         }
         
         .header {
             text-align: center;
-            margin-bottom: 20pt;
-            padding: 20pt;
+            margin-bottom: 20px;
         }
         
         .logo {
-            width: 60pt;
+            width: 60px;
             height: auto;
-            margin-bottom: 10pt;
+            margin-bottom: 10px;
         }
         
         .name {
             font-size: 16pt;
             font-weight: bold;
-            margin-bottom: 5pt;
+            margin-bottom: 5px;
         }
         
         .contact {
             font-size: 11pt;
-            margin-bottom: 15pt;
+            margin-bottom: 20px;
         }
         
         .section {
-            margin-bottom: 20pt;
-            padding: 0 20pt;
+            margin-bottom: 25px;
         }
         
         .section-title {
             font-size: 12pt;
             font-weight: bold;
             text-transform: uppercase;
-            margin-bottom: 10pt;
-            border-bottom: 1pt solid black;
-            padding-bottom: 3pt;
+            margin-bottom: 10px;
+            border-bottom: 1px solid black;
+            padding-bottom: 3px;
         }
         
         .job-item {
-            margin-bottom: 15pt;
+            margin-bottom: 20px;
         }
         
         .job-header {
-            margin-bottom: 5pt;
+            margin-bottom: 5px;
+            overflow: hidden;
         }
         
         .job-title {
@@ -80,21 +87,14 @@
         
         .job-company {
             font-weight: bold;
-            margin-bottom: 5pt;
+            margin-bottom: 5px;
             clear: both;
         }
         
         .job-description {
-            margin-left: 10pt;
+            margin-left: 10px;
             font-size: 10pt;
-        }
-        
-        .footer-logo {
-            position: fixed;
-            bottom: 20pt;
-            right: 20pt;
-            width: 40pt;
-            height: auto;
+            line-height: 1.4;
         }
         
         .clearfix::after {
@@ -103,23 +103,23 @@
             clear: both;
         }
         
-        /* Force very tall content to trigger pagination */
-        .page1-content {
-            height: 800pt;
+        .spacer {
+            height: 400px;
         }
         
-        .page2-content {
-            height: 800pt;
+        .footer-logo {
+            margin-top: 50px;
+            text-align: right;
         }
         
-        .page3-content {
-            height: 800pt;
+        .footer-logo img {
+            width: 40px;
+            height: auto;
         }
     </style>
 </head>
 <body>
-    <!-- PAGE 1 CONTENT -->
-    <div class="page1-content">
+    <div class="page-container">
         <div class="header">
             <img src="data:image/png;base64,{TOP_LOGO_BASE64}" alt="Logo" class="logo">
             <div class="name">{NAME}</div>
@@ -131,28 +131,36 @@
             {WORK_EXPERIENCE}
         </div>
 
+        <div class="spacer"></div>
+
         <div class="section">
             <div class="section-title">Education</div>
             {EDUCATION}
         </div>
 
+        <div class="spacer"></div>
+
         {LANGUAGES}
+
+        <div class="spacer"></div>
 
         {COMPUTER_SKILLS}
 
-        {EXTRA_CURRICULAR}
-    </div>
+        <div class="spacer"></div>
 
-    <!-- PAGE 2 CONTENT -->
-    <div class="page2-content">
+        {EXTRA_CURRICULAR}
+
+        <div class="spacer"></div>
+
+        <!-- Additional Content to Force Pagination -->
         <div class="section">
-            <div class="section-title">Additional Skills</div>
+            <div class="section-title">Professional Skills</div>
             <div class="job-item clearfix">
                 <div class="job-header">
-                    <div class="job-title">Financial Analysis</div>
-                    <div class="job-date">Advanced</div>
+                    <div class="job-title">FINANCIAL ANALYSIS</div>
+                    <div class="job-date">ADVANCED</div>
                 </div>
-                <div class="job-company">Quantitative Methods & Risk Assessment</div>
+                <div class="job-company">QUANTITATIVE METHODS & RISK ASSESSMENT</div>
                 <div class="job-description">
                     • Advanced Excel modeling and financial forecasting<br>
                     • Risk assessment and portfolio analysis<br>
@@ -173,26 +181,21 @@
                     • Market risk factor analysis and decomposition<br>
                     • Credit spread analysis and modeling<br>
                     • Interest rate risk measurement and hedging<br>
-                    • Foreign exchange risk assessment and management<br>
-                    • Counterparty credit risk evaluation<br>
-                    • Collateral management and optimization<br>
-                    • Margin requirements and calculation<br>
-                    • Model validation and backtesting<br>
-                    • Scenario analysis and stress testing<br>
-                    • Risk appetite framework development<br>
-                    • Risk metrics dashboard creation<br>
-                    • Regulatory reporting automation<br>
-                    • Risk data aggregation and reconciliation<br>
-                    • Model risk management and governance
+                    • Foreign exchange risk assessment and management
                 </div>
             </div>
-            
+        </div>
+
+        <div class="spacer"></div>
+
+        <div class="section">
+            <div class="section-title">Technical Proficiency</div>
             <div class="job-item clearfix">
                 <div class="job-header">
-                    <div class="job-title">Technical Proficiency</div>
-                    <div class="job-date">Expert</div>
+                    <div class="job-title">PROGRAMMING & DATA ANALYSIS</div>
+                    <div class="job-date">EXPERT</div>
                 </div>
-                <div class="job-company">Programming & Data Analysis</div>
+                <div class="job-company">SOFTWARE & PLATFORMS</div>
                 <div class="job-description">
                     • Python programming for data analysis and modeling<br>
                     • SQL database management and optimization<br>
@@ -213,32 +216,21 @@
                     • Jupyter notebooks for data science<br>
                     • Pandas and NumPy for data manipulation<br>
                     • Scikit-learn for machine learning<br>
-                    • Plotly and Matplotlib for visualization<br>
-                    • Streamlit for web applications<br>
-                    • FastAPI for RESTful services<br>
-                    • PostgreSQL and MongoDB databases<br>
-                    • Redis for caching and session management<br>
-                    • Kubernetes for container orchestration<br>
-                    • Terraform for infrastructure as code<br>
-                    • Jenkins for CI/CD pipelines<br>
-                    • Elasticsearch for search and analytics<br>
-                    • Apache Kafka for real-time data streaming<br>
-                    • Apache Airflow for workflow orchestration
+                    • Plotly and Matplotlib for visualization
                 </div>
             </div>
         </div>
-    </div>
 
-    <!-- PAGE 3 CONTENT -->
-    <div class="page3-content">
+        <div class="spacer"></div>
+
         <div class="section">
             <div class="section-title">Professional Development</div>
             <div class="job-item clearfix">
                 <div class="job-header">
-                    <div class="job-title">Certifications</div>
+                    <div class="job-title">CERTIFICATIONS</div>
                     <div class="job-date">2020-2023</div>
                 </div>
-                <div class="job-company">Risk Management & Finance</div>
+                <div class="job-company">RISK MANAGEMENT & FINANCE</div>
                 <div class="job-description">
                     • Financial Risk Manager (FRM) - Global Association of Risk Professionals<br>
                     • Chartered Financial Analyst (CFA) - CFA Institute<br>
@@ -254,54 +246,21 @@
                     • AWS Certified Solutions Architect - Amazon Web Services<br>
                     • Microsoft Azure Fundamentals - Microsoft<br>
                     • Google Cloud Professional Data Engineer - Google Cloud<br>
-                    • Certified Kubernetes Administrator (CKA) - Cloud Native Computing Foundation<br>
-                    • Certified Data Management Professional (CDMP) - DAMA International<br>
-                    • Certified Business Analysis Professional (CBAP) - IIBA<br>
-                    • Certified Scrum Master (CSM) - Scrum Alliance<br>
-                    • Professional Scrum Master (PSM) - Scrum.org<br>
-                    • Certified Agile Leadership (CAL) - Scrum Alliance
-                </div>
-            </div>
-            
-            <div class="job-item clearfix">
-                <div class="job-header">
-                    <div class="job-title">Continuing Education</div>
-                    <div class="job-date">2021-2022</div>
-                </div>
-                <div class="job-company">Advanced Training & Development</div>
-                <div class="job-description">
-                    • Advanced Risk Management - London Business School<br>
-                    • Derivatives and Structured Products - Wharton School<br>
-                    • Machine Learning in Finance - MIT<br>
-                    • Blockchain and Cryptocurrency - Stanford University<br>
-                    • Quantitative Risk Management - Imperial College London<br>
-                    • Financial Engineering - Columbia University<br>
-                    • Behavioral Finance - University of Chicago<br>
-                    • International Banking and Finance - INSEAD<br>
-                    • Artificial Intelligence in Financial Services - Oxford University<br>
-                    • Cybersecurity Risk Management - Carnegie Mellon University<br>
-                    • Data Science and Analytics - Harvard University<br>
-                    • Digital Transformation in Banking - University of Cambridge<br>
-                    • Sustainable Finance and ESG Investing - University of Zurich<br>
-                    • Fintech Innovation and Disruption - University of California Berkeley<br>
-                    • Regulatory Technology (RegTech) - University of Edinburgh<br>
-                    • Climate Risk in Financial Services - University of Oxford<br>
-                    • Quantum Computing Applications in Finance - MIT<br>
-                    • Advanced Statistical Methods - Stanford University<br>
-                    • Financial Market Microstructure - University of Chicago<br>
-                    • International Financial Regulation - Georgetown University
+                    • Certified Kubernetes Administrator (CKA) - Cloud Native Computing Foundation
                 </div>
             </div>
         </div>
+
+        <div class="spacer"></div>
 
         <div class="section">
             <div class="section-title">Key Achievements</div>
             <div class="job-item clearfix">
                 <div class="job-header">
-                    <div class="job-title">Process Improvement</div>
+                    <div class="job-title">PROCESS IMPROVEMENT</div>
                     <div class="job-date">2022-2023</div>
                 </div>
-                <div class="job-company">Operational Excellence</div>
+                <div class="job-company">OPERATIONAL EXCELLENCE</div>
                 <div class="job-description">
                     • Implemented automated reporting system reducing manual work by 80%<br>
                     • Developed risk assessment framework adopted across all departments<br>
@@ -317,15 +276,12 @@
                     • Implemented cloud-based risk analytics platform<br>
                     • Created self-service analytics tools for business users<br>
                     • Established data governance framework and policies<br>
-                    • Led digital transformation initiative for risk management<br>
-                    • Reduced operational risk incidents by 45% through process automation<br>
-                    • Improved audit readiness reducing preparation time by 60%<br>
-                    • Enhanced stakeholder satisfaction scores by 25%<br>
-                    • Delivered $2M in cost savings through process optimization<br>
-                    • Increased team productivity by 35% through tool implementation
+                    • Led digital transformation initiative for risk management
                 </div>
             </div>
         </div>
+
+        <div class="spacer"></div>
 
         <div class="section">
             <div class="section-title">Professional Memberships</div>
@@ -348,41 +304,9 @@
             </div>
         </div>
 
-        <div class="section">
-            <div class="section-title">Additional Information</div>
-            <div class="job-description">
-                • Available for international assignments<br>
-                • Willing to relocate for career advancement<br>
-                • Strong analytical and problem-solving skills<br>
-                • Excellent communication and presentation abilities<br>
-                • Proven track record in team leadership<br>
-                • Experience working in multicultural environments<br>
-                • Commitment to continuous learning and professional development<br>
-                • Strong attention to detail and accuracy<br>
-                • Ability to work under pressure and meet tight deadlines<br>
-                • Passion for financial markets and risk management<br>
-                • Multilingual capabilities (English, French, Spanish, Mandarin)<br>
-                • Experience with global regulatory frameworks<br>
-                • Strong ethical standards and professional integrity<br>
-                • Adaptability to changing market conditions<br>
-                • Innovation mindset and forward-thinking approach<br>
-                • Extensive experience with regulatory examinations<br>
-                • Proven ability to work with senior management and board members<br>
-                • Strong project management and change management skills<br>
-                • Experience with crisis management and business continuity<br>
-                • Commitment to diversity and inclusion initiatives
-            </div>
-        </div>
-
-        <div class="section">
-            <div class="section-title">References</div>
-            <div class="job-description">
-                Available upon request. Professional references include senior managers from Morgan Stanley, Goldman Sachs, and academic supervisors from London School of Economics. Additional references available from current and former colleagues, clients, and industry partners. All references have been pre-approved and are available for immediate contact.
-            </div>
+        <div class="footer-logo">
+            <img src="data:image/png;base64,{BOTTOM_LOGO_BASE64}" alt="Logo">
         </div>
     </div>
-
-    <img src="data:image/png;base64,{BOTTOM_LOGO_BASE64}" alt="Logo" class="footer-logo">
 </body>
 </html>
-

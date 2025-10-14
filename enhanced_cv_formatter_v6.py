@@ -731,3 +731,4 @@ class EnhancedCVFormatterV6:
 
 # Create global instance
 enhanced_cv_formatter_v6 = EnhancedCVFormatterV6()
+

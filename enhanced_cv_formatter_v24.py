@@ -420,3 +420,4 @@ class EnhancedCVFormatterV24:
 
 # Create instance
 enhanced_cv_formatter_v24 = EnhancedCVFormatterV24()
+
