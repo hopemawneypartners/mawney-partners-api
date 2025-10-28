@@ -1946,6 +1946,208 @@ def sync_chat_to_user(chat, user_email):
     except Exception as e:
         print(f"❌ Error syncing chat to user {user_email}: {e}")
 
+# MARK: - Task Management API Endpoints
+
+# Task storage (in production, this would be a database)
+user_tasks_storage = {}
+
+@app.route('/api/user-tasks', methods=['GET'])
+def get_user_tasks():
+    """Get all tasks for a specific user (iOS app endpoint)"""
+    try:
+        email = request.args.get('email')
+        if not email:
+            return jsonify({
+                "success": False,
+                "error": "Email parameter required"
+            }), 400
+        
+        print(f"📋 Fetching tasks for user: {email}")
+        
+        # Get tasks for this user
+        user_tasks = user_tasks_storage.get(email, [])
+        
+        print(f"📋 Found {len(user_tasks)} tasks for {email}")
+        
+        return jsonify({
+            "success": True,
+            "tasks": user_tasks
+        })
+        
+    except Exception as e:
+        print(f"❌ Error fetching user tasks: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/api/user-tasks', methods=['POST'])
+def save_user_tasks():
+    """Save tasks for a specific user (iOS app endpoint)"""
+    try:
+        data = request.get_json()
+        email = data.get('email')
+        tasks = data.get('tasks', [])
+        
+        if not email:
+            return jsonify({
+                "success": False,
+                "error": "Email parameter required"
+            }), 400
+        
+        print(f"💾 Saving {len(tasks)} tasks for user: {email}")
+        
+        # Store tasks for this user
+        user_tasks_storage[email] = tasks
+        
+        # Sync tasks to assigned users
+        for task in tasks:
+            assigned_to = task.get('assignedTo')
+            if assigned_to and assigned_to != get_user_id_by_email(email):
+                assigned_email = get_user_email_by_id(assigned_to)
+                if assigned_email and assigned_email != email:
+                    print(f"🔄 Syncing task '{task.get('title', 'Unknown')}' to {assigned_email}")
+                    sync_task_to_user(task, assigned_email)
+        
+        return jsonify({
+            "success": True,
+            "message": f"Saved {len(tasks)} tasks for {email}"
+        })
+        
+    except Exception as e:
+        print(f"❌ Error saving user tasks: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/api/user-tasks/assign', methods=['POST'])
+def assign_task():
+    """Assign a task to another user"""
+    try:
+        data = request.get_json()
+        task_id = data.get('task_id')
+        assigned_to = data.get('assignedTo')
+        assigned_by = data.get('assignedBy')
+        
+        if not all([task_id, assigned_to, assigned_by]):
+            return jsonify({
+                "success": False,
+                "error": "task_id, assignedTo, and assignedBy parameters required"
+            }), 400
+        
+        print(f"📋 Assigning task {task_id} to {assigned_to} by {assigned_by}")
+        
+        # Find the task in all user storage
+        task_found = False
+        for email, tasks in user_tasks_storage.items():
+            for task in tasks:
+                if task.get('id') == task_id:
+                    task['assignedTo'] = assigned_to
+                    task['assignedBy'] = assigned_by
+                    task['updatedAt'] = datetime.now().isoformat()
+                    task_found = True
+                    
+                    # Sync to assigned user
+                    assigned_email = get_user_email_by_id(assigned_to)
+                    if assigned_email:
+                        sync_task_to_user(task, assigned_email)
+                    break
+        
+        if not task_found:
+            return jsonify({
+                "success": False,
+                "error": "Task not found"
+            }), 404
+        
+        return jsonify({
+            "success": True,
+            "message": f"Task assigned to {assigned_to}"
+        })
+        
+    except Exception as e:
+        print(f"❌ Error assigning task: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/api/user-tasks/complete', methods=['POST'])
+def complete_task():
+    """Mark a task as completed"""
+    try:
+        data = request.get_json()
+        task_id = data.get('task_id')
+        user_email = data.get('user_email')
+        
+        if not all([task_id, user_email]):
+            return jsonify({
+                "success": False,
+                "error": "task_id and user_email parameters required"
+            }), 400
+        
+        print(f"✅ Completing task {task_id} for user {user_email}")
+        
+        # Find and update the task
+        task_found = False
+        for email, tasks in user_tasks_storage.items():
+            for task in tasks:
+                if task.get('id') == task_id:
+                    task['isCompleted'] = True
+                    task['completedAt'] = datetime.now().isoformat()
+                    task['updatedAt'] = datetime.now().isoformat()
+                    task_found = True
+                    break
+        
+        if not task_found:
+            return jsonify({
+                "success": False,
+                "error": "Task not found"
+            }), 404
+        
+        return jsonify({
+            "success": True,
+            "message": "Task completed successfully"
+        })
+        
+    except Exception as e:
+        print(f"❌ Error completing task: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+def get_user_id_by_email(email):
+    """Get user ID by email"""
+    for user_email, profile in user_profiles.items():
+        if user_email == email:
+            return profile.get('id')
+    return None
+
+def sync_task_to_user(task, user_email):
+    """Sync a task to another user's task list"""
+    try:
+        if user_email not in user_tasks_storage:
+            user_tasks_storage[user_email] = []
+        
+        # Check if task already exists for this user
+        existing_tasks = user_tasks_storage[user_email]
+        task_exists = any(existing_task.get('id') == task.get('id') for existing_task in existing_tasks)
+        
+        if not task_exists:
+            user_tasks_storage[user_email].append(task)
+            print(f"✅ Synced task '{task.get('title', 'Unknown')}' to {user_email}")
+        else:
+            # Update existing task
+            for i, existing_task in enumerate(existing_tasks):
+                if existing_task.get('id') == task.get('id'):
+                    user_tasks_storage[user_email][i] = task
+                    print(f"🔄 Updated task '{task.get('title', 'Unknown')}' for {user_email}")
+                    break
+            
+    except Exception as e:
+        print(f"❌ Error syncing task to user {user_email}: {e}")
+
 def store_memory(key, value, memory_type='learned_knowledge', user_id=None):
     """Store information in AI memory with categorization"""
     try:
