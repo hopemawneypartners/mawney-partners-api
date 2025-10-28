@@ -56,49 +56,55 @@ current_chat_sessions = {}  # Track current chat per user
 # User data storage (in production, this would be a database)
 user_profiles = {
     'hg@mawneypartners.com': {
+        'id': 'user_hope',
         'email': 'hg@mawneypartners.com',
         'name': 'Hope Gilbert',
-        'avatar': None,
+        'avatar': 'hope.jpg',
         'preferences': {},
         'created_at': datetime.now().isoformat(),
         'last_login': datetime.now().isoformat()
     },
     'jt@mawneypartners.com': {
+        'id': 'user_josh',
         'email': 'jt@mawneypartners.com',
         'name': 'Joshua Trister',
-        'avatar': None,
+        'avatar': 'josh.jpg',
         'preferences': {},
         'created_at': datetime.now().isoformat(),
         'last_login': datetime.now().isoformat()
     },
     'finance@mawneypartners.com': {
+        'id': 'user_rachel',
         'email': 'finance@mawneypartners.com',
         'name': 'Rachel Trister',
-        'avatar': None,
+        'avatar': 'rachel.jpg',
         'preferences': {},
         'created_at': datetime.now().isoformat(),
         'last_login': datetime.now().isoformat()
     },
     'jd@mawneypartners.com': {
+        'id': 'user_jack',
         'email': 'jd@mawneypartners.com',
         'name': 'Jack Dalby',
-        'avatar': None,
+        'avatar': 'jack.jpg',
         'preferences': {},
         'created_at': datetime.now().isoformat(),
         'last_login': datetime.now().isoformat()
     },
     'he@mawneypartners.com': {
+        'id': 'user_harry',
         'email': 'he@mawneypartners.com',
         'name': 'Harry Edleman',
-        'avatar': None,
+        'avatar': 'harry.jpg',
         'preferences': {},
         'created_at': datetime.now().isoformat(),
         'last_login': datetime.now().isoformat()
     },
     'tjt@mawneypartners.com': {
+        'id': 'user_tyler',
         'email': 'tjt@mawneypartners.com',
         'name': 'Tyler Johnson Thomas',
-        'avatar': None,
+        'avatar': 'tyler.jpg',
         'preferences': {},
         'created_at': datetime.now().isoformat(),
         'last_login': datetime.now().isoformat()
@@ -1776,6 +1782,169 @@ def get_current_chat():
             "success": False,
             "error": str(e)
         }), 500
+
+# MARK: - iOS App Chat Endpoints (user-chats and user-messages)
+
+# User chat storage (in production, this would be a database)
+user_chats_storage = {}
+user_messages_storage = {}
+
+@app.route('/api/user-chats', methods=['GET'])
+def get_user_chats():
+    """Get all chats for a specific user (iOS app endpoint)"""
+    try:
+        email = request.args.get('email')
+        if not email:
+            return jsonify({
+                "success": False,
+                "error": "Email parameter required"
+            }), 400
+        
+        print(f"📱 Fetching chats for user: {email}")
+        
+        # Get chats for this user
+        user_chats = user_chats_storage.get(email, [])
+        
+        print(f"📱 Found {len(user_chats)} chats for {email}")
+        
+        return jsonify({
+            "success": True,
+            "chats": user_chats
+        })
+        
+    except Exception as e:
+        print(f"❌ Error fetching user chats: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/api/user-chats', methods=['POST'])
+def save_user_chats():
+    """Save chats for a specific user (iOS app endpoint)"""
+    try:
+        data = request.get_json()
+        email = data.get('email')
+        chats = data.get('chats', [])
+        
+        if not email:
+            return jsonify({
+                "success": False,
+                "error": "Email parameter required"
+            }), 400
+        
+        print(f"💾 Saving {len(chats)} chats for user: {email}")
+        
+        # Store chats for this user
+        user_chats_storage[email] = chats
+        
+        # Also sync chats to other participants
+        for chat in chats:
+            for participant_id in chat.get('participants', []):
+                # Find participant email
+                participant_email = get_user_email_by_id(participant_id)
+                if participant_email and participant_email != email:
+                    print(f"🔄 Syncing chat '{chat.get('name', 'Unknown')}' to {participant_email}")
+                    sync_chat_to_user(chat, participant_email)
+        
+        return jsonify({
+            "success": True,
+            "message": f"Saved {len(chats)} chats for {email}"
+        })
+        
+    except Exception as e:
+        print(f"❌ Error saving user chats: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/api/user-messages', methods=['GET'])
+def get_user_messages():
+    """Get messages for a specific chat (iOS app endpoint)"""
+    try:
+        chat_id = request.args.get('chat_id')
+        if not chat_id:
+            return jsonify({
+                "success": False,
+                "error": "chat_id parameter required"
+            }), 400
+        
+        print(f"📱 Fetching messages for chat: {chat_id}")
+        
+        # Get messages for this chat
+        messages = user_messages_storage.get(chat_id, [])
+        
+        print(f"📱 Found {len(messages)} messages for chat {chat_id}")
+        
+        return jsonify({
+            "success": True,
+            "messages": messages
+        })
+        
+    except Exception as e:
+        print(f"❌ Error fetching user messages: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/api/user-messages', methods=['POST'])
+def save_user_messages():
+    """Save messages for a specific chat (iOS app endpoint)"""
+    try:
+        data = request.get_json()
+        chat_id = data.get('chat_id')
+        messages = data.get('messages', [])
+        
+        if not chat_id:
+            return jsonify({
+                "success": False,
+                "error": "chat_id parameter required"
+            }), 400
+        
+        print(f"💾 Saving {len(messages)} messages for chat: {chat_id}")
+        
+        # Store messages for this chat
+        user_messages_storage[chat_id] = messages
+        
+        return jsonify({
+            "success": True,
+            "message": f"Saved {len(messages)} messages for chat {chat_id}"
+        })
+        
+    except Exception as e:
+        print(f"❌ Error saving user messages: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+def get_user_email_by_id(user_id):
+    """Get user email by user ID"""
+    for email, profile in user_profiles.items():
+        if profile.get('id') == user_id:
+            return email
+    return None
+
+def sync_chat_to_user(chat, user_email):
+    """Sync a chat to another user's chat list"""
+    try:
+        if user_email not in user_chats_storage:
+            user_chats_storage[user_email] = []
+        
+        # Check if chat already exists for this user
+        existing_chats = user_chats_storage[user_email]
+        chat_exists = any(existing_chat.get('id') == chat.get('id') for existing_chat in existing_chats)
+        
+        if not chat_exists:
+            user_chats_storage[user_email].append(chat)
+            print(f"✅ Synced chat '{chat.get('name', 'Unknown')}' to {user_email}")
+        else:
+            print(f"ℹ️ Chat '{chat.get('name', 'Unknown')}' already exists for {user_email}")
+            
+    except Exception as e:
+        print(f"❌ Error syncing chat to user {user_email}: {e}")
 
 def store_memory(key, value, memory_type='learned_knowledge', user_id=None):
     """Store information in AI memory with categorization"""
