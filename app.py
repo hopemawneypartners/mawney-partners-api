@@ -1358,13 +1358,16 @@ def get_articles():
 def get_ai_summary():
     """Get comprehensive AI summary of articles from past 24 hours only"""
     try:
-        # Get articles (either from Daily News or RSS)
-        articles = get_daily_news_articles() if DAILY_NEWS_AVAILABLE else get_comprehensive_rss_articles()
+        # Get articles (try Daily News first, then RSS as fallback)
+        articles = get_daily_news_articles() if DAILY_NEWS_AVAILABLE else []
+        if not articles:
+            print("🔄 Daily News articles empty, trying RSS articles...")
+            articles = get_comprehensive_rss_articles()
         
         if not articles:
             return jsonify({
                 "success": False,
-                "error": "No articles available"
+                "error": "No articles available from any source"
             }), 500
 
         # DEDUPLICATION FOR AI SUMMARY
