@@ -1385,9 +1385,9 @@ def get_ai_summary():
         articles = deduplicated_articles
         print(f"🔧 AI Summary deduplication complete: {len(articles)} articles, removed {duplicates_removed} duplicates")
 
-        # Filter articles from past 24 hours ONLY
+        # Filter articles from past 7 days (more reasonable timeframe)
         now = datetime.now()
-        past_24_hours = []
+        past_7_days = []
         
         for article in articles:
             try:
@@ -1410,40 +1410,40 @@ def get_ai_summary():
                 if not article_date:
                     continue
                 
-                # Check if within 24 hours only
+                # Check if within 7 days (more reasonable timeframe)
                 time_diff = now - article_date.replace(tzinfo=None)
-                if time_diff.total_seconds() <= 24 * 3600:  # 24 hours in seconds
-                    past_24_hours.append(article)
+                if time_diff.total_seconds() <= 7 * 24 * 3600:  # 7 days in seconds
+                    past_7_days.append(article)
             except Exception as e:
                 print(f"Error parsing date for article: {e}")
                 continue
 
-        if not past_24_hours:
+        if not past_7_days:
             return jsonify({
                 "success": False,
-                "error": "No articles from past 24 hours available for analysis"
+                "error": "No recent articles available for analysis"
             }), 500
 
-        # Comprehensive analysis of past 24 hours articles
-        titles = [article.get('title', '') for article in past_24_hours]
-        sources = list(set([article.get('source', 'Unknown') for article in past_24_hours]))
-        categories = list(set([article.get('category', 'Unknown') for article in past_24_hours]))
+        # Comprehensive analysis of recent articles
+        titles = [article.get('title', '') for article in past_7_days]
+        sources = list(set([article.get('source', 'Unknown') for article in past_7_days]))
+        categories = list(set([article.get('category', 'Unknown') for article in past_7_days]))
         
         # Count articles by category
         category_counts = {}
-        for article in past_24_hours:
+        for article in past_7_days:
             cat = article.get('category', 'Unknown')
             category_counts[cat] = category_counts.get(cat, 0) + 1
         
         # Count articles by source
         source_counts = {}
-        for article in past_24_hours:
+        for article in past_7_days:
             src = article.get('source', 'Unknown')
             source_counts[src] = source_counts.get(src, 0) + 1
         
         # Analyze content themes
         content_themes = []
-        for article in past_24_hours:
+        for article in past_7_days:
             title = article.get('title', '').lower()
             content = article.get('content', '').lower()
             combined_text = title + ' ' + content
@@ -1502,11 +1502,11 @@ def get_ai_summary():
         
         # Generate comprehensive summary using OpenAI API
         try:
-            summary = generate_openai_daily_summary(past_24_hours, sources, categories, category_counts, source_counts, theme_counts, now)
+            summary = generate_openai_daily_summary(past_7_days, sources, categories, category_counts, source_counts, theme_counts, now)
         except Exception as ai_error:
             print(f"❌ OpenAI summary failed: {ai_error}")
             print("🔄 Falling back to basic summary")
-            summary = generate_basic_daily_summary(past_24_hours, sources, categories, category_counts, source_counts, theme_counts, now)
+            summary = generate_basic_daily_summary(past_7_days, sources, categories, category_counts, source_counts, theme_counts, now)
         
         return jsonify({
             "success": True,
