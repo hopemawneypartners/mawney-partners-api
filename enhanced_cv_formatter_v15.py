@@ -395,3 +395,4 @@ class EnhancedCVFormatterV15:
 # Create instance
 enhanced_cv_formatter_v15 = EnhancedCVFormatterV15()
 
+

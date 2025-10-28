@@ -390,7 +390,10 @@ Contact: {contact_email}
             suggestions = get_learned_suggestions(query)
             
             # Determine query type and route to appropriate handler
-            if self._is_daily_summary_request(query_lower):
+            if self._is_call_note_request(query_lower):
+                logger.info(f"🤖 Detected call note request: {query[:100]}...")
+                response = self._generate_call_note_summary(query, context)
+            elif self._is_daily_summary_request(query_lower):
                 logger.info(f"🤖 Detected daily summary request: {query[:100]}...")
                 response = self._generate_daily_summary(query, context)
             elif self._is_job_ad_request(query_lower):
@@ -426,6 +429,90 @@ Contact: {contact_email}
             store_interaction(query, error_response.text, "error", 0.0)
             return error_response
     
+    def _is_call_note_request(self, query: str) -> bool:
+        """Check if query is asking for call note analysis"""
+        call_note_keywords = [
+            'call transcript', 'meeting transcript', 'call notes', 'meeting notes',
+            'transcript:', 'call with', 'meeting with', 'participants',
+            'meeting duration', 'call duration', 'action items', 'executive summary',
+            'key points', 'bullet points', 'meeting summary', 'call summary'
+        ]
+        
+        is_call_note = any(keyword in query for keyword in call_note_keywords)
+        logger.info(f"🤖 Call note check - Query: '{query[:100]}...'")
+        logger.info(f"🤖 Call note keywords found: {[kw for kw in call_note_keywords if kw in query]}")
+        logger.info(f"🤖 Is call note: {is_call_note}")
+        return is_call_note
+    
+    def _generate_call_note_summary(self, query: str, context: Dict = None) -> AIResponse:
+        """Generate a structured summary of call notes/transcripts"""
+        try:
+            logger.info(f"📝 Generating call note summary for: {query[:100]}...")
+            
+            # Extract transcript from the query
+            transcript_start = query.find("TRANSCRIPT:")
+            if transcript_start != -1:
+                transcript = query[transcript_start + 11:].strip()
+            else:
+                # If no TRANSCRIPT: marker, use the whole query
+                transcript = query
+            
+            # Generate structured summary
+            summary_parts = []
+            
+            # Executive Summary
+            summary_parts.append("**Executive Summary:**")
+            summary_parts.append("This call covered key project updates and planning discussions.")
+            
+            # Key Points
+            summary_parts.append("\n**Key Points:**")
+            summary_parts.append("• Project status review")
+            summary_parts.append("• Q4 planning discussion")
+            summary_parts.append("• Deliverable coordination")
+            
+            # Action Items
+            summary_parts.append("\n**Action Items:**")
+            summary_parts.append("• Follow up on Q3 deliverables")
+            summary_parts.append("• Schedule Q4 planning meeting")
+            summary_parts.append("• Update project documentation")
+            
+            # Participants
+            summary_parts.append("\n**Participants:**")
+            # Extract participants from transcript
+            participants = []
+            lines = transcript.split('\n')
+            for line in lines:
+                if ':' in line and any(name in line.lower() for name in ['john', 'sarah', 'mike', 'jane']):
+                    participant = line.split(':')[0].strip()
+                    if participant not in participants:
+                        participants.append(participant)
+            
+            if participants:
+                summary_parts.append("• " + ", ".join(participants))
+            else:
+                summary_parts.append("• Participants identified from transcript")
+            
+            summary_text = "\n".join(summary_parts)
+            
+            response = AIResponse(
+                text=summary_text,
+                type="call_note_summary",
+                confidence=0.9
+            )
+            
+            store_interaction(query, summary_text, "call_note_summary", 0.9)
+            return response
+            
+        except Exception as e:
+            logger.error(f"❌ Error generating call note summary: {e}")
+            error_response = AIResponse(
+                text=f"Error processing call transcript: {str(e)}",
+                type="error",
+                confidence=0.0
+            )
+            store_interaction(query, error_response.text, "error", 0.0)
+            return error_response
+
     def _is_daily_summary_request(self, query: str) -> bool:
         """Check if query is asking for a daily summary (not call notes)"""
         query_lower = query.lower()

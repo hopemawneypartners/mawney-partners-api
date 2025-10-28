@@ -377,3 +377,4 @@ class EnhancedCVFormatterV12:
 # Create instance
 enhanced_cv_formatter_v12 = EnhancedCVFormatterV12()
 
+

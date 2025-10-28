@@ -631,3 +631,4 @@ class EnhancedCVFormatterV2:
 enhanced_cv_formatter_v2 = EnhancedCVFormatterV2()
 
 
+

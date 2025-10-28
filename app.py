@@ -1473,7 +1473,7 @@ def get_ai_summary():
         detailed_analysis = []
         
         # Analyze only top 5 most relevant articles for concise summary
-        for article in past_24_hours[:5]:
+        for article in past_7_days[:5]:
             title = article.get('title', '')
             content = article.get('content', '')
             source = article.get('source', '')
