@@ -1494,33 +1494,8 @@ def get_ai_summary():
                     article_insights.append(f"Market development: {title}")
                     detailed_analysis.append(f"General: {title} - {content[:80]}...")
         
-        # Generate comprehensive summary based on actual article analysis
-        summary = {
-            "executive_summary": f"24-Hour Credit Market Summary: {len(past_24_hours)} key developments from {len(sources)} sources. Focus areas: {', '.join(list(category_counts.keys())[:2])} with {', '.join(list(theme_counts.keys())[:2]) if theme_counts else 'credit market activity'}.",
-            
-            "key_points": key_headlines[:5] if key_headlines else [
-                f"📊 {len(past_24_hours)} articles analyzed from past 24 hours",
-                f"📰 Top sources: {', '.join([f'{src} ({count})' for src, count in list(source_counts.items())[:3]])}",
-                f"📈 Market sectors: {', '.join([f'{cat} ({count})' for cat, count in list(category_counts.items())[:3]])}",
-                f"🎯 Key themes: {', '.join([f'{theme} ({count})' for theme, count in list(theme_counts.items())[:3]]) if theme_counts else 'Credit market developments'}",
-                f"⏰ Analysis period: Last 24 hours (as of {now.strftime('%Y-%m-%d %H:%M UTC')})"
-            ],
-            
-            "market_insights": detailed_analysis[:3] if detailed_analysis else [
-                f"Recent activity shows {len(past_24_hours)} significant credit market developments",
-                f"Primary coverage from: {', '.join(list(source_counts.keys())[:3])}",
-                f"Market focus areas: {', '.join(list(category_counts.keys())[:3])}",
-                f"Key themes emerging: {', '.join(list(theme_counts.keys())[:3]) if theme_counts else 'General market activity'}",
-                "Credit market conditions reflect real-time developments and immediate market responses",
-                "Investment implications based on current market intelligence"
-            ],
-            
-            "articles_analyzed": len(past_24_hours),
-            "analysis_period": "Past 24 hours only",
-            "timestamp": datetime.now().isoformat(),
-            "data_freshness": "Real-time analysis of latest articles",
-            "key_headlines": key_headlines if key_headlines else []
-        }
+        # Generate comprehensive summary using OpenAI API
+        summary = generate_openai_daily_summary(past_24_hours, sources, categories, category_counts, source_counts, theme_counts, now)
         
         return jsonify({
             "success": True,
@@ -2518,50 +2493,145 @@ def handle_ai_assistant_with_attachments():
             "error": f"Attachment processing error: {str(e)}"
         }), 500
 
-@app.route('/api/ai/chat', methods=['POST'])
-def ai_chat():
-    """AI Chat endpoint for call note transcript summarization"""
+@app.route('/api/call-notes/summary', methods=['POST'])
+def call_notes_summary():
+    """Generate AI summary for call notes using custom AI assistant (NO OpenAI)"""
     try:
         data = request.get_json()
-        message = data.get('message', '')
-        user_id = data.get('user_id', 'system')
+        transcript = data.get('transcript', '')
         context = data.get('context', {})
         
-        if not message:
+        if not transcript:
             return jsonify({
                 "success": False,
-                "error": "No message provided"
+                "error": "No transcript provided"
             }), 400
         
-        print(f"🎙️ AI Chat processing call transcript: {message[:100]}...")
-        print(f"🎙️ User ID: {user_id}")
+        print(f"🎙️ Call Notes Summary processing transcript: {transcript[:100]}...")
         
-        # Check if this is a call transcript
-        is_call_transcript = context.get('type') == 'call_notes' or 'transcript' in message.lower()
+        # Use custom AI assistant for call notes (NO OpenAI)
+        ai_response = process_call_transcript_summary(transcript, context)
         
-        if is_call_transcript:
-            # Process as call transcript summary
-            ai_response = process_call_transcript(message, context)
-        else:
-            # Process as regular AI query
-            ai_response = process_ai_query(message, context)
-        
-        # Return response in expected format for Call Notes
         return jsonify({
             "success": True,
-            "response": ai_response['text'],
-            "type": ai_response['type'],
-            "confidence": ai_response['confidence'],
-            "sources": ai_response.get('sources', []),
-            "actions": ai_response.get('actions', [])
+            "summary": ai_response['summary'],
+            "key_points": ai_response['key_points'],
+            "action_items": ai_response['action_items'],
+            "participants": ai_response['participants'],
+            "duration": ai_response.get('duration'),
+            "sentiment": ai_response.get('sentiment', 'neutral'),
+            "confidence": ai_response.get('confidence', 0.8),
+            "ai_model": "Custom Mawney AI Assistant"
         })
         
     except Exception as e:
-        print(f"❌ Error in AI chat: {e}")
+        print(f"❌ Error in call notes summary: {e}")
         return jsonify({
             "success": False,
-            "error": f"AI chat error: {str(e)}"
+            "error": f"Call notes summary error: {str(e)}"
         }), 500
+
+def process_call_transcript_summary(transcript, context):
+    """Process call transcript using custom AI assistant (NO OpenAI)"""
+    try:
+        # Use the existing custom AI assistant
+        summary_prompt = f"""
+        Please analyze this call transcript and provide a structured summary:
+
+        TRANSCRIPT:
+        {transcript}
+
+        Please provide:
+        1. Executive Summary (2-3 sentences)
+        2. Key Points (bullet points)
+        3. Action Items (bullet points)
+        4. Participants (if identifiable)
+        5. Meeting Duration/Type (if mentioned)
+
+        Format as a professional meeting summary.
+        """
+        
+        # Use the existing AI processing (custom assistant, not OpenAI)
+        ai_response = process_ai_query(summary_prompt, context)
+        
+        # Parse the response into structured format
+        response_text = ai_response['text']
+        
+        # Extract structured information
+        summary, key_points, action_items, participants = parse_call_summary_response(response_text)
+        
+        return {
+            "summary": summary,
+            "key_points": key_points,
+            "action_items": action_items,
+            "participants": participants,
+            "duration": estimate_duration_from_transcript(transcript),
+            "sentiment": "neutral",  # Could be enhanced with sentiment analysis
+            "confidence": 0.9,
+            "ai_model": "Custom Mawney AI Assistant"
+        }
+        
+    except Exception as e:
+        print(f"❌ Error processing call transcript: {e}")
+        return {
+            "summary": f"Error processing transcript: {str(e)}",
+            "key_points": ["Error occurred during processing"],
+            "action_items": ["Please try again"],
+            "participants": [],
+            "duration": None,
+            "sentiment": "neutral",
+            "confidence": 0.0,
+            "ai_model": "Custom Mawney AI Assistant"
+        }
+
+def parse_call_summary_response(response_text):
+    """Parse AI response into structured call summary"""
+    lines = response_text.split('\n')
+    summary = ""
+    key_points = []
+    action_items = []
+    participants = []
+    
+    current_section = ""
+    
+    for line in lines:
+        trimmed = line.strip()
+        
+        if "summary" in trimmed.lower() or "overview" in trimmed.lower():
+            current_section = "summary"
+        elif "key point" in trimmed.lower():
+            current_section = "keyPoints"
+        elif "action" in trimmed.lower():
+            current_section = "actionItems"
+        elif "participant" in trimmed.lower():
+            current_section = "participants"
+        elif trimmed.startswith("•") or trimmed.startswith("-") or trimmed.startswith("*"):
+            point = trimmed[1:].strip()
+            if current_section == "keyPoints":
+                key_points.append(point)
+            elif current_section == "actionItems":
+                action_items.append(point)
+            elif current_section == "participants":
+                participants.append(point)
+        elif trimmed and current_section == "summary":
+            summary += trimmed + " "
+    
+    # Fallback if parsing didn't work well
+    if not summary:
+        summary = response_text[:200] + "..."
+    if not key_points:
+        key_points = ["See summary above"]
+    if not action_items:
+        action_items = ["No specific actions identified"]
+    
+    return summary.strip(), key_points, action_items, participants
+
+def estimate_duration_from_transcript(transcript):
+    """Estimate call duration from transcript length"""
+    word_count = len(transcript.split())
+    # Assume 150 words per minute
+    estimated_minutes = word_count / 150
+    return estimated_minutes * 60  # Return in seconds
 
 def process_call_transcript(transcript, context):
     """Process call transcript and generate structured summary"""
@@ -2750,6 +2820,133 @@ def download_cv(filename):
             'success': False,
             'error': f'Download error: {str(e)}'
         }), 500
+
+def generate_openai_daily_summary(articles, sources, categories, category_counts, source_counts, theme_counts, now):
+    """Generate daily summary using OpenAI API"""
+    try:
+        import openai
+        
+        # Check if OpenAI API key is available
+        if not os.getenv('OPENAI_API_KEY'):
+            print("⚠️ OpenAI API key not found, falling back to basic summary")
+            return generate_basic_daily_summary(articles, sources, categories, category_counts, source_counts, theme_counts, now)
+        
+        # Prepare article data for OpenAI
+        article_texts = []
+        for article in articles[:10]:  # Limit to top 10 articles
+            title = article.get('title', '')
+            content = article.get('content', '')
+            source = article.get('source', '')
+            article_texts.append(f"Title: {title}\nSource: {source}\nContent: {content[:500]}...")
+        
+        articles_text = "\n\n".join(article_texts)
+        
+        # Create OpenAI prompt
+        prompt = f"""
+        You are a financial analyst specializing in credit markets and private debt. 
+        Analyze the following articles from the past 24 hours and provide a comprehensive summary.
+        
+        ARTICLES TO ANALYZE:
+        {articles_text}
+        
+        Please provide:
+        1. Executive Summary (2-3 sentences about the overall market situation)
+        2. Key Points (5-7 bullet points highlighting the most important developments)
+        3. Market Insights (3-4 insights about credit market implications)
+        4. Key Headlines (list of the most significant headlines)
+        
+        Focus on:
+        - Credit market developments
+        - Private debt and direct lending
+        - Corporate credit and bond markets
+        - Interest rate implications
+        - M&A activity affecting credit
+        - Regulatory changes
+        
+        Format as JSON with these keys: executive_summary, key_points, market_insights, key_headlines
+        """
+        
+        # Call OpenAI API
+        client = openai.OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+        
+        response = client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "You are a financial analyst specializing in credit markets. Provide structured, professional analysis."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=1500,
+            temperature=0.3
+        )
+        
+        ai_response = response.choices[0].message.content
+        
+        # Try to parse JSON response
+        try:
+            import json
+            parsed_response = json.loads(ai_response)
+            
+            return {
+                "executive_summary": parsed_response.get("executive_summary", "Market analysis completed"),
+                "key_points": parsed_response.get("key_points", ["Analysis in progress"]),
+                "market_insights": parsed_response.get("market_insights", ["Market insights being processed"]),
+                "key_headlines": parsed_response.get("key_headlines", ["Headlines being analyzed"]),
+                "articles_analyzed": len(articles),
+                "analysis_period": "Past 24 hours only",
+                "timestamp": now.isoformat(),
+                "data_freshness": "AI-powered analysis of latest articles",
+                "ai_model": "GPT-4"
+            }
+        except json.JSONDecodeError:
+            # If JSON parsing fails, use the raw response
+            return {
+                "executive_summary": ai_response[:200] + "...",
+                "key_points": ["AI analysis completed", "See executive summary for details"],
+                "market_insights": ["AI-powered insights generated", "Based on latest market data"],
+                "key_headlines": [article.get('title', '')[:50] + "..." for article in articles[:5]],
+                "articles_analyzed": len(articles),
+                "analysis_period": "Past 24 hours only",
+                "timestamp": now.isoformat(),
+                "data_freshness": "AI-powered analysis of latest articles",
+                "ai_model": "GPT-4"
+            }
+            
+    except Exception as e:
+        print(f"❌ OpenAI API error: {e}")
+        print("🔄 Falling back to basic summary")
+        return generate_basic_daily_summary(articles, sources, categories, category_counts, source_counts, theme_counts, now)
+
+def generate_basic_daily_summary(articles, sources, categories, category_counts, source_counts, theme_counts, now):
+    """Fallback basic summary when OpenAI is not available"""
+    key_headlines = [f"• {article.get('title', '')} ({article.get('source', '')})" for article in articles[:5]]
+    
+    return {
+        "executive_summary": f"24-Hour Credit Market Summary: {len(articles)} key developments from {len(sources)} sources. Focus areas: {', '.join(list(category_counts.keys())[:2])} with {', '.join(list(theme_counts.keys())[:2]) if theme_counts else 'credit market activity'}.",
+        
+        "key_points": key_headlines[:5] if key_headlines else [
+            f"📊 {len(articles)} articles analyzed from past 24 hours",
+            f"📰 Top sources: {', '.join([f'{src} ({count})' for src, count in list(source_counts.items())[:3]])}",
+            f"📈 Market sectors: {', '.join([f'{cat} ({count})' for cat, count in list(category_counts.items())[:3]])}",
+            f"🎯 Key themes: {', '.join([f'{theme} ({count})' for theme, count in list(theme_counts.items())[:3]]) if theme_counts else 'Credit market developments'}",
+            f"⏰ Analysis period: Last 24 hours (as of {now.strftime('%Y-%m-%d %H:%M UTC')})"
+        ],
+        
+        "market_insights": [
+            f"Recent activity shows {len(articles)} significant credit market developments",
+            f"Primary coverage from: {', '.join(list(source_counts.keys())[:3])}",
+            f"Market focus areas: {', '.join(list(category_counts.keys())[:3])}",
+            f"Key themes emerging: {', '.join(list(theme_counts.keys())[:3]) if theme_counts else 'General market activity'}",
+            "Credit market conditions reflect real-time developments and immediate market responses",
+            "Investment implications based on current market intelligence"
+        ],
+        
+        "articles_analyzed": len(articles),
+        "analysis_period": "Past 24 hours only",
+        "timestamp": now.isoformat(),
+        "data_freshness": "Real-time analysis of latest articles",
+        "key_headlines": key_headlines if key_headlines else [],
+        "ai_model": "Basic Analysis"
+    }
 
 if __name__ == '__main__':
     # Force restart to pick up new template and text parsing fixes
