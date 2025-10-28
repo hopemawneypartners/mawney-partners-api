@@ -1388,9 +1388,9 @@ def get_ai_summary():
         articles = deduplicated_articles
         print(f"🔧 AI Summary deduplication complete: {len(articles)} articles, removed {duplicates_removed} duplicates")
 
-        # Filter articles from past 7 days (more reasonable timeframe)
+        # Filter articles from past 24 hours ONLY
         now = datetime.now()
-        past_7_days = []
+        past_24_hours = []
         
         for article in articles:
             try:
@@ -1413,40 +1413,40 @@ def get_ai_summary():
                 if not article_date:
                     continue
                 
-                # Check if within 7 days (more reasonable timeframe)
+                # Check if within 24 hours only
                 time_diff = now - article_date.replace(tzinfo=None)
-                if time_diff.total_seconds() <= 7 * 24 * 3600:  # 7 days in seconds
-                    past_7_days.append(article)
+                if time_diff.total_seconds() <= 24 * 3600:  # 24 hours in seconds
+                    past_24_hours.append(article)
             except Exception as e:
                 print(f"Error parsing date for article: {e}")
                 continue
 
-        if not past_7_days:
+        if not past_24_hours:
             return jsonify({
                 "success": False,
-                "error": "No recent articles available for analysis"
+                "error": "No articles from past 24 hours available for analysis"
             }), 500
 
-        # Comprehensive analysis of recent articles
-        titles = [article.get('title', '') for article in past_7_days]
-        sources = list(set([article.get('source', 'Unknown') for article in past_7_days]))
-        categories = list(set([article.get('category', 'Unknown') for article in past_7_days]))
+        # Comprehensive analysis of past 24 hours articles
+        titles = [article.get('title', '') for article in past_24_hours]
+        sources = list(set([article.get('source', 'Unknown') for article in past_24_hours]))
+        categories = list(set([article.get('category', 'Unknown') for article in past_24_hours]))
         
         # Count articles by category
         category_counts = {}
-        for article in past_7_days:
+        for article in past_24_hours:
             cat = article.get('category', 'Unknown')
             category_counts[cat] = category_counts.get(cat, 0) + 1
         
         # Count articles by source
         source_counts = {}
-        for article in past_7_days:
+        for article in past_24_hours:
             src = article.get('source', 'Unknown')
             source_counts[src] = source_counts.get(src, 0) + 1
         
         # Analyze content themes
         content_themes = []
-        for article in past_7_days:
+        for article in past_24_hours:
             title = article.get('title', '').lower()
             content = article.get('content', '').lower()
             combined_text = title + ' ' + content
@@ -1505,11 +1505,11 @@ def get_ai_summary():
         
         # Generate comprehensive summary using OpenAI API
         try:
-            summary = generate_openai_daily_summary(past_7_days, sources, categories, category_counts, source_counts, theme_counts, now)
+            summary = generate_openai_daily_summary(past_24_hours, sources, categories, category_counts, source_counts, theme_counts, now)
         except Exception as ai_error:
             print(f"❌ OpenAI summary failed: {ai_error}")
             print("🔄 Falling back to basic summary")
-            summary = generate_basic_daily_summary(past_7_days, sources, categories, category_counts, source_counts, theme_counts, now)
+            summary = generate_basic_daily_summary(past_24_hours, sources, categories, category_counts, source_counts, theme_counts, now)
         
         return jsonify({
             "success": True,
@@ -2911,10 +2911,9 @@ def call_notes_summary():
         }), 500
 
 def process_call_transcript_summary(transcript, context):
-    """Process call transcript using custom AI assistant (NO OpenAI)"""
+    """Process call transcript with intelligent content analysis"""
     try:
-        # For now, return a simple structured response instead of using the custom AI assistant
-        # This ensures call notes work properly
+        print(f"🎙️ Processing call transcript: {len(transcript)} characters")
         
         # Extract participants from transcript
         participants = []
@@ -2922,38 +2921,93 @@ def process_call_transcript_summary(transcript, context):
         for line in lines:
             if ':' in line:
                 participant = line.split(':')[0].strip()
-                if participant and participant not in participants and len(participant) < 50:  # Reasonable name length
+                if participant and participant not in participants and len(participant) < 50:
                     participants.append(participant)
         
-        # Generate basic summary
-        summary = f"Call Summary: This conversation covered key topics and discussions. The transcript contains {len(lines)} lines of dialogue."
+        # Analyze transcript content intelligently
+        transcript_lower = transcript.lower()
         
-        # Extract key points (simple approach)
+        # Generate intelligent summary based on content
+        summary_parts = []
+        
+        # Detect meeting type
+        if any(word in transcript_lower for word in ['project', 'deliverable', 'milestone']):
+            meeting_type = "Project Review"
+        elif any(word in transcript_lower for word in ['client', 'customer', 'prospect']):
+            meeting_type = "Client Meeting"
+        elif any(word in transcript_lower for word in ['team', 'staff', 'employee']):
+            meeting_type = "Team Meeting"
+        elif any(word in transcript_lower for word in ['budget', 'cost', 'financial']):
+            meeting_type = "Financial Review"
+        else:
+            meeting_type = "General Discussion"
+        
+        summary_parts.append(f"Meeting Type: {meeting_type}")
+        
+        # Extract key discussion topics
+        topics = []
+        if 'project' in transcript_lower:
+            topics.append("Project updates and status")
+        if 'budget' in transcript_lower or 'cost' in transcript_lower:
+            topics.append("Budget and financial matters")
+        if 'timeline' in transcript_lower or 'deadline' in transcript_lower:
+            topics.append("Timeline and deadlines")
+        if 'risk' in transcript_lower or 'issue' in transcript_lower:
+            topics.append("Risk assessment and issues")
+        if 'next step' in transcript_lower or 'follow up' in transcript_lower:
+            topics.append("Next steps and follow-up")
+        
+        if topics:
+            summary_parts.append(f"Key Topics: {', '.join(topics)}")
+        
+        # Generate executive summary
+        executive_summary = f"This {meeting_type.lower()} covered {len(topics)} main topics including {topics[0] if topics else 'general discussion'}."
+        if participants:
+            executive_summary += f" Participants included {', '.join(participants[:3])}{' and others' if len(participants) > 3 else ''}."
+        
+        # Extract key points from actual content
         key_points = []
-        if "project" in transcript.lower():
-            key_points.append("Project-related discussion")
-        if "meeting" in transcript.lower():
-            key_points.append("Meeting coordination")
-        if "next" in transcript.lower() or "follow" in transcript.lower():
-            key_points.append("Follow-up actions discussed")
-        if not key_points:
-            key_points.append("General discussion topics")
         
-        # Extract action items (simple approach)
+        # Look for specific statements and decisions
+        for line in lines:
+            line_lower = line.lower()
+            if any(word in line_lower for word in ['decided', 'agreed', 'concluded', 'determined']):
+                key_points.append(f"Decision: {line.strip()}")
+            elif any(word in line_lower for word in ['important', 'critical', 'key', 'main']):
+                key_points.append(f"Key Point: {line.strip()}")
+            elif any(word in line_lower for word in ['concern', 'issue', 'problem', 'challenge']):
+                key_points.append(f"Issue Raised: {line.strip()}")
+        
+        # If no specific key points found, extract meaningful statements
+        if not key_points:
+            meaningful_lines = [line.strip() for line in lines if len(line.strip()) > 20 and ':' in line]
+            key_points = [f"Discussion: {line}" for line in meaningful_lines[:3]]
+        
+        # Extract action items from actual content
         action_items = []
-        if "schedule" in transcript.lower():
-            action_items.append("Schedule follow-up meeting")
-        if "send" in transcript.lower() or "email" in transcript.lower():
-            action_items.append("Send follow-up communication")
-        if "review" in transcript.lower():
-            action_items.append("Review materials")
+        
+        for line in lines:
+            line_lower = line.lower()
+            if any(word in line_lower for word in ['will', 'need to', 'should', 'must', 'action']):
+                if any(word in line_lower for word in ['follow up', 'send', 'schedule', 'review', 'update', 'meet']):
+                    action_items.append(f"Action: {line.strip()}")
+            elif any(word in line_lower for word in ['next week', 'tomorrow', 'by friday', 'deadline']):
+                action_items.append(f"Timeline: {line.strip()}")
+        
+        # If no specific action items found, look for commitments
         if not action_items:
-            action_items.append("Follow up on discussed items")
+            for line in lines:
+                if any(word in line.lower() for word in ['i will', 'we will', 'let me', 'i can']):
+                    action_items.append(f"Commitment: {line.strip()}")
+        
+        # Fallback action items if none found
+        if not action_items:
+            action_items = ["Follow up on discussed items", "Schedule next meeting if needed"]
         
         return {
-            "summary": summary,
-            "key_points": key_points,
-            "action_items": action_items,
+            "summary": executive_summary,
+            "key_points": key_points[:5],  # Limit to top 5
+            "action_items": action_items[:5],  # Limit to top 5
             "participants": participants,
             "duration": estimate_duration_from_transcript(transcript),
             "sentiment": "neutral",
