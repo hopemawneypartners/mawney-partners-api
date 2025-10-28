@@ -1501,7 +1501,12 @@ def get_ai_summary():
                     detailed_analysis.append(f"General: {title} - {content[:80]}...")
         
         # Generate comprehensive summary using OpenAI API
-        summary = generate_openai_daily_summary(past_24_hours, sources, categories, category_counts, source_counts, theme_counts, now)
+        try:
+            summary = generate_openai_daily_summary(past_24_hours, sources, categories, category_counts, source_counts, theme_counts, now)
+        except Exception as ai_error:
+            print(f"❌ OpenAI summary failed: {ai_error}")
+            print("🔄 Falling back to basic summary")
+            summary = generate_basic_daily_summary(past_24_hours, sources, categories, category_counts, source_counts, theme_counts, now)
         
         return jsonify({
             "success": True,
@@ -3198,9 +3203,12 @@ def generate_openai_daily_summary(articles, sources, categories, category_counts
         import openai
         
         # Check if OpenAI API key is available
-        if not os.getenv('OPENAI_API_KEY'):
+        openai_key = os.getenv('OPENAI_API_KEY')
+        if not openai_key:
             print("⚠️ OpenAI API key not found, falling back to basic summary")
             return generate_basic_daily_summary(articles, sources, categories, category_counts, source_counts, theme_counts, now)
+        
+        print(f"🔑 OpenAI API key found: {openai_key[:10]}...")
         
         # Prepare article data for OpenAI
         article_texts = []
@@ -3238,7 +3246,8 @@ def generate_openai_daily_summary(articles, sources, categories, category_counts
         """
         
         # Call OpenAI API
-        client = openai.OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+        print("🤖 Calling OpenAI API...")
+        client = openai.OpenAI(api_key=openai_key)
         
         response = client.chat.completions.create(
             model="gpt-4",
@@ -3250,12 +3259,15 @@ def generate_openai_daily_summary(articles, sources, categories, category_counts
             temperature=0.3
         )
         
+        print("✅ OpenAI API call successful")
+        
         ai_response = response.choices[0].message.content
         
         # Try to parse JSON response
         try:
             import json
             parsed_response = json.loads(ai_response)
+            print("✅ Successfully parsed OpenAI JSON response")
             
             return {
                 "executive_summary": parsed_response.get("executive_summary", "Market analysis completed"),
@@ -3268,7 +3280,9 @@ def generate_openai_daily_summary(articles, sources, categories, category_counts
                 "data_freshness": "AI-powered analysis of latest articles",
                 "ai_model": "GPT-4"
             }
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as json_error:
+            print(f"⚠️ JSON parsing failed: {json_error}")
+            print(f"Raw AI response: {ai_response[:200]}...")
             # If JSON parsing fails, use the raw response
             return {
                 "executive_summary": ai_response[:200] + "...",
