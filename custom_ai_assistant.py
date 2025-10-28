@@ -427,15 +427,28 @@ Contact: {contact_email}
             return error_response
     
     def _is_daily_summary_request(self, query: str) -> bool:
-        """Check if query is asking for a daily summary"""
+        """Check if query is asking for a daily summary (not call notes)"""
         query_lower = query.lower()
+        
+        # First check if this is clearly a call note request
+        call_note_keywords = [
+            'call transcript', 'meeting transcript', 'call notes', 'meeting notes',
+            'transcript:', 'call with', 'meeting with', 'participants',
+            'meeting duration', 'call duration', 'action items'
+        ]
+        
+        if any(keyword in query_lower for keyword in call_note_keywords):
+            logger.info(f"🤖 Call note request detected - not daily summary")
+            return False
+        
+        # Then check for daily summary keywords
         summary_keywords = [
             'daily summary', 'daily news', 'daily analysis', 'daily report',
-            'summarize', 'summary', 'daily briefing', 'market summary',
-            'news summary', 'financial summary', 'daily update', 'daily wrap',
-            'analyze these financial articles', 'structured summary',
-            'executive summary', 'key points', 'market insights'
+            'daily briefing', 'market summary', 'news summary', 'financial summary', 
+            'daily update', 'daily wrap', 'analyze these financial articles',
+            'structured summary', 'market insights'
         ]
+        
         is_daily_summary = any(keyword in query_lower for keyword in summary_keywords)
         logger.info(f"🤖 Daily summary check - Query: '{query[:100]}...'")
         logger.info(f"🤖 Keywords found: {[kw for kw in summary_keywords if kw in query_lower]}")
