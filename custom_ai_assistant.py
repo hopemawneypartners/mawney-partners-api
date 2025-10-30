@@ -2113,9 +2113,11 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
             lines = [ln.strip() for ln in (text or '').split('\n')]
             role_re = re.compile(r"^[A-Z][A-Za-z0-9 &/+'–\-:,]+:\s*$")
             comp_re = re.compile(r"^([A-Z][A-Za-z0-9 '&/\.-]+),\s*([A-Za-z ]+)\s*\(([^)]+)\)\s*$")
+            header_re = re.compile(r"^(.+?)\s+—\s+(.+?),\s+([A-Za-z ]+)\s+—\s+(.+)$")
             i = 0
             jobs: List[Dict[str, Any]] = []
             while i < len(lines):
+                # Pattern A: Role:  then Company, Location (Dates)
                 if role_re.match(lines[i]) and i + 1 < len(lines) and comp_re.match(lines[i+1] or ""):
                     role = lines[i].rstrip(':').strip()
                     m = comp_re.match(lines[i+1])
@@ -2123,6 +2125,21 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
                     location = m.group(2).strip() if m else ''
                     dates = m.group(3).strip() if m else ''
                     i += 2
+                    bullets: List[str] = []
+                    while i < len(lines) and (lines[i].startswith('• ') or lines[i].startswith('- ')):
+                        btxt = lines[i][2:].strip()
+                        if btxt:
+                            bullets.append(btxt)
+                        i += 1
+                    jobs.append({"role": role, "company": company, "location": location, "dates": dates, "bullets": bullets})
+                # Pattern B: Merged header "Role — Company, Location — Dates"
+                elif header_re.match(lines[i] or ""):
+                    m = header_re.match(lines[i])
+                    role = m.group(1).strip()
+                    company = m.group(2).strip()
+                    location = m.group(3).strip()
+                    dates = m.group(4).strip()
+                    i += 1
                     bullets: List[str] = []
                     while i < len(lines) and (lines[i].startswith('• ') or lines[i].startswith('- ')):
                         btxt = lines[i][2:].strip()
@@ -2229,7 +2246,7 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
 
         html_content = _sanitize_html_for_ios_print(html_content)
         
-        # Ensure MP logos present by embedding base64 if missing
+        # Ensure MP logos present by embedding/replacing base64 logos
         try:
             import os, base64
             def _read_logo_b64(name: str) -> str:
@@ -2240,20 +2257,16 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
                         return base64.b64encode(f.read()).decode('utf-8')
                 except Exception:
                     return ''
-            has_logo = ('data:image' in (html_content or '')) or ('class="logo"' in (html_content or ''))
-            if not has_logo:
-                top_b64 = _read_logo_b64('cv logo 1.png')
-                bot_b64 = _read_logo_b64('cv logo 2.png')
-                header = f"<div class=\"logo\" style=\"text-align:center;margin-bottom:20px\"><img alt=\"Logo\" style=\"height:40px\" src=\"data:image/png;base64,{top_b64}\"></div>" if top_b64 else ''
-                footer = f"<div class=\"logo\" style=\"text-align:center;margin-top:20px\"><img alt=\"Logo\" style=\"height:40px\" src=\"data:image/png;base64,{bot_b64}\"></div>" if bot_b64 else ''
-                if '<body>' in html_content:
-                    html_content = html_content.replace('<body>', '<body>' + header)
-                else:
-                    html_content = header + (html_content or '')
+            top_b64 = _read_logo_b64('cv logo 1.png')
+            bot_b64 = _read_logo_b64('cv logo 2.png')
+            if top_b64:
+                # Replace any existing top logo img or inject at top
+                html_content = re.sub(r"<img[^>]*class=\"logo\"[^>]*>", f"<img alt=\"Logo\" style=\"height:40px\" src=\"data:image/png;base64,{top_b64}\">", html_content)
+                if '<body>' in html_content and 'data:image' not in html_content:
+                    html_content = html_content.replace('<body>', '<body>' + f"<div class=\"logo\" style=\"text-align:center;margin-bottom:20px\"><img alt=\"Logo\" style=\"height:40px\" src=\"data:image/png;base64,{top_b64}\"></div>")
+            if bot_b64:
                 if '</body>' in html_content:
-                    html_content = html_content.replace('</body>', footer + '</body>')
-                else:
-                    html_content = (html_content or '') + footer
+                    html_content = html_content.replace('</body>', f"<div class=\"logo\" style=\"text-align:center;margin-top:20px\"><img alt=\"Logo\" style=\"height:40px\" src=\"data:image/png;base64,{bot_b64}\"></div></body>")
         except Exception:
             pass
 
