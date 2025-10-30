@@ -2050,21 +2050,22 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
             pass
         
         # Generate PDF file and get base64 content for direct download
-        # Force HTML-only return and let iOS generate PDF (WKWebView-compatible)
-        # This avoids server-side PDF engines that can yield blank pages
-        file_result = {
-            'success': True,
-            'format': 'html',
-            'filename': f"formatted_{filename.replace('.pdf', '')}.html",
-            'file_size': len(html_content.encode('utf-8')),
-            'download_url': None
-        }
+        # Try to generate PDF, fallback to HTML if pdfkit not available
+        file_result = cv_file_generator.generate_pdf_file(html_content, f"formatted_{filename.replace('.pdf', '')}")
         
         # Get file as base64 for iOS app download
         import base64
-        html_base64 = base64.b64encode(html_content.encode('utf-8')).decode('utf-8')
-        file_base64 = html_base64
-        file_format = 'html'
+        if file_result.get('success') and file_result.get('format') == 'pdf':
+            # PDF was generated successfully
+            with open(file_result.get('filepath'), 'rb') as f:
+                pdf_base64 = base64.b64encode(f.read()).decode('utf-8')
+            file_base64 = pdf_base64
+            file_format = 'pdf'
+        else:
+            # Fallback to HTML
+            html_base64 = base64.b64encode(html_content.encode('utf-8')).decode('utf-8')
+            file_base64 = html_base64
+            file_format = 'html'
         
         # Create response
         response = "📄 **CV Formatted in Mawney Partners Style**\n\n"
@@ -2088,15 +2089,9 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
         # Add preview (truncated)
         response += "**Preview:**\n"
         response += "```\n"
-        text_version = formatted_result.get('text_version', '')
-        if not text_version:
-            # Derive a text preview from HTML if formatter didn't provide one
-            import re
-            text_version = re.sub(r"<[^>]+>", " ", html_content)
-            text_version = re.sub(r"\s+", " ", text_version).strip()
-        text_preview = text_version[:500]
+        text_preview = formatted_result.get('text_version', '')[:500]
         response += text_preview
-        if len(text_version) > 500:
+        if len(formatted_result.get('text_version', '')) > 500:
             response += "\n... [truncated - full version in downloadable file]"
         response += "\n```\n\n"
         
