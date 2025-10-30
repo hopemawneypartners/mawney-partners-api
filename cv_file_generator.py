@@ -108,28 +108,19 @@ class CVFileGenerator:
             Dictionary with file info and download URL
         """
         try:
-            # Try to use pdfkit/wkhtmltopdf if available
+            # Helper to sanitize and create file path
+            import re
+            if not filename:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                filename = f"cv_formatted_{timestamp}.pdf"
+            filename = re.sub(r'[^\w\-_.]', '_', filename).replace(' ', '_').replace('(', '').replace(')', '')
+            if not filename.endswith('.pdf'):
+                filename += '.pdf'
+            filepath = os.path.join(self.output_dir, filename)
+
+            # 1) Try pdfkit / wkhtmltopdf
             try:
                 import pdfkit
-                
-                # Generate filename if not provided
-                if not filename:
-                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    filename = f"cv_formatted_{timestamp}.pdf"
-                
-                # Sanitize filename - remove spaces and special characters
-                import re
-                filename = re.sub(r'[^\w\-_.]', '_', filename)
-                filename = filename.replace(' ', '_').replace('(', '').replace(')', '')
-                
-                # Ensure .pdf extension
-                if not filename.endswith('.pdf'):
-                    filename += '.pdf'
-                
-                # Full file path
-                filepath = os.path.join(self.output_dir, filename)
-                
-                # Configure pdfkit options
                 options = {
                     'page-size': 'A4',
                     'margin-top': '0.75in',
@@ -140,29 +131,42 @@ class CVFileGenerator:
                     'no-outline': None,
                     'enable-local-file-access': None
                 }
-                
-                # Generate PDF
                 pdfkit.from_string(html_content, filepath, options=options)
-                
-                logger.info(f"Generated PDF CV file: {filepath}")
-                
-                # Get file size
-                file_size = os.path.getsize(filepath)
-                
-                return {
-                    "success": True,
-                    "filename": filename,
-                    "filepath": filepath,
-                    "file_size": file_size,
-                    "format": "pdf",
-                    "download_url": f"/api/download-cv/{filename}",
-                    "message": "CV PDF generated successfully"
-                }
-                
-            except ImportError:
-                # Fallback: Generate HTML file instead
-                logger.warning("pdfkit not available, generating HTML file instead")
-                return self.generate_html_file(html_content, filename.replace('.pdf', '.html') if filename else None)
+                logger.info(f"Generated PDF via pdfkit: {filepath}")
+            except Exception as e_pdfkit:
+                logger.warning(f"pdfkit failed or not available: {e_pdfkit}")
+                # 2) Try WeasyPrint
+                try:
+                    from weasyprint import HTML
+                    HTML(string=html_content).write_pdf(filepath)
+                    logger.info(f"Generated PDF via WeasyPrint: {filepath}")
+                except Exception as e_weasy:
+                    logger.warning(f"WeasyPrint failed or not available: {e_weasy}")
+                    # 3) Try xhtml2pdf (pure Python)
+                    try:
+                        from xhtml2pdf import pisa
+                        with open(filepath, 'wb') as pdf_file:
+                            pisa_status = pisa.CreatePDF(src=html_content, dest=pdf_file)
+                        if pisa_status.err:
+                            raise RuntimeError("xhtml2pdf failed to create PDF")
+                        logger.info(f"Generated PDF via xhtml2pdf: {filepath}")
+                    except Exception as e_xhtml2pdf:
+                        logger.warning(f"xhtml2pdf failed or not available: {e_xhtml2pdf}")
+                        # Final fallback – return HTML file instead
+                        logger.warning("Falling back to HTML file generation for CV")
+                        return self.generate_html_file(html_content, filename.replace('.pdf', '.html'))
+
+            # At this point, a PDF should exist
+            file_size = os.path.getsize(filepath)
+            return {
+                "success": True,
+                "filename": filename,
+                "filepath": filepath,
+                "file_size": file_size,
+                "format": "pdf",
+                "download_url": f"/api/download-cv/{filename}",
+                "message": "CV PDF generated successfully"
+            }
             
         except Exception as e:
             logger.error(f"Error generating PDF file: {e}")

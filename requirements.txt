@@ -36,3 +36,7 @@ python-magic==0.4.27
 
 # Python 3.13 compatibility fix
 legacy-cgi==2.6.3
+
+# PDF generation fallbacks (server-side HTML->PDF)
+WeasyPrint==62.3
+xhtml2pdf==0.2.15
