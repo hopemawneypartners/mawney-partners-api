@@ -2112,6 +2112,35 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
             html_content = _build_structured_html_from_text(cv_content)
             formatted_result['html_content'] = html_content
             formatted_result['success'] = True
+
+        # Sanitize HTML for iOS print renderer (WKWebView/UIMarkupTextPrintFormatter)
+        def _sanitize_html_for_ios_print(html: str) -> str:
+            try:
+                import re
+                cleaned = html or ""
+                # Remove @page and @media blocks which often break iOS print layout
+                cleaned = re.sub(r"@page[^{]*\{[\s\S]*?\}", "", cleaned)
+                cleaned = re.sub(r"@media[^{]*\{[\s\S]*?\}", "", cleaned)
+                # Fix zero sizes that cause blank output
+                cleaned = cleaned.replace("font-size: 0pt", "font-size: 11pt").replace("font-size: 0px", "font-size: 12px")
+                cleaned = cleaned.replace("line-height: 0", "line-height: 1.3")
+                # Ensure fixed content width appropriate for A4
+                viewport = (
+                    "<meta name=\"viewport\" content=\"width=595px, initial-scale=1.0, maximum-scale=1.0, user-scalable=no\">\n"
+                    "<style>body{width:595px;margin:0 auto;font-size:11pt;line-height:1.4} .page-content{width:595px}</style>"
+                )
+                if "<meta charset=\"UTF-8\">" in cleaned:
+                    cleaned = cleaned.replace("<meta charset=\"UTF-8\">", "<meta charset=\"UTF-8\">\n" + viewport)
+                elif "<head>" in cleaned:
+                    cleaned = cleaned.replace("<head>", "<head>\n" + viewport)
+                else:
+                    cleaned = "<head>" + viewport + "</head>\n" + cleaned
+                return cleaned
+            except Exception:
+                return html or ""
+
+        html_content = _sanitize_html_for_ios_print(html_content)
+        formatted_result['html_content'] = html_content
         
         # Check for success or presence of html_content (V16 doesn't have success key)
         if not formatted_result.get('success', True) and not formatted_result.get('html_content'):
