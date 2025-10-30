@@ -2036,6 +2036,7 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
                     html = result.get('html_content', '')
                     if html and _has_visible_text(html):
                         logger.info(f"✅ Formatter {label} produced visible content")
+                        result['formatter_used'] = label
                         return result
                     else:
                         logger.warning(f"⚠️ Formatter {label} produced low/empty content; continuing")
@@ -2045,7 +2046,9 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
             # Fallback to original MawneyTemplateFormatter
             logger.info("🧩 Falling back to MawneyTemplateFormatter")
             template_formatter = MawneyTemplateFormatter()
-            return template_formatter.format_cv_with_template(raw_text, fname)
+            base = template_formatter.format_cv_with_template(raw_text, fname)
+            base['formatter_used'] = 'template'
+            return base
 
         def _preparse_sections(raw_text: str) -> str:
             # Light-weight pre-parser: ensure clear headings exist to help downstream formatter
@@ -2114,6 +2117,15 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
 
         html_content = _sanitize_html_for_ios_print(html_content)
         formatted_result['html_content'] = html_content
+        
+        # Compute visible text count for instrumentation
+        try:
+            import re
+            visible_text = re.sub(r"<[^>]+>", " ", html_content or "")
+            visible_text = re.sub(r"\s+", " ", visible_text).strip()
+            visible_text_count = len(visible_text)
+        except Exception:
+            visible_text_count = 0
         
         # Check for success or presence of html_content (V16 doesn't have success key)
         if not formatted_result.get('success', True) and not formatted_result.get('html_content'):
@@ -2200,6 +2212,10 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
             response += "\n... [truncated - full version in downloadable file]"
         response += "\n```\n\n"
         
+        # Instrumentation details for debugging
+        response += f"**Debug:** formatter={formatted_result.get('formatter_used','unknown')}, extracted_text_length={len(cv_content)}, visible_text_count={visible_text_count}\n\n"
+        response += f"**Extracted Preview (first 600 chars):**\n{cv_content[:600].replace('\n',' ')}\n\n"
+        
         # Add download instructions
         response += "💡 **Next Steps:**\n"
         if file_format == 'pdf':
@@ -2224,7 +2240,10 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
             "filename": file_result.get('filename'),  # Keep for compatibility
             "file_format": file_format,
             "file_base64": file_base64,
-            "html_content": html_content  # iOS app uses this to create PDF client-side
+            "html_content": html_content,  # iOS app uses this to create PDF client-side
+            "formatter_used": formatted_result.get('formatter_used', 'unknown'),
+            "visible_text_count": visible_text_count,
+            "extracted_text_length": len(cv_content)
         }
         
     except Exception as e:
