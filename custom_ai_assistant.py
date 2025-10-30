@@ -1717,7 +1717,7 @@ def process_ai_query_with_files(query: str, context: Dict = None, file_analyses:
             enhanced_context['file_analyses'] = file_analyses
             enhanced_context['has_attachments'] = True
             
-            # Format file information for the AI
+            # Format file information for the AI (human-readable)
             file_context = _format_file_context_for_ai(file_analyses)
             enhanced_context['file_context'] = file_context
             
@@ -1729,6 +1729,13 @@ def process_ai_query_with_files(query: str, context: Dict = None, file_analyses:
             logger.info(f"🔍 CV Detection: Found {len(cv_files)} CV files")
             logger.info(f"🔍 Query: {enhanced_query}")
             logger.info(f"🔍 CV formatting request: {_is_cv_formatting_request(enhanced_query, file_analyses)}")
+            
+            # IMPORTANT: If CV files exist, override file_context with RAW extracted text so CV formatter has real content
+            if cv_files:
+                raw_cv_text = cv_files[0].get('extracted_text', '') or ''
+                if raw_cv_text:
+                    enhanced_context['file_context'] = raw_cv_text
+                    logger.info(f"🔍 Using RAW CV text for formatting: {len(raw_cv_text)} characters")
             
             if cv_files and _is_cv_formatting_request(enhanced_query, file_analyses):
                 # Handle CV formatting and get file info
