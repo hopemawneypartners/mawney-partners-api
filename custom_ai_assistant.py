@@ -2281,6 +2281,16 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
         # Generate PDF file and get base64 content for direct download
         # Try to generate PDF, fallback to HTML if pdfkit not available
         file_result = cv_file_generator.generate_pdf_file(html_content, f"formatted_{filename.replace('.pdf', '')}")
+        # If generator couldn't create a PDF, fabricate an HTML file result so the app can still download
+        if not file_result.get('success'):
+            html_bytes = (html_content or '').encode('utf-8')
+            file_result = {
+                'success': True,
+                'format': 'html',
+                'filename': f"formatted_{filename.replace('.pdf', '')}.html",
+                'file_size': len(html_bytes),
+                'download_url': None
+            }
         
         # Get file as base64 for iOS app download
         import base64
