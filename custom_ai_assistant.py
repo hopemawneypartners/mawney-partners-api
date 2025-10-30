@@ -2106,8 +2106,86 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
 
         # Pre-parse to improve section boundaries before formatting
         cv_content = _preparse_sections(cv_content)
-        # Try cascading enhanced formatters first
-        formatted_result = _format_with_cascading_templates(cv_content, filename)
+
+        # Deterministic parser for Role:/Company, Location (Dates) + bullets
+        def _deterministic_parse_to_html(text: str) -> Dict[str, Any]:
+            import re, os, base64
+            lines = [ln.strip() for ln in (text or '').split('\n')]
+            role_re = re.compile(r"^[A-Z][A-Za-z0-9 &/+'–\-:,]+:\s*$")
+            comp_re = re.compile(r"^([A-Z][A-Za-z0-9 '&/\.-]+),\s*([A-Za-z ]+)\s*\(([^)]+)\)\s*$")
+            i = 0
+            jobs: List[Dict[str, Any]] = []
+            while i < len(lines):
+                if role_re.match(lines[i]) and i + 1 < len(lines) and comp_re.match(lines[i+1] or ""):
+                    role = lines[i].rstrip(':').strip()
+                    m = comp_re.match(lines[i+1])
+                    company = m.group(1).strip() if m else ''
+                    location = m.group(2).strip() if m else ''
+                    dates = m.group(3).strip() if m else ''
+                    i += 2
+                    bullets: List[str] = []
+                    while i < len(lines) and (lines[i].startswith('• ') or lines[i].startswith('- ')):
+                        btxt = lines[i][2:].strip()
+                        if btxt:
+                            bullets.append(btxt)
+                        i += 1
+                    jobs.append({"role": role, "company": company, "location": location, "dates": dates, "bullets": bullets})
+                else:
+                    i += 1
+
+            if not jobs:
+                return {"success": False}
+
+            def _logo_b64(name: str) -> str:
+                try:
+                    assets_dir = os.path.join(os.path.dirname(__file__), 'assets')
+                    with open(os.path.join(assets_dir, name), 'rb') as f:
+                        return base64.b64encode(f.read()).decode('utf-8')
+                except Exception:
+                    return ''
+            top_b64 = _logo_b64('cv logo 1.png')
+            bot_b64 = _logo_b64('cv logo 2.png')
+
+            items_html: List[str] = []
+            for j in jobs:
+                header = f"<div class=\"job-header\"><div class=\"job-title\">{j['role']}</div><div class=\"job-company\">{j['company']}, {j['location']}</div><div class=\"job-date\">{j['dates']}</div></div>"
+                bl = ''.join([f"<li>{b}</li>" for b in j['bullets']])
+                items_html.append(f"<div class=\"job-item\">{header}<ul class=\"job-description\">{bl}</ul></div>")
+            work_html = "".join(items_html)
+
+            html = f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <meta charset=\"UTF-8\">
+              <meta name=\"viewport\" content=\"width=595px, initial-scale=1.0\">
+              <style>
+                body{{ width:595px; margin:0 auto; font-family:'Times New Roman', serif; font-size:11pt; line-height:1.4; color:#111; }}
+                .logo{{ text-align:center; margin:10px 0; }}
+                .section-title{{ font-weight:bold; text-transform:uppercase; border-bottom:1px solid #333; margin:16px 0 10px 0; }}
+                .job-item{{ margin-bottom:14px; }}
+                .job-title{{ font-weight:bold; font-size:12pt; }}
+                .job-company{{ font-weight:bold; }}
+                .job-date{{ font-style:italic; }}
+                ul.job-description{{ margin:6px 0 0 18px; }}
+              </style>
+            </head>
+            <body>
+              {f'<div class=\'logo\'><img alt=\'Logo\' style=\'height:40px\' src=\'data:image/png;base64,{top_b64}\'></div>' if top_b64 else ''}
+              <div class=\"section-title\">Work Experience</div>
+              {work_html}
+              {f'<div class=\'logo\'><img alt=\'Logo\' style=\'height:40px\' src=\'data:image/png;base64,{bot_b64}\'></div>' if bot_b64 else ''}
+            </body>
+            </html>
+            """
+            return {"success": True, "html_content": html, "text_version": "\n".join([j['role'] for j in jobs])}
+
+        det = _deterministic_parse_to_html(cv_content)
+        if det.get('success') and _has_visible_text(det.get('html_content', '')):
+            formatted_result = det
+        else:
+            # Try cascading enhanced formatters first
+            formatted_result = _format_with_cascading_templates(cv_content, filename)
         html_content = formatted_result.get('html_content', '')
         # If still no visible content, return a parsing error instead of fallback text
         if not _has_visible_text(html_content):
