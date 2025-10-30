@@ -2140,37 +2140,8 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
                 "has_file": False
             }
         
-        # Defensive fallback: if formatter produced little or no visible text, create a simple HTML from raw CV text
+        # No plain-text fallback: keep template output; iOS handles rendering fallbacks
         html_content = formatted_result.get('html_content', '')
-        try:
-            import re
-            visible_text = re.sub(r"<[^>]+>", " ", html_content or "").strip()
-            if len(visible_text) < 100:  # too little content -> build simple fallback
-                logger.warning("⚠️ Formatter output too small; using simple HTML fallback from raw CV text")
-                safe_text = cv_content.replace("<", "&lt;").replace(">", "&gt;")
-                simple_html = f"""
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <meta charset=\"UTF-8\">
-                    <meta name=\"viewport\" content=\"width=595px, initial-scale=1.0\">
-                    <style>
-                        body {{ font-family: 'Times New Roman', serif; font-size: 12pt; line-height: 1.4; margin: 20px; color: #222; }}
-                        h1 {{ font-size: 18pt; text-align: center; margin-bottom: 20px; }}
-                        pre {{ white-space: pre-wrap; word-wrap: break-word; font-family: 'Times New Roman', serif; }}
-                    </style>
-                </head>
-                <body>
-                    <h1>Curriculum Vitae</h1>
-                    <pre>{safe_text}</pre>
-                </body>
-                </html>
-                """
-                html_content = simple_html
-                formatted_result['html_content'] = html_content
-                formatted_result['success'] = True
-        except Exception:
-            pass
         
         # Generate PDF file and get base64 content for direct download
         # Try to generate PDF, fallback to HTML if pdfkit not available
