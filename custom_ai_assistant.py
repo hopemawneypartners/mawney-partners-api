@@ -1983,7 +1983,8 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
                     r"publications", r"projects", r"profile", r"summary"
                 ]
                 for h in headings:
-                    t = re.sub(rf"\s*(?i){h}\s*:?\s*", lambda m: f"\n\n{m.group(0).strip().upper()}\n", t)
+                    pattern = rf"\s*{h}\s*:?\s*"
+                    t = re.sub(pattern, lambda m: f"\n\n{m.group(0).strip().upper()}\n", t, flags=re.IGNORECASE)
                 # Add line breaks between date ranges and roles to help parsers
                 t = re.sub(r"(\d{4}\s*[–-]\s*(Present|\d{4}))", r"\n\1\n", t, flags=re.IGNORECASE)
                 # Collapse excessive blanks
@@ -2059,7 +2060,8 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
                 "EDUCATION", "SKILLS", "LANGUAGES", "CERTIFICATIONS", "SUMMARY", "PROFILE"
             ]
             for h in headings:
-                t = re.sub(rf"\n\s*(?i){h}\s*:?\s*\n", f"\n\n{h}\n", t)
+                pattern = rf"\n\s*{h}\s*:?\s*\n"
+                t = re.sub(pattern, f"\n\n{h}\n", t, flags=re.IGNORECASE)
             # If no work experience header but there are date ranges, insert one above first match
             if not re.search(r"\n(WORK EXPERIENCE|PROFESSIONAL EXPERIENCE|EXPERIENCE)\n", t, re.I):
                 m = re.search(r"\b(19|20)\d{2}\s*[–-]\s*(Present|\b(19|20)\d{2}\b)", t, re.I)
