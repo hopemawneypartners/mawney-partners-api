@@ -1995,20 +1995,123 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
         cv_content = _normalize_cv_text(cv_content)
         logger.info(f"🔧 Normalized CV text length: {len(cv_content)}")
 
-        # Format the CV using the ENHANCED V33 Mawney Partners template with WKWebView-compatible HTML
-        try:
-            from enhanced_cv_formatter_v33 import enhanced_cv_formatter_v33
-            formatted_result = enhanced_cv_formatter_v33.format_cv_with_template(cv_content, filename)
-        except ImportError:
+        def _has_visible_text(html: str, min_chars: int = 200) -> bool:
             try:
-                # Fallback to V32 enhanced formatter
-                from enhanced_cv_formatter_v32 import enhanced_cv_formatter_v32
-                formatted_result = enhanced_cv_formatter_v32.format_cv_with_template(cv_content, filename)
+                import re
+                text = re.sub(r"<[^>]+>", " ", html or "").strip()
+                text = re.sub(r"\s+", " ", text)
+                return len(text) >= min_chars
+            except Exception:
+                return False
+
+        def _format_with_cascading_templates(raw_text: str, fname: str):
+            # Try V33, then V31, V20, V17, then MawneyTemplateFormatter
+            try_order = []
+            try:
+                from enhanced_cv_formatter_v33 import enhanced_cv_formatter_v33
+                try_order.append(("v33", enhanced_cv_formatter_v33))
             except ImportError:
-                # Fallback to original formatter
-                logger.warning("Enhanced CV formatters not available, using original")
-                template_formatter = MawneyTemplateFormatter()
-                formatted_result = template_formatter.format_cv_with_template(cv_content, filename)
+                pass
+            try:
+                from enhanced_cv_formatter_v31 import enhanced_cv_formatter_v31
+                try_order.append(("v31", enhanced_cv_formatter_v31))
+            except ImportError:
+                pass
+            try:
+                from enhanced_cv_formatter_v20 import enhanced_cv_formatter_v20
+                try_order.append(("v20", enhanced_cv_formatter_v20))
+            except ImportError:
+                pass
+            try:
+                from enhanced_cv_formatter_v17 import enhanced_cv_formatter_v17
+                try_order.append(("v17", enhanced_cv_formatter_v17))
+            except ImportError:
+                pass
+
+            for label, mod in try_order:
+                try:
+                    logger.info(f"🧩 Trying formatter {label}...")
+                    result = mod.format_cv_with_template(raw_text, fname)
+                    html = result.get('html_content', '')
+                    if html and _has_visible_text(html):
+                        logger.info(f"✅ Formatter {label} produced visible content")
+                        return result
+                    else:
+                        logger.warning(f"⚠️ Formatter {label} produced low/empty content; continuing")
+                except Exception as e:
+                    logger.warning(f"⚠️ Formatter {label} error: {e}")
+
+            # Fallback to original MawneyTemplateFormatter
+            logger.info("🧩 Falling back to MawneyTemplateFormatter")
+            template_formatter = MawneyTemplateFormatter()
+            return template_formatter.format_cv_with_template(raw_text, fname)
+
+        def _build_structured_html_from_text(raw_text: str) -> str:
+            import re
+            text = raw_text or ""
+            # Extract simple fields
+            name = ""
+            email = ""
+            phone = ""
+            m = re.search(r"\b[A-Z][a-z]+\s+[A-Z][a-z]+\b", text)
+            if m:
+                name = m.group(0)
+            m = re.search(r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}", text, re.I)
+            if m:
+                email = m.group(0)
+            m = re.search(r"(\+?\d[\d\s\-()]{7,}\d)", text)
+            if m:
+                phone = m.group(0)
+
+            # Split into sections heuristically
+            def section(title):
+                return f"<div class=\"section\"><div class=\"section-header\">{title}</div>"
+            def end():
+                return "</div>"
+
+            safe = text.replace("<", "&lt;").replace(">", "&gt;")
+            # Basic bullet formatting
+            safe = re.sub(r"\n\s*[-•·]\s+", "\n• ", safe)
+            lines = [l.strip() for l in safe.splitlines() if l.strip()]
+            bullets = [l for l in lines if l.startswith("• ")]
+
+            html = [
+                "<!DOCTYPE html>",
+                "<html>",
+                "<head>",
+                "<meta charset=\"UTF-8\">",
+                "<meta name=\"viewport\" content=\"width=595px, initial-scale=1.0\">",
+                "<style>body{font-family:'Times New Roman',serif;font-size:11pt;line-height:1.4;margin:20px} .name{font-size:18pt;font-weight:bold;text-align:center;margin-bottom:6px} .contact{text-align:center;margin-bottom:20px} .section{margin-bottom:16px} .section-header{font-weight:bold;text-transform:uppercase;border-bottom:1px solid #333;margin-bottom:8px} .item{margin-bottom:10px}</style>",
+                "</head>",
+                "<body>",
+                f"<div class=\"name\">{name or 'CANDIDATE'}</div>",
+                f"<div class=\"contact\">{email} {(' | ' + phone) if phone else ''}</div>",
+                section("Work Experience"),
+            ]
+
+            # Heuristic grouping of bullet lines into items
+            for b in bullets[:50]:
+                html.append(f"<div class=\"item\">{b[2:]}</div>")
+            html.append(end())
+
+            html.extend([
+                section("Education"),
+                end(),
+                section("Skills"),
+                end(),
+                "</body>",
+                "</html>"
+            ])
+            return "\n".join(html)
+
+        # Try cascading enhanced formatters first
+        formatted_result = _format_with_cascading_templates(cv_content, filename)
+        html_content = formatted_result.get('html_content', '')
+        if not _has_visible_text(html_content):
+            logger.warning("⚠️ Enhanced formatters produced too little visible text; building structured HTML from raw text")
+            html_content = _build_structured_html_from_text(cv_content)
+            formatted_result['html_content'] = html_content
+            formatted_result['success'] = True
         
         # Check for success or presence of html_content (V16 doesn't have success key)
         if not formatted_result.get('success', True) and not formatted_result.get('html_content'):
