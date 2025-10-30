@@ -2097,6 +2097,12 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
                 # Remove @page and @media blocks which often break iOS print layout
                 cleaned = re.sub(r"@page[^{]*\{[\s\S]*?\}", "", cleaned)
                 cleaned = re.sub(r"@media[^{]*\{[\s\S]*?\}", "", cleaned)
+                # Remove problematic CSS properties that can hide content
+                cleaned = re.sub(r"position:\s*(fixed|absolute)\s*;?", "", cleaned, flags=re.I)
+                cleaned = re.sub(r"overflow:\s*(hidden|auto|scroll)\s*;?", "", cleaned, flags=re.I)
+                cleaned = re.sub(r"transform:[^;]+;", "", cleaned, flags=re.I)
+                cleaned = re.sub(r"opacity:\s*0\s*;?", "opacity:1;", cleaned, flags=re.I)
+                cleaned = re.sub(r"height:\s*0(px|pt)?\s*;?", "", cleaned, flags=re.I)
                 # Fix zero sizes that cause blank output
                 cleaned = cleaned.replace("font-size: 0pt", "font-size: 11pt").replace("font-size: 0px", "font-size: 12px")
                 cleaned = cleaned.replace("line-height: 0", "line-height: 1.3")
