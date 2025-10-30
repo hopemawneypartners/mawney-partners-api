@@ -451,6 +451,34 @@ class MawneyTemplateFormatter:
         if current_education:
             parsed['education'].append(current_education)
         
+        # Extract skills: capture lines under a SKILLS header or comma-separated skills
+        try:
+            skills_section = False
+            skills_collected: List[str] = []
+            for line in lines:
+                ll = line.lower()
+                if any(h in ll for h in ['skills', 'technical & creative skills', 'core strengths', 'competencies']):
+                    skills_section = True
+                    continue
+                if skills_section and any(h in ll for h in ['education', 'experience', 'summary', 'profile', 'interests', 'certifications']):
+                    break
+                if skills_section:
+                    # bullets
+                    if line.startswith(('•', '-', '·')):
+                        item = line.lstrip('•-· ').strip()
+                        if item:
+                            skills_collected.append(item)
+                    else:
+                        # comma separated within the same line
+                        if ',' in line:
+                            for part in [p.strip() for p in line.split(',') if p.strip()]:
+                                skills_collected.append(part)
+            # de-dup and keep reasonable length
+            seen = set()
+            parsed['skills'] = [s for s in skills_collected if not (s.lower() in seen or seen.add(s.lower()))][:30]
+        except Exception:
+            pass
+
         return parsed
     
     def _is_company_line(self, line: str) -> bool:

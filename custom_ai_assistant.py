@@ -2197,12 +2197,23 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
             """
             return {"success": True, "html_content": html, "text_version": "\n".join([j['role'] for j in jobs])}
 
-        det = _deterministic_parse_to_html(cv_content)
-        if det.get('success') and _has_visible_text(det.get('html_content', '')):
-            formatted_result = det
-        else:
-            # Try cascading enhanced formatters first
-        formatted_result = _format_with_cascading_templates(cv_content, filename)
+        # Prefer the full Mawney template first (includes profile, skills, education)
+        try:
+            template_formatter_primary = MawneyTemplateFormatter()
+            formatted_result = template_formatter_primary.format_cv_with_template(cv_content, filename)
+        except Exception:
+            formatted_result = {}
+
+        # If template output is insufficient, fall back to deterministic work-experience and cascade formatters
+        html_candidate = (formatted_result.get('html_content') or formatted_result.get('html_version') or '') if isinstance(formatted_result, dict) else ''
+        if not _has_visible_text(html_candidate):
+            det = _deterministic_parse_to_html(cv_content)
+            if det.get('success') and _has_visible_text(det.get('html_content', '')):
+                formatted_result = det
+            else:
+                # Try cascading enhanced formatters
+                formatted_result = _format_with_cascading_templates(cv_content, filename)
+
         # Normalize key names from different formatters
         html_content = formatted_result.get('html_content') or formatted_result.get('html_version') or ''
         if 'html_content' not in formatted_result and 'html_version' in formatted_result:
