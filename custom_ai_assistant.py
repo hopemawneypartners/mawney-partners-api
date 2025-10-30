@@ -2046,72 +2046,43 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
             template_formatter = MawneyTemplateFormatter()
             return template_formatter.format_cv_with_template(raw_text, fname)
 
-        def _build_structured_html_from_text(raw_text: str) -> str:
+        def _preparse_sections(raw_text: str) -> str:
+            # Light-weight pre-parser: ensure clear headings exist to help downstream formatter
             import re
-            text = raw_text or ""
-            # Extract simple fields
-            name = ""
-            email = ""
-            phone = ""
-            m = re.search(r"\b[A-Z][a-z]+\s+[A-Z][a-z]+\b", text)
-            if m:
-                name = m.group(0)
-            m = re.search(r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}", text, re.I)
-            if m:
-                email = m.group(0)
-            m = re.search(r"(\+?\d[\d\s\-()]{7,}\d)", text)
-            if m:
-                phone = m.group(0)
-
-            # Split into sections heuristically
-            def section(title):
-                return f"<div class=\"section\"><div class=\"section-header\">{title}</div>"
-            def end():
-                return "</div>"
-
-            safe = text.replace("<", "&lt;").replace(">", "&gt;")
-            # Basic bullet formatting
-            safe = re.sub(r"\n\s*[-•·]\s+", "\n• ", safe)
-            lines = [l.strip() for l in safe.splitlines() if l.strip()]
-            bullets = [l for l in lines if l.startswith("• ")]
-
-            html = [
-                "<!DOCTYPE html>",
-                "<html>",
-                "<head>",
-                "<meta charset=\"UTF-8\">",
-                "<meta name=\"viewport\" content=\"width=595px, initial-scale=1.0\">",
-                "<style>body{font-family:'Times New Roman',serif;font-size:11pt;line-height:1.4;margin:20px} .name{font-size:18pt;font-weight:bold;text-align:center;margin-bottom:6px} .contact{text-align:center;margin-bottom:20px} .section{margin-bottom:16px} .section-header{font-weight:bold;text-transform:uppercase;border-bottom:1px solid #333;margin-bottom:8px} .item{margin-bottom:10px}</style>",
-                "</head>",
-                "<body>",
-                f"<div class=\"name\">{name or 'CANDIDATE'}</div>",
-                f"<div class=\"contact\">{email} {(' | ' + phone) if phone else ''}</div>",
-                section("Work Experience"),
+            t = raw_text or ""
+            t = t.replace('\r\n', '\n').replace('\r', '\n')
+            # Normalize bullets
+            t = re.sub(r"\n\s*[-•·]\s+", "\n• ", t)
+            # Promote common headings
+            headings = [
+                "WORK EXPERIENCE", "PROFESSIONAL EXPERIENCE", "EXPERIENCE",
+                "EDUCATION", "SKILLS", "LANGUAGES", "CERTIFICATIONS", "SUMMARY", "PROFILE"
             ]
+            for h in headings:
+                t = re.sub(rf"\n\s*(?i){h}\s*:?\s*\n", f"\n\n{h}\n", t)
+            # If no work experience header but there are date ranges, insert one above first match
+            if not re.search(r"\n(WORK EXPERIENCE|PROFESSIONAL EXPERIENCE|EXPERIENCE)\n", t, re.I):
+                m = re.search(r"\b(19|20)\d{2}\s*[–-]\s*(Present|\b(19|20)\d{2}\b)", t, re.I)
+                if m:
+                    pos = t.rfind('\n', 0, m.start())
+                    if pos != -1:
+                        t = t[:pos] + "\n\nWORK EXPERIENCE\n" + t[pos:]
+            # Collapse excessive whitespace
+            t = re.sub(r"\n{3,}", "\n\n", t)
+            return t
 
-            # Heuristic grouping of bullet lines into items
-            for b in bullets[:50]:
-                html.append(f"<div class=\"item\">{b[2:]}</div>")
-            html.append(end())
-
-            html.extend([
-                section("Education"),
-                end(),
-                section("Skills"),
-                end(),
-                "</body>",
-                "</html>"
-            ])
-            return "\n".join(html)
-
+        # Pre-parse to improve section boundaries before formatting
+        cv_content = _preparse_sections(cv_content)
         # Try cascading enhanced formatters first
         formatted_result = _format_with_cascading_templates(cv_content, filename)
         html_content = formatted_result.get('html_content', '')
+        # If still no visible content, return a parsing error instead of fallback text
         if not _has_visible_text(html_content):
-            logger.warning("⚠️ Enhanced formatters produced too little visible text; building structured HTML from raw text")
-            html_content = _build_structured_html_from_text(cv_content)
-            formatted_result['html_content'] = html_content
-            formatted_result['success'] = True
+            logger.error("❌ CV parsing produced insufficient content after cascading formatters")
+            return {
+                "text": "I couldn't parse your CV into the template. Please try a different PDF export (text-based, not scanned) or send a .docx/.txt.",
+                "has_file": False
+            }
 
         # Sanitize HTML for iOS print renderer (WKWebView/UIMarkupTextPrintFormatter)
         def _sanitize_html_for_ios_print(html: str) -> str:
