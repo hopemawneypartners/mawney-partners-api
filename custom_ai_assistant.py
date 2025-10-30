@@ -2202,8 +2202,11 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
             formatted_result = det
         else:
             # Try cascading enhanced formatters first
-            formatted_result = _format_with_cascading_templates(cv_content, filename)
-        html_content = formatted_result.get('html_content', '')
+        formatted_result = _format_with_cascading_templates(cv_content, filename)
+        # Normalize key names from different formatters
+        html_content = formatted_result.get('html_content') or formatted_result.get('html_version') or ''
+        if 'html_content' not in formatted_result and 'html_version' in formatted_result:
+            formatted_result['html_content'] = formatted_result.get('html_version')
         # If still no visible content, return a parsing error instead of fallback text
         if not _has_visible_text(html_content):
             logger.error("❌ CV parsing produced insufficient content after cascading formatters")

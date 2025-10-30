@@ -66,6 +66,7 @@ class MawneyTemplateFormatter:
         return {
             'success': True,
             'html_version': formatted_html,
+            'html_content': formatted_html,  # ensure downstream callers find HTML consistently
             'text_version': self._extract_text_from_html(formatted_html),
             'analysis': f"CV formatted using Mawney Partners template. Extracted: {len(parsed_data.get('experience', []))} experience items, {len(parsed_data.get('education', []))} education items.",
             'sections_found': list(parsed_data.keys()),
@@ -536,26 +537,27 @@ class MawneyTemplateFormatter:
             company = exp.get('company', '').strip()
             title = exp.get('title', '').strip()
             dates = exp.get('dates', '').strip()
-            responsibilities = exp.get('responsibilities', [])
-            
+            location = exp.get('location', '').strip()
+            responsibilities = exp.get('responsibilities', []) or []
+
             # Only add if we have substantial content
             if company or title or responsibilities:
                 responsibility_list = ''
                 if responsibilities:
                     responsibility_list = f'''
                     <ul>
-                        {''.join([f'<li>{resp.strip()}</li>' for resp in responsibilities if resp.strip()])}
+                        {''.join([f'<li>{resp.strip()}</li>' for resp in responsibilities if resp and resp.strip()])}
                     </ul>
                     '''
-                
-                    item_html = f'''
-                    <div class="experience-item">
-                        <div class="job-header">{title}, {company}, {exp.get('location', '')} {dates}</div>
-                        <div class="job-details">
-                            {responsibility_list}
-                        </div>
+
+                item_html = f'''
+                <div class="experience-item">
+                    <div class="job-header">{title}{', ' if title and company else ''}{company}{', ' if (title or company) and location else ''}{location} {dates}</div>
+                    <div class="job-details">
+                        {responsibility_list}
                     </div>
-                    '''
+                </div>
+                '''
                 items.append(item_html)
         
         return '\n'.join(items)
