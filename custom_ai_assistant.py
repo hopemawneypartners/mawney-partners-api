@@ -2057,6 +2057,34 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
             t = t.replace('\r\n', '\n').replace('\r', '\n')
             # Normalize bullets
             t = re.sub(r"\n\s*[-•·]\s+", "\n• ", t)
+            
+            # Merge role/company/date blocks like:
+            #   Marketing and Business Development Associate:
+            #   Mawney Partners, London (May 2025 - Present)
+            # Into a single header line the formatters can understand:
+            #   Marketing and Business Development Associate — Mawney Partners, London — May 2025 - Present
+            def _merge_role_blocks(text: str) -> str:
+                lines = [ln.strip() for ln in text.split('\n')]
+                merged: list[str] = []
+                i = 0
+                role_re = re.compile(r"^[A-Z][A-Za-z0-9 &/+-]+:\s*$")
+                company_dates_re = re.compile(r"^([A-Z][A-Za-z0-9 '&/.-]+),\s*([A-Za-z ]+)\s*\(([^)]+)\)\s*$")
+                while i < len(lines):
+                    line = lines[i]
+                    if role_re.match(line) and i + 1 < len(lines) and company_dates_re.match(lines[i+1] or ""):
+                        role = line.rstrip(':').strip()
+                        m = company_dates_re.match(lines[i+1])
+                        company = m.group(1).strip() if m else ''
+                        location = m.group(2).strip() if m else ''
+                        dates = m.group(3).strip() if m else ''
+                        merged.append(f"{role} — {company}, {location} — {dates}")
+                        i += 2
+                        continue
+                    merged.append(line)
+                    i += 1
+                return '\n'.join(merged)
+
+            t = _merge_role_blocks(t)
             # Promote common headings
             headings = [
                 "WORK EXPERIENCE", "PROFESSIONAL EXPERIENCE", "EXPERIENCE",
