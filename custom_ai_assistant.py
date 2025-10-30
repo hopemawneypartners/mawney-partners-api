@@ -1966,6 +1966,35 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
                 "has_file": False
             }
         
+        # Normalize raw CV text to improve section detection before formatting
+        def _normalize_cv_text(text: str) -> str:
+            try:
+                import re
+                t = text or ""
+                # Standardize newlines
+                t = t.replace('\r\n', '\n').replace('\r', '\n')
+                # Fix hyphen bullets to real bullets
+                t = re.sub(r"\n\s*[-•·]\s+", "\n• ", t)
+                # Ensure headings are on their own line
+                headings = [
+                    r"work experience", r"professional experience", r"experience",
+                    r"education", r"qualifications", r"skills", r"languages",
+                    r"certifications", r"additional information", r"interests",
+                    r"publications", r"projects", r"profile", r"summary"
+                ]
+                for h in headings:
+                    t = re.sub(rf"\s*(?i){h}\s*:?\s*", lambda m: f"\n\n{m.group(0).strip().upper()}\n", t)
+                # Add line breaks between date ranges and roles to help parsers
+                t = re.sub(r"(\d{4}\s*[–-]\s*(Present|\d{4}))", r"\n\1\n", t, flags=re.IGNORECASE)
+                # Collapse excessive blanks
+                t = re.sub(r"\n{3,}", "\n\n", t)
+                return t.strip()
+            except Exception:
+                return text or ""
+
+        cv_content = _normalize_cv_text(cv_content)
+        logger.info(f"🔧 Normalized CV text length: {len(cv_content)}")
+
         # Format the CV using the ENHANCED V33 Mawney Partners template with WKWebView-compatible HTML
         try:
             from enhanced_cv_formatter_v33 import enhanced_cv_formatter_v33
