@@ -56,55 +56,49 @@ current_chat_sessions = {}  # Track current chat per user
 # User data storage (in production, this would be a database)
 user_profiles = {
     'hg@mawneypartners.com': {
-        'id': 'user_hope',
         'email': 'hg@mawneypartners.com',
         'name': 'Hope Gilbert',
-        'avatar': 'hope.jpg',
+        'avatar': None,
         'preferences': {},
         'created_at': datetime.now().isoformat(),
         'last_login': datetime.now().isoformat()
     },
     'jt@mawneypartners.com': {
-        'id': 'user_josh',
         'email': 'jt@mawneypartners.com',
         'name': 'Joshua Trister',
-        'avatar': 'josh.jpg',
+        'avatar': None,
         'preferences': {},
         'created_at': datetime.now().isoformat(),
         'last_login': datetime.now().isoformat()
     },
     'finance@mawneypartners.com': {
-        'id': 'user_rachel',
         'email': 'finance@mawneypartners.com',
         'name': 'Rachel Trister',
-        'avatar': 'rachel.jpg',
+        'avatar': None,
         'preferences': {},
         'created_at': datetime.now().isoformat(),
         'last_login': datetime.now().isoformat()
     },
     'jd@mawneypartners.com': {
-        'id': 'user_jack',
         'email': 'jd@mawneypartners.com',
         'name': 'Jack Dalby',
-        'avatar': 'jack.jpg',
+        'avatar': None,
         'preferences': {},
         'created_at': datetime.now().isoformat(),
         'last_login': datetime.now().isoformat()
     },
     'he@mawneypartners.com': {
-        'id': 'user_harry',
         'email': 'he@mawneypartners.com',
         'name': 'Harry Edleman',
-        'avatar': 'harry.jpg',
+        'avatar': None,
         'preferences': {},
         'created_at': datetime.now().isoformat(),
         'last_login': datetime.now().isoformat()
     },
     'tjt@mawneypartners.com': {
-        'id': 'user_tyler',
         'email': 'tjt@mawneypartners.com',
         'name': 'Tyler Johnson Thomas',
-        'avatar': 'tyler.jpg',
+        'avatar': None,
         'preferences': {},
         'created_at': datetime.now().isoformat(),
         'last_login': datetime.now().isoformat()
@@ -1358,16 +1352,13 @@ def get_articles():
 def get_ai_summary():
     """Get comprehensive AI summary of articles from past 24 hours only"""
     try:
-        # Get articles (try Daily News first, then RSS as fallback)
-        articles = get_daily_news_articles() if DAILY_NEWS_AVAILABLE else []
-        if not articles:
-            print("🔄 Daily News articles empty, trying RSS articles...")
-            articles = get_comprehensive_rss_articles()
+        # Get articles (either from Daily News or RSS)
+        articles = get_daily_news_articles() if DAILY_NEWS_AVAILABLE else get_comprehensive_rss_articles()
         
         if not articles:
             return jsonify({
                 "success": False,
-                "error": "No articles available from any source"
+                "error": "No articles available"
             }), 500
 
         # DEDUPLICATION FOR AI SUMMARY
@@ -1473,7 +1464,7 @@ def get_ai_summary():
         detailed_analysis = []
         
         # Analyze only top 5 most relevant articles for concise summary
-        for article in past_7_days[:5]:
+        for article in past_24_hours[:5]:
             title = article.get('title', '')
             content = article.get('content', '')
             source = article.get('source', '')
@@ -1503,13 +1494,33 @@ def get_ai_summary():
                     article_insights.append(f"Market development: {title}")
                     detailed_analysis.append(f"General: {title} - {content[:80]}...")
         
-        # Generate comprehensive summary using OpenAI API
-        try:
-            summary = generate_openai_daily_summary(past_24_hours, sources, categories, category_counts, source_counts, theme_counts, now)
-        except Exception as ai_error:
-            print(f"❌ OpenAI summary failed: {ai_error}")
-            print("🔄 Falling back to basic summary")
-            summary = generate_basic_daily_summary(past_24_hours, sources, categories, category_counts, source_counts, theme_counts, now)
+        # Generate comprehensive summary based on actual article analysis
+        summary = {
+            "executive_summary": f"24-Hour Credit Market Summary: {len(past_24_hours)} key developments from {len(sources)} sources. Focus areas: {', '.join(list(category_counts.keys())[:2])} with {', '.join(list(theme_counts.keys())[:2]) if theme_counts else 'credit market activity'}.",
+            
+            "key_points": key_headlines[:5] if key_headlines else [
+                f"📊 {len(past_24_hours)} articles analyzed from past 24 hours",
+                f"📰 Top sources: {', '.join([f'{src} ({count})' for src, count in list(source_counts.items())[:3]])}",
+                f"📈 Market sectors: {', '.join([f'{cat} ({count})' for cat, count in list(category_counts.items())[:3]])}",
+                f"🎯 Key themes: {', '.join([f'{theme} ({count})' for theme, count in list(theme_counts.items())[:3]]) if theme_counts else 'Credit market developments'}",
+                f"⏰ Analysis period: Last 24 hours (as of {now.strftime('%Y-%m-%d %H:%M UTC')})"
+            ],
+            
+            "market_insights": detailed_analysis[:3] if detailed_analysis else [
+                f"Recent activity shows {len(past_24_hours)} significant credit market developments",
+                f"Primary coverage from: {', '.join(list(source_counts.keys())[:3])}",
+                f"Market focus areas: {', '.join(list(category_counts.keys())[:3])}",
+                f"Key themes emerging: {', '.join(list(theme_counts.keys())[:3]) if theme_counts else 'General market activity'}",
+                "Credit market conditions reflect real-time developments and immediate market responses",
+                "Investment implications based on current market intelligence"
+            ],
+            
+            "articles_analyzed": len(past_24_hours),
+            "analysis_period": "Past 24 hours only",
+            "timestamp": datetime.now().isoformat(),
+            "data_freshness": "Real-time analysis of latest articles",
+            "key_headlines": key_headlines if key_headlines else []
+        }
         
         return jsonify({
             "success": True,
@@ -1790,371 +1801,6 @@ def get_current_chat():
             "success": False,
             "error": str(e)
         }), 500
-
-# MARK: - iOS App Chat Endpoints (user-chats and user-messages)
-
-# User chat storage (in production, this would be a database)
-user_chats_storage = {}
-user_messages_storage = {}
-
-@app.route('/api/user-chats', methods=['GET'])
-def get_user_chats():
-    """Get all chats for a specific user (iOS app endpoint)"""
-    try:
-        email = request.args.get('email')
-        if not email:
-            return jsonify({
-                "success": False,
-                "error": "Email parameter required"
-            }), 400
-        
-        print(f"📱 Fetching chats for user: {email}")
-        
-        # Get chats for this user
-        user_chats = user_chats_storage.get(email, [])
-        
-        print(f"📱 Found {len(user_chats)} chats for {email}")
-        
-        return jsonify({
-            "success": True,
-            "chats": user_chats
-        })
-        
-    except Exception as e:
-        print(f"❌ Error fetching user chats: {e}")
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 500
-
-@app.route('/api/user-chats', methods=['POST'])
-def save_user_chats():
-    """Save chats for a specific user (iOS app endpoint)"""
-    try:
-        data = request.get_json()
-        email = data.get('email')
-        chats = data.get('chats', [])
-        
-        if not email:
-            return jsonify({
-                "success": False,
-                "error": "Email parameter required"
-            }), 400
-        
-        print(f"💾 Saving {len(chats)} chats for user: {email}")
-        
-        # Store chats for this user
-        user_chats_storage[email] = chats
-        
-        # Also sync chats to other participants
-        for chat in chats:
-            for participant_id in chat.get('participants', []):
-                # Find participant email
-                participant_email = get_user_email_by_id(participant_id)
-                if participant_email and participant_email != email:
-                    print(f"🔄 Syncing chat '{chat.get('name', 'Unknown')}' to {participant_email}")
-                    sync_chat_to_user(chat, participant_email)
-        
-        return jsonify({
-            "success": True,
-            "message": f"Saved {len(chats)} chats for {email}"
-        })
-        
-    except Exception as e:
-        print(f"❌ Error saving user chats: {e}")
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 500
-
-@app.route('/api/user-messages', methods=['GET'])
-def get_user_messages():
-    """Get messages for a specific chat (iOS app endpoint)"""
-    try:
-        chat_id = request.args.get('chat_id')
-        if not chat_id:
-            return jsonify({
-                "success": False,
-                "error": "chat_id parameter required"
-            }), 400
-        
-        print(f"📱 Fetching messages for chat: {chat_id}")
-        
-        # Get messages for this chat
-        messages = user_messages_storage.get(chat_id, [])
-        
-        print(f"📱 Found {len(messages)} messages for chat {chat_id}")
-        
-        return jsonify({
-            "success": True,
-            "messages": messages
-        })
-        
-    except Exception as e:
-        print(f"❌ Error fetching user messages: {e}")
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 500
-
-@app.route('/api/user-messages', methods=['POST'])
-def save_user_messages():
-    """Save messages for a specific chat (iOS app endpoint)"""
-    try:
-        data = request.get_json()
-        chat_id = data.get('chat_id')
-        messages = data.get('messages', [])
-        
-        if not chat_id:
-            return jsonify({
-                "success": False,
-                "error": "chat_id parameter required"
-            }), 400
-        
-        print(f"💾 Saving {len(messages)} messages for chat: {chat_id}")
-        
-        # Store messages for this chat
-        user_messages_storage[chat_id] = messages
-        
-        return jsonify({
-            "success": True,
-            "message": f"Saved {len(messages)} messages for chat {chat_id}"
-        })
-        
-    except Exception as e:
-        print(f"❌ Error saving user messages: {e}")
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 500
-
-def get_user_email_by_id(user_id):
-    """Get user email by user ID"""
-    for email, profile in user_profiles.items():
-        if profile.get('id') == user_id:
-            return email
-    return None
-
-def sync_chat_to_user(chat, user_email):
-    """Sync a chat to another user's chat list"""
-    try:
-        if user_email not in user_chats_storage:
-            user_chats_storage[user_email] = []
-        
-        # Check if chat already exists for this user
-        existing_chats = user_chats_storage[user_email]
-        chat_exists = any(existing_chat.get('id') == chat.get('id') for existing_chat in existing_chats)
-        
-        if not chat_exists:
-            user_chats_storage[user_email].append(chat)
-            print(f"✅ Synced chat '{chat.get('name', 'Unknown')}' to {user_email}")
-        else:
-            print(f"ℹ️ Chat '{chat.get('name', 'Unknown')}' already exists for {user_email}")
-            
-    except Exception as e:
-        print(f"❌ Error syncing chat to user {user_email}: {e}")
-
-# MARK: - Task Management API Endpoints
-
-# Task storage (in production, this would be a database)
-user_tasks_storage = {}
-
-@app.route('/api/user-tasks', methods=['GET'])
-def get_user_tasks():
-    """Get all tasks for a specific user (iOS app endpoint)"""
-    try:
-        email = request.args.get('email')
-        if not email:
-            return jsonify({
-                "success": False,
-                "error": "Email parameter required"
-            }), 400
-        
-        print(f"📋 Fetching tasks for user: {email}")
-        
-        # Get tasks for this user
-        user_tasks = user_tasks_storage.get(email, [])
-        
-        print(f"📋 Found {len(user_tasks)} tasks for {email}")
-        
-        return jsonify({
-            "success": True,
-            "tasks": user_tasks
-        })
-        
-    except Exception as e:
-        print(f"❌ Error fetching user tasks: {e}")
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 500
-
-@app.route('/api/user-tasks', methods=['POST'])
-def save_user_tasks():
-    """Save tasks for a specific user (iOS app endpoint)"""
-    try:
-        data = request.get_json()
-        email = data.get('email')
-        tasks = data.get('tasks', [])
-        
-        if not email:
-            return jsonify({
-                "success": False,
-                "error": "Email parameter required"
-            }), 400
-        
-        print(f"💾 Saving {len(tasks)} tasks for user: {email}")
-        
-        # Store tasks for this user
-        user_tasks_storage[email] = tasks
-        
-        # Sync tasks to assigned users
-        for task in tasks:
-            assigned_to = task.get('assignedTo')
-            if assigned_to and assigned_to != get_user_id_by_email(email):
-                assigned_email = get_user_email_by_id(assigned_to)
-                if assigned_email and assigned_email != email:
-                    print(f"🔄 Syncing task '{task.get('title', 'Unknown')}' to {assigned_email}")
-                    sync_task_to_user(task, assigned_email)
-        
-        return jsonify({
-            "success": True,
-            "message": f"Saved {len(tasks)} tasks for {email}"
-        })
-        
-    except Exception as e:
-        print(f"❌ Error saving user tasks: {e}")
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 500
-
-@app.route('/api/user-tasks/assign', methods=['POST'])
-def assign_task():
-    """Assign a task to another user"""
-    try:
-        data = request.get_json()
-        task_id = data.get('task_id')
-        assigned_to = data.get('assignedTo')
-        assigned_by = data.get('assignedBy')
-        
-        if not all([task_id, assigned_to, assigned_by]):
-            return jsonify({
-                "success": False,
-                "error": "task_id, assignedTo, and assignedBy parameters required"
-            }), 400
-        
-        print(f"📋 Assigning task {task_id} to {assigned_to} by {assigned_by}")
-        
-        # Find the task in all user storage
-        task_found = False
-        for email, tasks in user_tasks_storage.items():
-            for task in tasks:
-                if task.get('id') == task_id:
-                    task['assignedTo'] = assigned_to
-                    task['assignedBy'] = assigned_by
-                    task['updatedAt'] = datetime.now().isoformat()
-                    task_found = True
-                    
-                    # Sync to assigned user
-                    assigned_email = get_user_email_by_id(assigned_to)
-                    if assigned_email:
-                        sync_task_to_user(task, assigned_email)
-                    break
-        
-        if not task_found:
-            return jsonify({
-                "success": False,
-                "error": "Task not found"
-            }), 404
-        
-        return jsonify({
-            "success": True,
-            "message": f"Task assigned to {assigned_to}"
-        })
-        
-    except Exception as e:
-        print(f"❌ Error assigning task: {e}")
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 500
-
-@app.route('/api/user-tasks/complete', methods=['POST'])
-def complete_task():
-    """Mark a task as completed"""
-    try:
-        data = request.get_json()
-        task_id = data.get('task_id')
-        user_email = data.get('user_email')
-        
-        if not all([task_id, user_email]):
-            return jsonify({
-                "success": False,
-                "error": "task_id and user_email parameters required"
-            }), 400
-        
-        print(f"✅ Completing task {task_id} for user {user_email}")
-        
-        # Find and update the task
-        task_found = False
-        for email, tasks in user_tasks_storage.items():
-            for task in tasks:
-                if task.get('id') == task_id:
-                    task['isCompleted'] = True
-                    task['completedAt'] = datetime.now().isoformat()
-                    task['updatedAt'] = datetime.now().isoformat()
-                    task_found = True
-                    break
-        
-        if not task_found:
-            return jsonify({
-                "success": False,
-                "error": "Task not found"
-            }), 404
-        
-        return jsonify({
-            "success": True,
-            "message": "Task completed successfully"
-        })
-        
-    except Exception as e:
-        print(f"❌ Error completing task: {e}")
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 500
-
-def get_user_id_by_email(email):
-    """Get user ID by email"""
-    for user_email, profile in user_profiles.items():
-        if user_email == email:
-            return profile.get('id')
-    return None
-
-def sync_task_to_user(task, user_email):
-    """Sync a task to another user's task list"""
-    try:
-        if user_email not in user_tasks_storage:
-            user_tasks_storage[user_email] = []
-        
-        # Check if task already exists for this user
-        existing_tasks = user_tasks_storage[user_email]
-        task_exists = any(existing_task.get('id') == task.get('id') for existing_task in existing_tasks)
-        
-        if not task_exists:
-            user_tasks_storage[user_email].append(task)
-            print(f"✅ Synced task '{task.get('title', 'Unknown')}' to {user_email}")
-        else:
-            # Update existing task
-            for i, existing_task in enumerate(existing_tasks):
-                if existing_task.get('id') == task.get('id'):
-                    user_tasks_storage[user_email][i] = task
-                    print(f"🔄 Updated task '{task.get('title', 'Unknown')}' for {user_email}")
-                    break
-            
-    except Exception as e:
-        print(f"❌ Error syncing task to user {user_email}: {e}")
 
 def store_memory(key, value, memory_type='learned_knowledge', user_id=None):
     """Store information in AI memory with categorization"""
@@ -2747,8 +2393,8 @@ def handle_ai_assistant_text_only():
         # Store the interaction in memory system
         store_interaction(message, ai_response['text'], ai_response['type'], ai_response['confidence'])
         
-        # Return response in expected format (support both iOS and other clients)
-        return jsonify({
+        # Build response (support both iOS and other clients)
+        response_payload = {
             "success": True,
             "text": ai_response['text'],  # iOS app expects 'text'
             "response": ai_response['text'],  # Alternative key for compatibility
@@ -2756,7 +2402,21 @@ def handle_ai_assistant_text_only():
             "confidence": ai_response['confidence'],
             "sources": ai_response.get('sources', []),
             "actions": ai_response.get('actions', [])
-        })
+        }
+        
+        # If this is a CV formatting response and we only have text containing HTML,
+        # expose html_content and a sensible default filename so clients can download/share cleanly
+        try:
+            if ai_response.get('type') == 'cv_format':
+                text_lower = (ai_response.get('text') or '').lower()
+                if ('<html' in text_lower) or ('<head' in text_lower) or ('<body' in text_lower):
+                    response_payload['html_content'] = ai_response.get('text')
+                    response_payload['download_filename'] = 'formatted_cv.html'
+        except Exception:
+            # Non-fatal; keep base payload
+            pass
+        
+        return jsonify(response_payload)
         
     except Exception as e:
         print(f"❌ Error in text-only AI assistant: {e}")
@@ -2872,210 +2532,50 @@ def handle_ai_assistant_with_attachments():
             "error": f"Attachment processing error: {str(e)}"
         }), 500
 
-@app.route('/api/call-notes/summary', methods=['POST'])
-def call_notes_summary():
-    """Generate AI summary for call notes using custom AI assistant (NO OpenAI)"""
+@app.route('/api/ai/chat', methods=['POST'])
+def ai_chat():
+    """AI Chat endpoint for call note transcript summarization"""
     try:
         data = request.get_json()
-        transcript = data.get('transcript', '')
+        message = data.get('message', '')
+        user_id = data.get('user_id', 'system')
         context = data.get('context', {})
         
-        if not transcript:
+        if not message:
             return jsonify({
                 "success": False,
-                "error": "No transcript provided"
+                "error": "No message provided"
             }), 400
         
-        print(f"🎙️ Call Notes Summary processing transcript: {transcript[:100]}...")
+        print(f"🎙️ AI Chat processing call transcript: {message[:100]}...")
+        print(f"🎙️ User ID: {user_id}")
         
-        # Use custom AI assistant for call notes (NO OpenAI)
-        ai_response = process_call_transcript_summary(transcript, context)
+        # Check if this is a call transcript
+        is_call_transcript = context.get('type') == 'call_notes' or 'transcript' in message.lower()
         
+        if is_call_transcript:
+            # Process as call transcript summary
+            ai_response = process_call_transcript(message, context)
+        else:
+            # Process as regular AI query
+            ai_response = process_ai_query(message, context)
+        
+        # Return response in expected format for Call Notes
         return jsonify({
             "success": True,
-            "summary": ai_response['summary'],
-            "key_points": ai_response['key_points'],
-            "action_items": ai_response['action_items'],
-            "participants": ai_response['participants'],
-            "duration": ai_response.get('duration'),
-            "sentiment": ai_response.get('sentiment', 'neutral'),
-            "confidence": ai_response.get('confidence', 0.8),
-            "ai_model": "Custom Mawney AI Assistant"
+            "response": ai_response['text'],
+            "type": ai_response['type'],
+            "confidence": ai_response['confidence'],
+            "sources": ai_response.get('sources', []),
+            "actions": ai_response.get('actions', [])
         })
         
     except Exception as e:
-        print(f"❌ Error in call notes summary: {e}")
+        print(f"❌ Error in AI chat: {e}")
         return jsonify({
             "success": False,
-            "error": f"Call notes summary error: {str(e)}"
+            "error": f"AI chat error: {str(e)}"
         }), 500
-
-def process_call_transcript_summary(transcript, context):
-    """Process call transcript with intelligent content analysis"""
-    try:
-        print(f"🎙️ Processing call transcript: {len(transcript)} characters")
-        
-        # Extract participants from transcript
-        participants = []
-        lines = transcript.split('\n')
-        for line in lines:
-            if ':' in line:
-                participant = line.split(':')[0].strip()
-                if participant and participant not in participants and len(participant) < 50:
-                    participants.append(participant)
-        
-        # Analyze transcript content intelligently
-        transcript_lower = transcript.lower()
-        
-        # Generate intelligent summary based on content
-        summary_parts = []
-        
-        # Detect meeting type
-        if any(word in transcript_lower for word in ['project', 'deliverable', 'milestone']):
-            meeting_type = "Project Review"
-        elif any(word in transcript_lower for word in ['client', 'customer', 'prospect']):
-            meeting_type = "Client Meeting"
-        elif any(word in transcript_lower for word in ['team', 'staff', 'employee']):
-            meeting_type = "Team Meeting"
-        elif any(word in transcript_lower for word in ['budget', 'cost', 'financial']):
-            meeting_type = "Financial Review"
-        else:
-            meeting_type = "General Discussion"
-        
-        summary_parts.append(f"Meeting Type: {meeting_type}")
-        
-        # Extract key discussion topics
-        topics = []
-        if 'project' in transcript_lower:
-            topics.append("Project updates and status")
-        if 'budget' in transcript_lower or 'cost' in transcript_lower:
-            topics.append("Budget and financial matters")
-        if 'timeline' in transcript_lower or 'deadline' in transcript_lower:
-            topics.append("Timeline and deadlines")
-        if 'risk' in transcript_lower or 'issue' in transcript_lower:
-            topics.append("Risk assessment and issues")
-        if 'next step' in transcript_lower or 'follow up' in transcript_lower:
-            topics.append("Next steps and follow-up")
-        
-        if topics:
-            summary_parts.append(f"Key Topics: {', '.join(topics)}")
-        
-        # Generate executive summary
-        executive_summary = f"This {meeting_type.lower()} covered {len(topics)} main topics including {topics[0] if topics else 'general discussion'}."
-        if participants:
-            executive_summary += f" Participants included {', '.join(participants[:3])}{' and others' if len(participants) > 3 else ''}."
-        
-        # Extract key points from actual content
-        key_points = []
-        
-        # Look for specific statements and decisions
-        for line in lines:
-            line_lower = line.lower()
-            if any(word in line_lower for word in ['decided', 'agreed', 'concluded', 'determined']):
-                key_points.append(f"Decision: {line.strip()}")
-            elif any(word in line_lower for word in ['important', 'critical', 'key', 'main']):
-                key_points.append(f"Key Point: {line.strip()}")
-            elif any(word in line_lower for word in ['concern', 'issue', 'problem', 'challenge']):
-                key_points.append(f"Issue Raised: {line.strip()}")
-        
-        # If no specific key points found, extract meaningful statements
-        if not key_points:
-            meaningful_lines = [line.strip() for line in lines if len(line.strip()) > 20 and ':' in line]
-            key_points = [f"Discussion: {line}" for line in meaningful_lines[:3]]
-        
-        # Extract action items from actual content
-        action_items = []
-        
-        for line in lines:
-            line_lower = line.lower()
-            if any(word in line_lower for word in ['will', 'need to', 'should', 'must', 'action']):
-                if any(word in line_lower for word in ['follow up', 'send', 'schedule', 'review', 'update', 'meet']):
-                    action_items.append(f"Action: {line.strip()}")
-            elif any(word in line_lower for word in ['next week', 'tomorrow', 'by friday', 'deadline']):
-                action_items.append(f"Timeline: {line.strip()}")
-        
-        # If no specific action items found, look for commitments
-        if not action_items:
-            for line in lines:
-                if any(word in line.lower() for word in ['i will', 'we will', 'let me', 'i can']):
-                    action_items.append(f"Commitment: {line.strip()}")
-        
-        # Fallback action items if none found
-        if not action_items:
-            action_items = ["Follow up on discussed items", "Schedule next meeting if needed"]
-        
-        return {
-            "summary": executive_summary,
-            "key_points": key_points[:5],  # Limit to top 5
-            "action_items": action_items[:5],  # Limit to top 5
-            "participants": participants,
-            "duration": estimate_duration_from_transcript(transcript),
-            "sentiment": "neutral",
-            "confidence": 0.9,
-            "ai_model": "Custom Mawney AI Assistant"
-        }
-        
-    except Exception as e:
-        print(f"❌ Error processing call transcript: {e}")
-        return {
-            "summary": f"Error processing transcript: {str(e)}",
-            "key_points": ["Error occurred during processing"],
-            "action_items": ["Please try again"],
-            "participants": [],
-            "duration": None,
-            "sentiment": "neutral",
-            "confidence": 0.0,
-            "ai_model": "Custom Mawney AI Assistant"
-        }
-
-def parse_call_summary_response(response_text):
-    """Parse AI response into structured call summary"""
-    lines = response_text.split('\n')
-    summary = ""
-    key_points = []
-    action_items = []
-    participants = []
-    
-    current_section = ""
-    
-    for line in lines:
-        trimmed = line.strip()
-        
-        if "summary" in trimmed.lower() or "overview" in trimmed.lower():
-            current_section = "summary"
-        elif "key point" in trimmed.lower():
-            current_section = "keyPoints"
-        elif "action" in trimmed.lower():
-            current_section = "actionItems"
-        elif "participant" in trimmed.lower():
-            current_section = "participants"
-        elif trimmed.startswith("•") or trimmed.startswith("-") or trimmed.startswith("*"):
-            point = trimmed[1:].strip()
-            if current_section == "keyPoints":
-                key_points.append(point)
-            elif current_section == "actionItems":
-                action_items.append(point)
-            elif current_section == "participants":
-                participants.append(point)
-        elif trimmed and current_section == "summary":
-            summary += trimmed + " "
-    
-    # Fallback if parsing didn't work well
-    if not summary:
-        summary = response_text[:200] + "..."
-    if not key_points:
-        key_points = ["See summary above"]
-    if not action_items:
-        action_items = ["No specific actions identified"]
-    
-    return summary.strip(), key_points, action_items, participants
-
-def estimate_duration_from_transcript(transcript):
-    """Estimate call duration from transcript length"""
-    word_count = len(transcript.split())
-    # Assume 150 words per minute
-    estimated_minutes = word_count / 150
-    return estimated_minutes * 60  # Return in seconds
 
 def process_call_transcript(transcript, context):
     """Process call transcript and generate structured summary"""
@@ -3264,142 +2764,6 @@ def download_cv(filename):
             'success': False,
             'error': f'Download error: {str(e)}'
         }), 500
-
-def generate_openai_daily_summary(articles, sources, categories, category_counts, source_counts, theme_counts, now):
-    """Generate daily summary using OpenAI API"""
-    try:
-        import openai
-        
-        # Check if OpenAI API key is available
-        openai_key = os.getenv('OPENAI_API_KEY')
-        if not openai_key:
-            print("⚠️ OpenAI API key not found, falling back to basic summary")
-            return generate_basic_daily_summary(articles, sources, categories, category_counts, source_counts, theme_counts, now)
-        
-        print(f"🔑 OpenAI API key found: {openai_key[:10]}...")
-        
-        # Prepare article data for OpenAI
-        article_texts = []
-        for article in articles[:10]:  # Limit to top 10 articles
-            title = article.get('title', '')
-            content = article.get('content', '')
-            source = article.get('source', '')
-            article_texts.append(f"Title: {title}\nSource: {source}\nContent: {content[:500]}...")
-        
-        articles_text = "\n\n".join(article_texts)
-        
-        # Create OpenAI prompt
-        prompt = f"""
-        You are a financial analyst specializing in credit markets and private debt. 
-        Analyze the following articles from the past 24 hours and provide a comprehensive summary.
-        
-        ARTICLES TO ANALYZE:
-        {articles_text}
-        
-        Please provide:
-        1. Executive Summary (2-3 sentences about the overall market situation)
-        2. Key Points (5-7 bullet points highlighting the most important developments)
-        3. Market Insights (3-4 insights about credit market implications)
-        4. Key Headlines (list of the most significant headlines)
-        
-        Focus on:
-        - Credit market developments
-        - Private debt and direct lending
-        - Corporate credit and bond markets
-        - Interest rate implications
-        - M&A activity affecting credit
-        - Regulatory changes
-        
-        Format as JSON with these keys: executive_summary, key_points, market_insights, key_headlines
-        """
-        
-        # Call OpenAI API
-        print("🤖 Calling OpenAI API...")
-        client = openai.OpenAI(api_key=openai_key)
-        
-        response = client.chat.completions.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": "You are a financial analyst specializing in credit markets. Provide structured, professional analysis."},
-                {"role": "user", "content": prompt}
-            ],
-            max_tokens=1500,
-            temperature=0.3
-        )
-        
-        print("✅ OpenAI API call successful")
-        
-        ai_response = response.choices[0].message.content
-        
-        # Try to parse JSON response
-        try:
-            import json
-            parsed_response = json.loads(ai_response)
-            print("✅ Successfully parsed OpenAI JSON response")
-            
-            return {
-                "executive_summary": parsed_response.get("executive_summary", "Market analysis completed"),
-                "key_points": parsed_response.get("key_points", ["Analysis in progress"]),
-                "market_insights": parsed_response.get("market_insights", ["Market insights being processed"]),
-                "key_headlines": parsed_response.get("key_headlines", ["Headlines being analyzed"]),
-                "articles_analyzed": len(articles),
-                "analysis_period": "Past 24 hours only",
-                "timestamp": now.isoformat(),
-                "data_freshness": "AI-powered analysis of latest articles",
-                "ai_model": "GPT-4"
-            }
-        except json.JSONDecodeError as json_error:
-            print(f"⚠️ JSON parsing failed: {json_error}")
-            print(f"Raw AI response: {ai_response[:200]}...")
-            # If JSON parsing fails, use the raw response
-            return {
-                "executive_summary": ai_response[:200] + "...",
-                "key_points": ["AI analysis completed", "See executive summary for details"],
-                "market_insights": ["AI-powered insights generated", "Based on latest market data"],
-                "key_headlines": [article.get('title', '')[:50] + "..." for article in articles[:5]],
-                "articles_analyzed": len(articles),
-                "analysis_period": "Past 24 hours only",
-                "timestamp": now.isoformat(),
-                "data_freshness": "AI-powered analysis of latest articles",
-                "ai_model": "GPT-4"
-            }
-            
-    except Exception as e:
-        print(f"❌ OpenAI API error: {e}")
-        print("🔄 Falling back to basic summary")
-        return generate_basic_daily_summary(articles, sources, categories, category_counts, source_counts, theme_counts, now)
-
-def generate_basic_daily_summary(articles, sources, categories, category_counts, source_counts, theme_counts, now):
-    """Fallback basic summary when OpenAI is not available"""
-    key_headlines = [f"• {article.get('title', '')} ({article.get('source', '')})" for article in articles[:5]]
-    
-    return {
-        "executive_summary": f"24-Hour Credit Market Summary: {len(articles)} key developments from {len(sources)} sources. Focus areas: {', '.join(list(category_counts.keys())[:2])} with {', '.join(list(theme_counts.keys())[:2]) if theme_counts else 'credit market activity'}.",
-        
-        "key_points": key_headlines[:5] if key_headlines else [
-            f"📊 {len(articles)} articles analyzed from past 24 hours",
-            f"📰 Top sources: {', '.join([f'{src} ({count})' for src, count in list(source_counts.items())[:3]])}",
-            f"📈 Market sectors: {', '.join([f'{cat} ({count})' for cat, count in list(category_counts.items())[:3]])}",
-            f"🎯 Key themes: {', '.join([f'{theme} ({count})' for theme, count in list(theme_counts.items())[:3]]) if theme_counts else 'Credit market developments'}",
-            f"⏰ Analysis period: Last 24 hours (as of {now.strftime('%Y-%m-%d %H:%M UTC')})"
-        ],
-        
-        "market_insights": [
-            f"Recent activity shows {len(articles)} significant credit market developments",
-            f"Primary coverage from: {', '.join(list(source_counts.keys())[:3])}",
-            f"Market focus areas: {', '.join(list(category_counts.keys())[:3])}",
-            f"Key themes emerging: {', '.join(list(theme_counts.keys())[:3]) if theme_counts else 'General market activity'}",
-            "Credit market conditions reflect real-time developments and immediate market responses",
-            "Investment implications based on current market intelligence"
-        ],
-        
-        "articles_analyzed": len(articles),
-        "analysis_period": "Past 24 hours only",
-        "timestamp": now.isoformat(),
-        "data_freshness": "Real-time analysis of latest articles",
-        "key_headlines": key_headlines if key_headlines else [],
-        "ai_model": "Basic Analysis"
-    }
 
 if __name__ == '__main__':
     # Force restart to pick up new template and text parsing fixes
