@@ -2180,18 +2180,8 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
         if sections_found:
             response += f"**Sections Identified:** {', '.join(sections_found)}\n\n"
         
-        # Add preview (truncated)
-        response += "**Preview:**\n"
-        response += "```\n"
-        text_preview = formatted_result.get('text_version', '')[:500]
-        response += text_preview
-        if len(formatted_result.get('text_version', '')) > 500:
-            response += "\n... [truncated - full version in downloadable file]"
-        response += "\n```\n\n"
-        
-        # Instrumentation details for debugging
-        response += f"**Debug:** formatter={formatted_result.get('formatter_used','unknown')}, extracted_text_length={len(cv_content)}, visible_text_count={visible_text_count}\n\n"
-        response += f"**Extracted Preview (first 600 chars):**\n{cv_content[:600].replace('\n',' ')}\n\n"
+        # Keep response brief; download contains full content
+        response += "I have formatted your CV using the Mawney template. Use the button below to download as PDF.\n\n"
         
         # Add download instructions
         response += "💡 **Next Steps:**\n"
