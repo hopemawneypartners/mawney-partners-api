@@ -2122,6 +2122,35 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
                 return html or ""
 
         html_content = _sanitize_html_for_ios_print(html_content)
+        
+        # Ensure MP logos present by embedding base64 if missing
+        try:
+            import os, base64
+            def _read_logo_b64(name: str) -> str:
+                try:
+                    assets_dir = os.path.join(os.path.dirname(__file__), 'assets')
+                    filepath = os.path.join(assets_dir, name)
+                    with open(filepath, 'rb') as f:
+                        return base64.b64encode(f.read()).decode('utf-8')
+                except Exception:
+                    return ''
+            has_logo = ('data:image' in (html_content or '')) or ('class="logo"' in (html_content or ''))
+            if not has_logo:
+                top_b64 = _read_logo_b64('cv logo 1.png')
+                bot_b64 = _read_logo_b64('cv logo 2.png')
+                header = f"<div class=\"logo\" style=\"text-align:center;margin-bottom:20px\"><img alt=\"Logo\" style=\"height:40px\" src=\"data:image/png;base64,{top_b64}\"></div>" if top_b64 else ''
+                footer = f"<div class=\"logo\" style=\"text-align:center;margin-top:20px\"><img alt=\"Logo\" style=\"height:40px\" src=\"data:image/png;base64,{bot_b64}\"></div>" if bot_b64 else ''
+                if '<body>' in html_content:
+                    html_content = html_content.replace('<body>', '<body>' + header)
+                else:
+                    html_content = header + (html_content or '')
+                if '</body>' in html_content:
+                    html_content = html_content.replace('</body>', footer + '</body>')
+                else:
+                    html_content = (html_content or '') + footer
+        except Exception:
+            pass
+
         formatted_result['html_content'] = html_content
         
         # Compute visible text count for instrumentation
