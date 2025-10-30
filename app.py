@@ -2410,8 +2410,11 @@ def handle_ai_assistant_text_only():
             if ai_response.get('type') == 'cv_format':
                 text_lower = (ai_response.get('text') or '').lower()
                 if ('<html' in text_lower) or ('<head' in text_lower) or ('<body' in text_lower):
+                    # Move raw HTML out of the chat text and into html_content
                     response_payload['html_content'] = ai_response.get('text')
                     response_payload['download_filename'] = 'formatted_cv.html'
+                    # Replace text with a concise message so the UI doesn't display raw HTML
+                    response_payload['text'] = 'Your formatted CV is ready. Use the download/share action to open it.'
         except Exception:
             # Non-fatal; keep base payload
             pass
