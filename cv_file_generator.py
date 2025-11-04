@@ -132,29 +132,44 @@ class CVFileGenerator:
                     'enable-local-file-access': None
                 }
                 pdfkit.from_string(html_content, filepath, options=options)
-                logger.info(f"Generated PDF via pdfkit: {filepath}")
+                if os.path.exists(filepath) and os.path.getsize(filepath) > 0:
+                    logger.info(f"✅ Generated PDF via pdfkit: {filepath} ({os.path.getsize(filepath)} bytes)")
+                else:
+                    raise RuntimeError("pdfkit created file but it's empty or missing")
+            except ImportError as e_pdfkit:
+                logger.warning(f"pdfkit not installed: {e_pdfkit}")
+                raise
             except Exception as e_pdfkit:
-                logger.warning(f"pdfkit failed or not available: {e_pdfkit}")
+                logger.warning(f"pdfkit failed: {type(e_pdfkit).__name__}: {e_pdfkit}")
                 # 2) Try WeasyPrint
                 try:
                     from weasyprint import HTML
                     HTML(string=html_content).write_pdf(filepath)
-                    logger.info(f"Generated PDF via WeasyPrint: {filepath}")
+                    if os.path.exists(filepath) and os.path.getsize(filepath) > 0:
+                        logger.info(f"✅ Generated PDF via WeasyPrint: {filepath} ({os.path.getsize(filepath)} bytes)")
+                    else:
+                        raise RuntimeError("WeasyPrint created file but it's empty or missing")
+                except ImportError as e_weasy:
+                    logger.warning(f"WeasyPrint not installed: {e_weasy}")
+                    raise
                 except Exception as e_weasy:
-                    logger.warning(f"WeasyPrint failed or not available: {e_weasy}")
+                    logger.warning(f"WeasyPrint failed: {type(e_weasy).__name__}: {e_weasy}")
                     # 3) Try xhtml2pdf (pure Python)
                     try:
                         from xhtml2pdf import pisa
                         with open(filepath, 'wb') as pdf_file:
                             pisa_status = pisa.CreatePDF(src=html_content, dest=pdf_file)
                         if pisa_status.err:
-                            raise RuntimeError("xhtml2pdf failed to create PDF")
-                        logger.info(f"Generated PDF via xhtml2pdf: {filepath}")
+                            raise RuntimeError(f"xhtml2pdf failed: {pisa_status.err}")
+                        if not os.path.exists(filepath) or os.path.getsize(filepath) == 0:
+                            raise RuntimeError("xhtml2pdf created file but it's empty or missing")
+                        logger.info(f"✅ Generated PDF via xhtml2pdf: {filepath} ({os.path.getsize(filepath)} bytes)")
+                    except ImportError as e_xhtml2pdf:
+                        logger.error(f"❌ xhtml2pdf not installed: {e_xhtml2pdf}")
+                        raise
                     except Exception as e_xhtml2pdf:
-                        logger.warning(f"xhtml2pdf failed or not available: {e_xhtml2pdf}")
-                        # Final fallback – return HTML file instead
-                        logger.warning("Falling back to HTML file generation for CV")
-                        return self.generate_html_file(html_content, filename.replace('.pdf', '.html'))
+                        logger.error(f"❌ xhtml2pdf failed: {type(e_xhtml2pdf).__name__}: {e_xhtml2pdf}")
+                        raise
 
             # At this point, a PDF should exist
             file_size = os.path.getsize(filepath)
@@ -169,10 +184,14 @@ class CVFileGenerator:
             }
             
         except Exception as e:
-            logger.error(f"Error generating PDF file: {e}")
+            logger.error(f"❌ All PDF generation methods failed: {type(e).__name__}: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
             return {
                 "success": False,
-                "error": str(e)
+                "format": "pdf",
+                "error": f"PDF generation failed: {str(e)}",
+                "error_type": type(e).__name__
             }
     
     def get_file_as_base64(self, filepath: str) -> Optional[str]:

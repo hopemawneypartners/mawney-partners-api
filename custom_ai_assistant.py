@@ -2306,32 +2306,39 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
         html_content = formatted_result.get('html_content', '')
         
         # Generate PDF file and get base64 content for direct download
-        # Try to generate PDF, fallback to HTML if pdfkit not available
-        file_result = cv_file_generator.generate_pdf_file(html_content, f"formatted_{filename.replace('.pdf', '')}")
-        # If generator couldn't create a PDF, fabricate an HTML file result so the app can still download
-        if not file_result.get('success'):
-            html_bytes = (html_content or '').encode('utf-8')
-            file_result = {
-                'success': True,
-                'format': 'html',
-                'filename': f"formatted_{filename.replace('.pdf', '')}.html",
-                'file_size': len(html_bytes),
-                'download_url': None
-            }
-        
-        # Get file as base64 for iOS app download
+        # MUST generate PDF server-side - never return raw HTML to iOS app
         import base64
+        import os
+        
+        file_result = cv_file_generator.generate_pdf_file(html_content, f"formatted_{filename.replace('.pdf', '')}")
+        
+        # Verify PDF was actually created
+        pdf_success = False
+        file_base64 = None
+        file_format = None
+        
         if file_result.get('success') and file_result.get('format') == 'pdf':
-            # PDF was generated successfully
-            with open(file_result.get('filepath'), 'rb') as f:
-                pdf_base64 = base64.b64encode(f.read()).decode('utf-8')
-            file_base64 = pdf_base64
-            file_format = 'pdf'
-        else:
-            # Fallback to HTML
-            html_base64 = base64.b64encode(html_content.encode('utf-8')).decode('utf-8')
-            file_base64 = html_base64
-            file_format = 'html'
+            filepath = file_result.get('filepath')
+            if filepath and os.path.exists(filepath):
+                try:
+                    with open(filepath, 'rb') as f:
+                        pdf_base64 = base64.b64encode(f.read()).decode('utf-8')
+                    file_base64 = pdf_base64
+                    file_format = 'pdf'
+                    pdf_success = True
+                    logger.info(f"✅ PDF generated successfully: {filepath} ({len(pdf_base64)} bytes base64)")
+                except Exception as e:
+                    logger.error(f"❌ Failed to read generated PDF: {e}")
+        
+        # If PDF generation failed, return error instead of HTML
+        if not pdf_success:
+            logger.error(f"❌ PDF generation failed. File result: {file_result}")
+            return {
+                "text": "I formatted your CV successfully, but encountered an error generating the PDF file. Please try again, or contact support if the issue persists.",
+                "has_file": False,
+                "error": "PDF generation failed",
+                "html_content": None  # Don't send HTML to iOS app
+            }
         
         # Create response
         response = "📄 **CV Formatted in Mawney Partners Style**\n\n"
@@ -2355,18 +2362,12 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
         # Keep response brief; download contains full content
         response += "I have formatted your CV using the Mawney template. Use the button below to download as PDF.\n\n"
         
-        # Add download instructions
+        # Add download instructions (PDF only)
         response += "💡 **Next Steps:**\n"
-        if file_format == 'pdf':
-            response += "• Download the PDF file above\n"
-            response += "• Open with any PDF viewer\n"
-            response += "• Print or share directly\n"
-            response += "• Edit if needed using a PDF editor\n\n"
-        else:
-            response += "• Download the HTML file above\n"
-            response += "• Open in your web browser\n"
-            response += "• Print to PDF or save directly\n"
-            response += "• Edit in your preferred document editor if needed\n\n"
+        response += "• Download the PDF file above\n"
+        response += "• Open with any PDF viewer\n"
+        response += "• Print or share directly\n"
+        response += "• Edit if needed using a PDF editor\n\n"
         
         response += "**Note:** This CV has been formatted with Garamond typography, your company logos (top & bottom), and professional Mawney Partners styling."
         
@@ -2379,7 +2380,8 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
             "filename": file_result.get('filename'),  # Keep for compatibility
             "file_format": file_format,
             "file_base64": file_base64,
-            "html_content": html_content,  # iOS app uses this to create PDF client-side
+            # Only include html_content if PDF generation failed (shouldn't happen now)
+            # "html_content": html_content,  # REMOVED - PDF should always be generated server-side
             "formatter_used": formatted_result.get('formatter_used', 'unknown'),
             "visible_text_count": visible_text_count,
             "extracted_text_length": len(cv_content)
