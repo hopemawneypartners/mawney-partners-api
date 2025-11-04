@@ -118,58 +118,78 @@ class CVFileGenerator:
                 filename += '.pdf'
             filepath = os.path.join(self.output_dir, filename)
 
-            # 1) Try pdfkit / wkhtmltopdf
+            # Try PDF generation methods in order, prioritize pure Python solutions for Render
+            pdf_generated = False
+            last_error = None
+            
+            # 1) Try xhtml2pdf FIRST (pure Python, no system dependencies, most reliable on Render)
             try:
-                import pdfkit
-                options = {
-                    'page-size': 'A4',
-                    'margin-top': '0.75in',
-                    'margin-right': '0.75in',
-                    'margin-bottom': '0.75in',
-                    'margin-left': '0.75in',
-                    'encoding': "UTF-8",
-                    'no-outline': None,
-                    'enable-local-file-access': None
-                }
-                pdfkit.from_string(html_content, filepath, options=options)
-                if os.path.exists(filepath) and os.path.getsize(filepath) > 0:
-                    logger.info(f"✅ Generated PDF via pdfkit: {filepath} ({os.path.getsize(filepath)} bytes)")
-                else:
-                    raise RuntimeError("pdfkit created file but it's empty or missing")
-            except ImportError as e_pdfkit:
-                logger.warning(f"pdfkit not installed: {e_pdfkit}")
-                raise
-            except Exception as e_pdfkit:
-                logger.warning(f"pdfkit failed: {type(e_pdfkit).__name__}: {e_pdfkit}")
-                # 2) Try WeasyPrint
+                from xhtml2pdf import pisa
+                with open(filepath, 'wb') as pdf_file:
+                    pisa_status = pisa.CreatePDF(src=html_content, dest=pdf_file)
+                if pisa_status.err:
+                    raise RuntimeError(f"xhtml2pdf failed: {pisa_status.err}")
+                if not os.path.exists(filepath) or os.path.getsize(filepath) == 0:
+                    raise RuntimeError("xhtml2pdf created file but it's empty or missing")
+                logger.info(f"✅ Generated PDF via xhtml2pdf: {filepath} ({os.path.getsize(filepath)} bytes)")
+                pdf_generated = True
+            except ImportError:
+                logger.info("xhtml2pdf not available, trying WeasyPrint...")
+                last_error = "xhtml2pdf not installed"
+            except Exception as e_xhtml2pdf:
+                logger.warning(f"xhtml2pdf failed: {type(e_xhtml2pdf).__name__}: {e_xhtml2pdf}")
+                last_error = f"xhtml2pdf failed: {str(e_xhtml2pdf)}"
+            
+            # 2) Try WeasyPrint (may need system dependencies on Render)
+            if not pdf_generated:
                 try:
                     from weasyprint import HTML
                     HTML(string=html_content).write_pdf(filepath)
                     if os.path.exists(filepath) and os.path.getsize(filepath) > 0:
                         logger.info(f"✅ Generated PDF via WeasyPrint: {filepath} ({os.path.getsize(filepath)} bytes)")
+                        pdf_generated = True
                     else:
                         raise RuntimeError("WeasyPrint created file but it's empty or missing")
-                except ImportError as e_weasy:
-                    logger.warning(f"WeasyPrint not installed: {e_weasy}")
-                    raise
+                except ImportError:
+                    logger.info("WeasyPrint not available, trying pdfkit...")
+                    if not last_error:
+                        last_error = "WeasyPrint not installed"
                 except Exception as e_weasy:
                     logger.warning(f"WeasyPrint failed: {type(e_weasy).__name__}: {e_weasy}")
-                    # 3) Try xhtml2pdf (pure Python)
-                    try:
-                        from xhtml2pdf import pisa
-                        with open(filepath, 'wb') as pdf_file:
-                            pisa_status = pisa.CreatePDF(src=html_content, dest=pdf_file)
-                        if pisa_status.err:
-                            raise RuntimeError(f"xhtml2pdf failed: {pisa_status.err}")
-                        if not os.path.exists(filepath) or os.path.getsize(filepath) == 0:
-                            raise RuntimeError("xhtml2pdf created file but it's empty or missing")
-                        logger.info(f"✅ Generated PDF via xhtml2pdf: {filepath} ({os.path.getsize(filepath)} bytes)")
-                    except ImportError as e_xhtml2pdf:
-                        logger.error(f"❌ xhtml2pdf not installed: {e_xhtml2pdf}")
-                        raise
-                    except Exception as e_xhtml2pdf:
-                        logger.error(f"❌ xhtml2pdf failed: {type(e_xhtml2pdf).__name__}: {e_xhtml2pdf}")
-                        raise
+                    last_error = f"WeasyPrint failed: {str(e_weasy)}"
+            
+            # 3) Try pdfkit / wkhtmltopdf (requires system binary, least likely to work on Render)
+            if not pdf_generated:
+                try:
+                    import pdfkit
+                    options = {
+                        'page-size': 'A4',
+                        'margin-top': '0.75in',
+                        'margin-right': '0.75in',
+                        'margin-bottom': '0.75in',
+                        'margin-left': '0.75in',
+                        'encoding': "UTF-8",
+                        'no-outline': None,
+                        'enable-local-file-access': None
+                    }
+                    pdfkit.from_string(html_content, filepath, options=options)
+                    if os.path.exists(filepath) and os.path.getsize(filepath) > 0:
+                        logger.info(f"✅ Generated PDF via pdfkit: {filepath} ({os.path.getsize(filepath)} bytes)")
+                        pdf_generated = True
+                except ImportError:
+                    logger.info("pdfkit not available")
+                    if not last_error:
+                        last_error = "pdfkit not installed"
+                except Exception as e_pdfkit:
+                    logger.warning(f"pdfkit failed: {type(e_pdfkit).__name__}: {e_pdfkit}")
+                    if not last_error:
+                        last_error = f"pdfkit failed: {str(e_pdfkit)}"
+            
+            # If all methods failed, raise an error
+            if not pdf_generated:
+                error_msg = f"All PDF generation methods failed. Last error: {last_error}"
+                logger.error(f"❌ {error_msg}")
+                raise RuntimeError(error_msg)
 
             # At this point, a PDF should exist
             file_size = os.path.getsize(filepath)
