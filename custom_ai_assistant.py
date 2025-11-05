@@ -2380,6 +2380,7 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
             "filename": file_result.get('filename'),  # Keep for compatibility
             "file_format": file_format,
             "file_base64": file_base64,
+            "html_base64": file_base64 if file_base64 else None,  # Also include as html_base64 for compatibility with iOS code (only if file_base64 exists)
             # Only include html_content if PDF generation failed (shouldn't happen now)
             # "html_content": html_content,  # REMOVED - PDF should always be generated server-side
             "formatter_used": formatted_result.get('formatter_used', 'unknown'),
