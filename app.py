@@ -2817,7 +2817,7 @@ def validate_compensation(comp):
     
     # Validate currency
     if 'currency' in comp:
-        valid_currencies = ['USD', 'GBP']
+        valid_currencies = ['USD', 'GBP', 'EUR']
         if comp['currency'] not in valid_currencies:
             errors.append(f'currency must be one of: {", ".join(valid_currencies)}')
     
@@ -2862,7 +2862,7 @@ def sanitize_compensation(comp):
     # Sanitize currency
     if 'currency' in comp:
         sanitized['currency'] = str(comp['currency']).upper()
-        if sanitized['currency'] not in ['USD', 'GBP']:
+        if sanitized['currency'] not in ['USD', 'GBP', 'EUR']:
             sanitized['currency'] = 'USD'
     
     # Sanitize person name
@@ -2870,7 +2870,7 @@ def sanitize_compensation(comp):
         sanitized['personName'] = re.sub(r'[<>"\']', '', str(comp['personName'])).strip()[:MAX_PERSON_NAME_LENGTH]
     
     # Preserve other fields
-    for key in ['id', 'addedDate', 'createdAt', 'updatedAt']:
+    for key in ['id', 'addedDate', 'createdAt', 'updatedAt', 'workflowData']:
         if key in comp:
             sanitized[key] = comp[key]
     
