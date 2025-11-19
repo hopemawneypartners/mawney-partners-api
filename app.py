@@ -113,6 +113,14 @@ user_saved_jobs = {}  # user_email -> saved_jobs
 # Shared compensation data (shared across all users)
 compensations = []  # List of compensation entries
 
+# Rate limiting for compensation endpoint
+compensation_rate_limits = {}  # email -> {count: int, reset_time: datetime}
+MAX_COMPENSATIONS_PER_REQUEST = 1000  # Maximum compensations that can be saved at once
+MAX_COMPENSATION_VALUE = 100000000  # Maximum salary/bonus value (100 million)
+MIN_COMPENSATION_VALUE = 0  # Minimum salary/bonus value
+MAX_JOB_TITLE_LENGTH = 200
+MAX_PERSON_NAME_LENGTH = 100
+
 # User-to-user chat storage
 user_chats = {}  # user_email -> list of chats
 user_messages = {}  # chat_id -> list of messages
@@ -2728,41 +2736,251 @@ def create_user_profile():
     """Create user profile endpoint"""
     return user_profile()
 
+def authenticate_user():
+    """Authenticate user by checking email in user_profiles"""
+    email = request.headers.get('X-User-Email') or request.args.get('email')
+    if not email:
+        return None, jsonify({
+            'success': False,
+            'error': 'Authentication required. Please provide user email.'
+        }), 401
+    
+    # Check if user exists in user_profiles
+    if email not in user_profiles:
+        return None, jsonify({
+            'success': False,
+            'error': 'Unauthorized. User not found.'
+        }), 403
+    
+    return email, None, None
+
+def check_rate_limit(email, max_requests=10, window_seconds=60):
+    """Check rate limiting for compensation endpoint"""
+    global compensation_rate_limits
+    
+    now = datetime.now()
+    
+    if email not in compensation_rate_limits:
+        compensation_rate_limits[email] = {
+            'count': 1,
+            'reset_time': now + timedelta(seconds=window_seconds)
+        }
+        return True, (None, None)
+    
+    rate_data = compensation_rate_limits[email]
+    
+    # Reset if window expired
+    if now > rate_data['reset_time']:
+        rate_data['count'] = 1
+        rate_data['reset_time'] = now + timedelta(seconds=window_seconds)
+        return True, (None, None)
+    
+    # Check if limit exceeded
+    if rate_data['count'] >= max_requests:
+        return False, (jsonify({
+            'success': False,
+            'error': f'Rate limit exceeded. Maximum {max_requests} requests per {window_seconds} seconds.'
+        }), 429)
+    
+    rate_data['count'] += 1
+    return True, (None, None)
+
+def validate_compensation(comp):
+    """Validate a single compensation entry"""
+    errors = []
+    
+    # Check required fields
+    if 'jobTitle' not in comp or not comp['jobTitle']:
+        errors.append('jobTitle is required')
+    elif len(comp['jobTitle']) > MAX_JOB_TITLE_LENGTH:
+        errors.append(f'jobTitle exceeds maximum length of {MAX_JOB_TITLE_LENGTH} characters')
+    
+    if 'baseSalary' not in comp:
+        errors.append('baseSalary is required')
+    else:
+        try:
+            base_salary = float(comp['baseSalary'])
+            if base_salary < MIN_COMPENSATION_VALUE or base_salary > MAX_COMPENSATION_VALUE:
+                errors.append(f'baseSalary must be between {MIN_COMPENSATION_VALUE} and {MAX_COMPENSATION_VALUE}')
+        except (ValueError, TypeError):
+            errors.append('baseSalary must be a valid number')
+    
+    if 'bonus' not in comp:
+        errors.append('bonus is required')
+    else:
+        try:
+            bonus = float(comp['bonus'])
+            if bonus < MIN_COMPENSATION_VALUE or bonus > MAX_COMPENSATION_VALUE:
+                errors.append(f'bonus must be between {MIN_COMPENSATION_VALUE} and {MAX_COMPENSATION_VALUE}')
+        except (ValueError, TypeError):
+            errors.append('bonus must be a valid number')
+    
+    # Validate currency
+    if 'currency' in comp:
+        valid_currencies = ['USD', 'GBP']
+        if comp['currency'] not in valid_currencies:
+            errors.append(f'currency must be one of: {", ".join(valid_currencies)}')
+    
+    # Validate person name (optional)
+    if 'personName' in comp and comp['personName']:
+        if len(comp['personName']) > MAX_PERSON_NAME_LENGTH:
+            errors.append(f'personName exceeds maximum length of {MAX_PERSON_NAME_LENGTH} characters')
+        # Sanitize person name - remove potentially dangerous characters
+        if not re.match(r'^[a-zA-Z0-9\s\-\'\.]+$', comp['personName']):
+            errors.append('personName contains invalid characters')
+    
+    # Validate dates
+    if 'addedDate' in comp:
+        try:
+            datetime.fromisoformat(comp['addedDate'].replace('Z', '+00:00'))
+        except (ValueError, AttributeError):
+            errors.append('addedDate must be a valid ISO 8601 date')
+    
+    return errors
+
+def sanitize_compensation(comp):
+    """Sanitize compensation data"""
+    sanitized = {}
+    
+    # Sanitize job title
+    if 'jobTitle' in comp:
+        sanitized['jobTitle'] = re.sub(r'[<>"\']', '', str(comp['jobTitle'])).strip()[:MAX_JOB_TITLE_LENGTH]
+    
+    # Sanitize numeric fields
+    if 'baseSalary' in comp:
+        try:
+            sanitized['baseSalary'] = float(comp['baseSalary'])
+        except (ValueError, TypeError):
+            sanitized['baseSalary'] = 0.0
+    
+    if 'bonus' in comp:
+        try:
+            sanitized['bonus'] = float(comp['bonus'])
+        except (ValueError, TypeError):
+            sanitized['bonus'] = 0.0
+    
+    # Sanitize currency
+    if 'currency' in comp:
+        sanitized['currency'] = str(comp['currency']).upper()
+        if sanitized['currency'] not in ['USD', 'GBP']:
+            sanitized['currency'] = 'USD'
+    
+    # Sanitize person name
+    if 'personName' in comp and comp['personName']:
+        sanitized['personName'] = re.sub(r'[<>"\']', '', str(comp['personName'])).strip()[:MAX_PERSON_NAME_LENGTH]
+    
+    # Preserve other fields
+    for key in ['id', 'addedDate', 'createdAt', 'updatedAt']:
+        if key in comp:
+            sanitized[key] = comp[key]
+    
+    return sanitized
+
 @app.route('/api/compensations', methods=['GET', 'POST'])
 def compensations_endpoint():
-    """Compensation data endpoint - shared across all users"""
+    """Compensation data endpoint - shared across all users with security"""
     global compensations
     
     try:
+        # Authentication check
+        email, auth_error, auth_status = authenticate_user()
+        if auth_error:
+            return auth_error, auth_status
+        
+        # Rate limiting check
+        allowed, rate_error = check_rate_limit(email, max_requests=20, window_seconds=60)
+        if not allowed:
+            error_response, status_code = rate_error
+            return error_response, status_code
+        
         if request.method == 'GET':
-            # Return all compensation data
+            # Return all compensation data (read-only, no validation needed)
             return jsonify({
                 'success': True,
-                'compensations': compensations
+                'compensations': compensations,
+                'count': len(compensations)
             })
         
         elif request.method == 'POST':
-            # Save compensation data (replace all)
+            # Save compensation data (replace all) - requires validation
             data = request.get_json()
-            if not data or 'compensations' not in data:
+            if not data:
+                return jsonify({
+                    'success': False,
+                    'error': 'Request body is required'
+                }), 400
+            
+            if 'compensations' not in data:
                 return jsonify({
                     'success': False,
                     'error': 'Compensations data required'
                 }), 400
             
-            compensations = data['compensations']
+            comps = data['compensations']
+            
+            # Validate array
+            if not isinstance(comps, list):
+                return jsonify({
+                    'success': False,
+                    'error': 'Compensations must be an array'
+                }), 400
+            
+            # Check size limit
+            if len(comps) > MAX_COMPENSATIONS_PER_REQUEST:
+                return jsonify({
+                    'success': False,
+                    'error': f'Maximum {MAX_COMPENSATIONS_PER_REQUEST} compensations allowed per request'
+                }), 400
+            
+            # Validate and sanitize each compensation entry
+            validated_comps = []
+            all_errors = []
+            
+            for idx, comp in enumerate(comps):
+                if not isinstance(comp, dict):
+                    all_errors.append(f'Entry {idx}: Must be an object')
+                    continue
+                
+                errors = validate_compensation(comp)
+                if errors:
+                    all_errors.extend([f'Entry {idx}: {error}' for error in errors])
+                    continue
+                
+                # Sanitize and add
+                sanitized = sanitize_compensation(comp)
+                validated_comps.append(sanitized)
+            
+            if all_errors:
+                return jsonify({
+                    'success': False,
+                    'error': 'Validation errors',
+                    'errors': all_errors
+                }), 400
+            
+            # All validations passed - update compensations
+            compensations = validated_comps
+            
+            # Log the update
+            print(f"✅ Compensation data updated by {email}: {len(validated_comps)} entries")
             
             return jsonify({
                 'success': True,
-                'message': f'Saved {len(compensations)} compensation entries',
-                'compensations': compensations
+                'message': f'Saved {len(validated_comps)} compensation entries',
+                'count': len(validated_comps)
             })
     
-    except Exception as e:
-        print(f"❌ Error in compensations endpoint: {e}")
+    except json.JSONDecodeError:
         return jsonify({
             'success': False,
-            'error': str(e)
+            'error': 'Invalid JSON in request body'
+        }), 400
+    except Exception as e:
+        print(f"❌ Error in compensations endpoint: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': 'Internal server error'
         }), 500
 
 @app.route('/api/download-cv/<filename>', methods=['GET'])
