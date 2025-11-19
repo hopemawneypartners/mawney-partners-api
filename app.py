@@ -110,6 +110,9 @@ user_todos = {}  # user_email -> todos
 user_call_notes = {}  # user_email -> call_notes
 user_saved_jobs = {}  # user_email -> saved_jobs
 
+# Shared compensation data (shared across all users)
+compensations = []  # List of compensation entries
+
 # User-to-user chat storage
 user_chats = {}  # user_email -> list of chats
 user_messages = {}  # chat_id -> list of messages
@@ -2410,11 +2413,8 @@ def handle_ai_assistant_text_only():
             if ai_response.get('type') == 'cv_format':
                 text_lower = (ai_response.get('text') or '').lower()
                 if ('<html' in text_lower) or ('<head' in text_lower) or ('<body' in text_lower):
-                    # Move raw HTML out of the chat text and into html_content
                     response_payload['html_content'] = ai_response.get('text')
                     response_payload['download_filename'] = 'formatted_cv.html'
-                    # Replace text with a concise message so the UI doesn't display raw HTML
-                    response_payload['text'] = 'Your formatted CV is ready. Use the download/share action to open it.'
         except Exception:
             # Non-fatal; keep base payload
             pass
@@ -2727,6 +2727,43 @@ def user_profile():
 def create_user_profile():
     """Create user profile endpoint"""
     return user_profile()
+
+@app.route('/api/compensations', methods=['GET', 'POST'])
+def compensations_endpoint():
+    """Compensation data endpoint - shared across all users"""
+    global compensations
+    
+    try:
+        if request.method == 'GET':
+            # Return all compensation data
+            return jsonify({
+                'success': True,
+                'compensations': compensations
+            })
+        
+        elif request.method == 'POST':
+            # Save compensation data (replace all)
+            data = request.get_json()
+            if not data or 'compensations' not in data:
+                return jsonify({
+                    'success': False,
+                    'error': 'Compensations data required'
+                }), 400
+            
+            compensations = data['compensations']
+            
+            return jsonify({
+                'success': True,
+                'message': f'Saved {len(compensations)} compensation entries',
+                'compensations': compensations
+            })
+    
+    except Exception as e:
+        print(f"❌ Error in compensations endpoint: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 @app.route('/api/download-cv/<filename>', methods=['GET'])
 def download_cv(filename):
