@@ -1673,9 +1673,11 @@ def get_ai_summary():
             try:
                 print(f"🤖 Generating AI summary for {len(past_24_hours)} articles using OpenAI...")
                 
-                prompt = f"""You are a credit markets analyst. Read the {num_articles_to_analyze} articles below and EXTRACT the actual key information from the most relevant ones.
+                prompt = f"""CRITICAL: You are a credit markets analyst. Read the {num_articles_to_analyze} articles below and EXTRACT the actual key information from the most relevant ones.
 
-DO NOT describe that articles exist. DO EXTRACT what actually happened in them.
+DO NOT write things like "5 articles analyzed" or "Top sources: Financial Times". 
+DO NOT describe that articles exist or summarize article counts.
+DO EXTRACT what actually happened in the articles - specific facts, developments, deals, people moves, market data.
 
 EXAMPLE OF WHAT TO DO:
 ❌ BAD: "Article about Blackstone raising funds"
