@@ -192,18 +192,30 @@ try:
     try:
         if DAILY_NEWS_AVAILABLE and hasattr(Config, 'OPENAI_API_KEY') and Config.OPENAI_API_KEY:
             api_key = Config.OPENAI_API_KEY
-    except:
+            print(f"📝 Found OpenAI API key in Config (length: {len(api_key) if api_key else 0})")
+    except Exception as config_error:
+        print(f"📝 Config check failed: {config_error}")
         pass
     
     # Fallback to environment variable
     if not api_key:
         api_key = os.getenv('OPENAI_API_KEY')
+        if api_key:
+            print(f"📝 Found OpenAI API key in environment (length: {len(api_key) if api_key else 0})")
+        else:
+            print("📝 OPENAI_API_KEY not found in environment variables")
     
-    if api_key:
-        openai_client = OpenAI(api_key=api_key)
-        print("✅ OpenAI client initialized for AI summaries")
+    if api_key and api_key.strip():
+        try:
+            openai_client = OpenAI(api_key=api_key.strip())
+            print("✅ OpenAI client initialized for AI summaries")
+        except Exception as init_error:
+            print(f"❌ Error creating OpenAI client: {init_error}")
+            import traceback
+            print(f"Traceback: {traceback.format_exc()}")
     else:
-        print("⚠️  OPENAI_API_KEY not found in config or environment - AI summaries will not use OpenAI")
+        print("⚠️  OPENAI_API_KEY not found or empty - AI summaries will not use OpenAI")
+        print("💡 Make sure OPENAI_API_KEY is set in Render environment variables")
 except Exception as e:
     print(f"⚠️  Error initializing OpenAI client: {e}")
     import traceback
