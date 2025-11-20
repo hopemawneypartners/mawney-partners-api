@@ -186,13 +186,27 @@ except ImportError:
 # Initialize OpenAI client for AI summaries
 openai_client = None
 try:
-    if Config.OPENAI_API_KEY:
-        openai_client = OpenAI(api_key=Config.OPENAI_API_KEY)
+    # Try to get API key from Config if available, otherwise from environment
+    api_key = None
+    try:
+        if DAILY_NEWS_AVAILABLE and hasattr(Config, 'OPENAI_API_KEY') and Config.OPENAI_API_KEY:
+            api_key = Config.OPENAI_API_KEY
+    except:
+        pass
+    
+    # Fallback to environment variable
+    if not api_key:
+        api_key = os.getenv('OPENAI_API_KEY')
+    
+    if api_key:
+        openai_client = OpenAI(api_key=api_key)
         print("✅ OpenAI client initialized for AI summaries")
     else:
-        print("⚠️  OPENAI_API_KEY not found in config - AI summaries will not use OpenAI")
+        print("⚠️  OPENAI_API_KEY not found in config or environment - AI summaries will not use OpenAI")
 except Exception as e:
     print(f"⚠️  Error initializing OpenAI client: {e}")
+    import traceback
+    print(f"Traceback: {traceback.format_exc()}")
 
 def deduplicate_ft_articles(articles):
     """Aggressively deduplicate Financial Times articles that appear in multiple feeds"""
@@ -1382,8 +1396,10 @@ def get_articles():
 def get_ai_summary():
     """Get comprehensive AI summary of articles from past 24 hours only"""
     try:
+        print(f"🤖 AI Summary endpoint called")
         # Get articles (either from Daily News or RSS)
         articles = get_daily_news_articles() if DAILY_NEWS_AVAILABLE else get_comprehensive_rss_articles()
+        print(f"📰 Retrieved {len(articles) if articles else 0} articles")
         
         if not articles:
             return jsonify({
@@ -1413,6 +1429,8 @@ def get_ai_summary():
         now = datetime.now()
         past_24_hours = []
         
+        print(f"🕐 Filtering articles from past 24 hours (current time: {now})")
+        
         for article in articles:
             try:
                 # Parse article date - handle multiple date formats
@@ -1422,25 +1440,39 @@ def get_ai_summary():
                 for field in date_fields:
                     if field in article and article[field]:
                         try:
-                            date_str = article[field]
-                            # Remove 'Z' suffix if present
+                            date_str = str(article[field])
+                            # Remove 'Z' suffix if present and handle timezone
                             if date_str.endswith('Z'):
-                                date_str = date_str[:-1]
+                                date_str = date_str[:-1] + '+00:00'
+                            elif '+' not in date_str and date_str.count('-') >= 2:
+                                # If no timezone info, assume UTC
+                                if 'T' in date_str:
+                                    date_str = date_str + '+00:00'
+                            
                             article_date = datetime.fromisoformat(date_str)
+                            # Convert to timezone-naive for comparison
+                            if article_date.tzinfo is not None:
+                                article_date = article_date.replace(tzinfo=None)
                             break
-                        except:
+                        except Exception as parse_error:
+                            print(f"⚠️  Date parse error for field {field}: {parse_error}, value: {date_str[:50] if 'date_str' in locals() else 'N/A'}")
                             continue
                 
                 if not article_date:
                     continue
                 
                 # Check if within 24 hours only
-                time_diff = now - article_date.replace(tzinfo=None)
-                if time_diff.total_seconds() <= 24 * 3600:  # 24 hours in seconds
+                time_diff = now - article_date
+                hours_diff = time_diff.total_seconds() / 3600
+                if hours_diff >= 0 and hours_diff <= 24:  # 24 hours in seconds
                     past_24_hours.append(article)
             except Exception as e:
-                print(f"Error parsing date for article: {e}")
+                print(f"⚠️  Error parsing date for article: {e}")
+                import traceback
+                print(f"Traceback: {traceback.format_exc()}")
                 continue
+        
+        print(f"✅ Found {len(past_24_hours)} articles from past 24 hours")
 
         if not past_24_hours:
             return jsonify({
@@ -1473,6 +1505,7 @@ def get_ai_summary():
         articles_text = "\n---\n".join(article_summaries)
         
         # Generate AI summary using OpenAI
+        print(f"🤖 OpenAI client available: {openai_client is not None}")
         if openai_client:
             try:
                 print(f"🤖 Generating AI summary for {len(past_24_hours)} articles using OpenAI...")
@@ -1540,7 +1573,10 @@ Provide your response as valid JSON only, no additional text."""
                 
             except json.JSONDecodeError as e:
                 print(f"⚠️  Error parsing OpenAI JSON response: {e}")
-                print(f"Response was: {ai_summary_text[:500]}")
+                ai_summary_text_safe = ai_summary_text[:500] if 'ai_summary_text' in locals() else "No response received"
+                print(f"Response was: {ai_summary_text_safe}")
+                import traceback
+                print(f"Traceback: {traceback.format_exc()}")
                 # Fallback to basic summary
                 summary = {
                     "executive_summary": f"AI summary generation encountered an error. {len(past_24_hours)} articles analyzed from past 24 hours.",
@@ -1554,6 +1590,8 @@ Provide your response as valid JSON only, no additional text."""
                 }
             except Exception as e:
                 print(f"⚠️  Error generating AI summary: {e}")
+                import traceback
+                print(f"Traceback: {traceback.format_exc()}")
                 # Fallback to basic summary
                 summary = {
                     "executive_summary": f"AI summary generation encountered an error. {len(past_24_hours)} articles analyzed from past 24 hours.",
@@ -1595,9 +1633,14 @@ Provide your response as valid JSON only, no additional text."""
         })
         
     except Exception as e:
+        import traceback
+        error_traceback = traceback.format_exc()
+        print(f"❌ Error in get_ai_summary: {e}")
+        print(f"Full traceback:\n{error_traceback}")
         return jsonify({
             "success": False,
-            "error": str(e)
+            "error": str(e),
+            "error_type": type(e).__name__
         }), 500
 
 @app.route('/api/notifications', methods=['GET'])
