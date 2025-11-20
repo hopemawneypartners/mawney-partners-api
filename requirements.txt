@@ -40,3 +40,6 @@ legacy-cgi==2.6.3
 # PDF generation fallbacks (server-side HTML->PDF)
 WeasyPrint==62.3
 xhtml2pdf==0.2.15
+
+# Push Notifications
+PyAPNs2==0.7.2

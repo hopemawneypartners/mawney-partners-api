@@ -13,6 +13,8 @@ import json
 import os
 import feedparser  # Re-enabled for article monitoring
 from email.utils import parsedate_to_datetime
+import base64
+import json
 
 # Import AI Assistant System
 from custom_ai_assistant import process_ai_query, process_ai_query_with_files
@@ -124,6 +126,7 @@ MAX_PERSON_NAME_LENGTH = 100
 # User-to-user chat storage
 user_chats = {}  # user_email -> list of chats
 user_messages = {}  # chat_id -> list of messages
+device_tokens = {}  # user_email -> device_token (for push notifications)
 
 def check_for_new_articles():
     """Check for new articles and create notifications for ones not yet sent"""
@@ -3141,8 +3144,8 @@ def get_user_messages():
 
 @app.route('/api/user-messages', methods=['POST'])
 def save_user_messages():
-    """Save messages for a chat"""
-    global user_messages
+    """Save messages for a chat and send push notifications to recipients"""
+    global user_messages, user_chats, device_tokens
     try:
         data = request.get_json()
         if not data:
@@ -3153,6 +3156,7 @@ def save_user_messages():
         
         chat_id = data.get('chat_id')
         messages = data.get('messages', [])
+        sender_email = data.get('sender_email')  # Email of the person sending the message
         
         if not chat_id:
             return jsonify({
@@ -3168,8 +3172,56 @@ def save_user_messages():
         
         print(f"💾 Saving {len(messages)} messages for chat: {chat_id}")
         
+        # Get previous messages to detect new ones
+        previous_messages = user_messages.get(chat_id, [])
+        previous_message_ids = {msg.get('id') for msg in previous_messages if isinstance(msg, dict)}
+        
         # Save messages for this chat
         user_messages[chat_id] = messages
+        
+        # Find new messages (ones not in previous set)
+        new_messages = [msg for msg in messages if isinstance(msg, dict) and msg.get('id') not in previous_message_ids]
+        
+        # Find the chat to get participants
+        chat = None
+        for email, chats in user_chats.items():
+            for c in chats:
+                if isinstance(c, dict) and c.get('id') == chat_id:
+                    chat = c
+                    break
+            if chat:
+                break
+        
+        # Send push notifications to recipients (participants who aren't the sender)
+        if new_messages and chat and sender_email:
+            participants = chat.get('participants', [])
+            sender_name = chat.get('name', 'Someone')  # Fallback to chat name
+            
+            # Find recipient emails (participants who aren't the sender)
+            recipient_emails = [p for p in participants if p != sender_email and isinstance(p, str) and '@' in p]
+            
+            # Get the last new message for notification
+            last_message = new_messages[-1] if new_messages else None
+            if last_message:
+                message_text = last_message.get('text', 'New message')
+                # Truncate long messages
+                if len(message_text) > 100:
+                    message_text = message_text[:100] + "..."
+                
+                # Send push notification to each recipient
+                for recipient_email in recipient_emails:
+                    device_token = device_tokens.get(recipient_email)
+                    if device_token:
+                        send_push_notification(
+                            device_token=device_token,
+                            title=f"💬 {sender_name}",
+                            body=message_text,
+                            chat_id=chat_id,
+                            message_id=last_message.get('id')
+                        )
+                        print(f"📱 Sent push notification to {recipient_email}")
+                    else:
+                        print(f"⚠️ No device token found for {recipient_email}")
         
         print(f"✅ Successfully saved {len(messages)} messages for chat {chat_id}")
         
@@ -3180,6 +3232,92 @@ def save_user_messages():
         
     except Exception as e:
         print(f"❌ Error saving user messages: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+# MARK: - Push Notifications
+
+def send_push_notification(device_token, title, body, chat_id=None, message_id=None):
+    """Send push notification using APNs"""
+    try:
+        # For now, we'll use a simple HTTP/2 approach
+        # In production, you'd use PyAPNs2 or similar library
+        # This is a placeholder - you'll need to configure APNs certificates
+        
+        # Get APNs key and team ID from environment variables
+        apns_key_id = os.getenv('APNS_KEY_ID')
+        apns_team_id = os.getenv('APNS_TEAM_ID')
+        apns_key_path = os.getenv('APNS_KEY_PATH')
+        apns_topic = os.getenv('APNS_TOPIC', 'MP.MP-APP-V4')  # Your bundle ID
+        
+        if not all([apns_key_id, apns_team_id, apns_key_path]):
+            print("⚠️ APNs credentials not configured - skipping push notification")
+            print("💡 Set APNS_KEY_ID, APNS_TEAM_ID, and APNS_KEY_PATH environment variables")
+            return False
+        
+        # For now, just log that we would send a notification
+        # You'll need to implement actual APNs sending with PyAPNs2
+        print(f"📱 Would send push notification:")
+        print(f"   Device Token: {device_token[:20]}...")
+        print(f"   Title: {title}")
+        print(f"   Body: {body}")
+        print(f"   Chat ID: {chat_id}")
+        
+        # TODO: Implement actual APNs sending
+        # from apns2.client import APNsClient
+        # from apns2.payload import Payload
+        # client = APNsClient(apns_key_path, use_sandbox=False, use_alternative_port=False)
+        # payload = Payload(alert={"title": title, "body": body}, sound="default", badge=1)
+        # client.send_notification(device_token, payload, topic=apns_topic)
+        
+        return True
+    except Exception as e:
+        print(f"❌ Error sending push notification: {e}")
+        return False
+
+@app.route('/api/register-device-token', methods=['POST'])
+def register_device_token():
+    """Register a device token for push notifications"""
+    global device_tokens
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': 'Request body is required'
+            }), 400
+        
+        email = data.get('email')
+        device_token = data.get('device_token')
+        
+        if not email:
+            return jsonify({
+                'success': False,
+                'error': 'Email is required'
+            }), 400
+        
+        if not device_token:
+            return jsonify({
+                'success': False,
+                'error': 'Device token is required'
+            }), 400
+        
+        # Store device token for this user
+        device_tokens[email] = device_token
+        
+        print(f"✅ Registered device token for {email}")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Device token registered'
+        })
+        
+    except Exception as e:
+        print(f"❌ Error registering device token: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({
