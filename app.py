@@ -1668,6 +1668,7 @@ def get_ai_summary():
         
         # Generate AI summary using OpenAI
         print(f"🤖 OpenAI client available: {openai_client is not None}")
+        sys.stdout.flush()
         if openai_client:
             try:
                 print(f"🤖 Generating AI summary for {len(past_24_hours)} articles using OpenAI...")
@@ -1741,6 +1742,8 @@ Provide valid JSON only, no additional text."""
                 )
                 
                 ai_summary_text = response.choices[0].message.content.strip()
+                print(f"📝 Raw AI response (first 500 chars): {ai_summary_text[:500]}")
+                sys.stdout.flush()
                 
                 # Try to parse JSON from response (remove markdown code blocks if present)
                 if ai_summary_text.startswith("```json"):
@@ -1751,7 +1754,13 @@ Provide valid JSON only, no additional text."""
                     ai_summary_text = ai_summary_text[:-3]
                 ai_summary_text = ai_summary_text.strip()
                 
+                print(f"📝 Cleaned AI response (first 500 chars): {ai_summary_text[:500]}")
+                sys.stdout.flush()
+                
                 ai_summary = json.loads(ai_summary_text)
+                print(f"📝 Parsed AI summary keys: {list(ai_summary.keys())}")
+                print(f"📝 Key points in response: {len(ai_summary.get('key_points', []))}")
+                sys.stdout.flush()
                 
                 # Add metadata
                 summary = {
@@ -1769,6 +1778,10 @@ Provide valid JSON only, no additional text."""
                 }
                 
                 print(f"✅ AI summary generated successfully")
+                print(f"📋 Executive summary: {summary.get('executive_summary', '')[:200]}")
+                print(f"📋 Key points count: {len(summary.get('key_points', []))}")
+                print(f"📋 First key point: {summary.get('key_points', [])[0] if summary.get('key_points', []) else 'None'}")
+                sys.stdout.flush()
                 
             except json.JSONDecodeError as e:
                 print(f"⚠️  Error parsing OpenAI JSON response: {e}")
