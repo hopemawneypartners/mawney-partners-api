@@ -3187,6 +3187,148 @@ def save_user_messages():
             'error': str(e)
         }), 500
 
+# MARK: - Call Notes Endpoints
+
+@app.route('/api/user-call-notes', methods=['GET'])
+def get_user_call_notes():
+    """Get all call notes for a user"""
+    global user_call_notes
+    try:
+        email = request.args.get('email')
+        if not email:
+            return jsonify({
+                'success': False,
+                'error': 'Email parameter is required'
+            }), 400
+        
+        print(f"📥 Fetching call notes for user: {email}")
+        
+        # Get call notes for this user, or return empty list
+        call_notes = user_call_notes.get(email, [])
+        
+        print(f"✅ Returning {len(call_notes)} call notes for {email}")
+        
+        return jsonify({
+            'success': True,
+            'call_notes': call_notes
+        })
+        
+    except Exception as e:
+        print(f"❌ Error fetching user call notes: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/user-call-notes', methods=['POST'])
+def save_user_call_notes():
+    """Save call notes for a user"""
+    global user_call_notes
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': 'Request body is required'
+            }), 400
+        
+        email = data.get('email')
+        call_notes = data.get('call_notes', [])
+        
+        if not email:
+            return jsonify({
+                'success': False,
+                'error': 'Email is required'
+            }), 400
+        
+        if not isinstance(call_notes, list):
+            return jsonify({
+                'success': False,
+                'error': 'Call notes must be an array'
+            }), 400
+        
+        print(f"💾 Saving {len(call_notes)} call notes for user: {email}")
+        
+        # Save call notes for this user
+        user_call_notes[email] = call_notes
+        
+        print(f"✅ Successfully saved {len(call_notes)} call notes for {email}")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Saved {len(call_notes)} call notes'
+        })
+        
+    except Exception as e:
+        print(f"❌ Error saving user call notes: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/share-call-note', methods=['POST'])
+def share_call_note():
+    """Share a call note with specific users"""
+    global user_call_notes
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': 'Request body is required'
+            }), 400
+        
+        call_note = data.get('call_note')
+        user_emails = data.get('user_emails', [])
+        
+        if not call_note:
+            return jsonify({
+                'success': False,
+                'error': 'Call note is required'
+            }), 400
+        
+        if not isinstance(user_emails, list) or len(user_emails) == 0:
+            return jsonify({
+                'success': False,
+                'error': 'At least one user email is required'
+            }), 400
+        
+        print(f"📤 Sharing call note '{call_note.get('title', 'Unknown')}' with {len(user_emails)} users")
+        
+        # Add call note to each user's list
+        shared_count = 0
+        for user_email in user_emails:
+            if user_email not in user_call_notes:
+                user_call_notes[user_email] = []
+            
+            # Check if call note already exists (by ID)
+            call_note_id = call_note.get('id')
+            if call_note_id and not any(note.get('id') == call_note_id for note in user_call_notes[user_email]):
+                user_call_notes[user_email].append(call_note)
+                shared_count += 1
+                print(f"✅ Added call note to {user_email}'s list")
+            else:
+                print(f"ℹ️ Call note already exists for {user_email}")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Shared call note with {shared_count} user(s)',
+            'shared_count': shared_count
+        })
+        
+    except Exception as e:
+        print(f"❌ Error sharing call note: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 if __name__ == '__main__':
     # Force restart to pick up new template and text parsing fixes
     port = int(os.environ.get('PORT', 5001))
