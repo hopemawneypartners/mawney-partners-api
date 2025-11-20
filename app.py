@@ -190,38 +190,57 @@ try:
     # Try to get API key from Config if available, otherwise from environment
     api_key = None
     
-    # First try Config (which loads from .env or environment)
-    try:
-        if DAILY_NEWS_AVAILABLE and hasattr(Config, 'OPENAI_API_KEY') and Config.OPENAI_API_KEY:
-            api_key = Config.OPENAI_API_KEY
-            print(f"📝 Found OpenAI API key in Config (length: {len(api_key) if api_key else 0})")
-    except Exception as config_error:
-        print(f"📝 Config check failed: {config_error}")
-        pass
+    print(f"🔍 Checking for OpenAI API key...")
+    print(f"🔍 DAILY_NEWS_AVAILABLE: {DAILY_NEWS_AVAILABLE}")
     
-    # Also try direct Config access even if DAILY_NEWS_AVAILABLE is False
+    # First try Config (which loads from .env or environment)
+    if DAILY_NEWS_AVAILABLE:
+        try:
+            if hasattr(Config, 'OPENAI_API_KEY'):
+                config_key = Config.OPENAI_API_KEY
+                print(f"🔍 Config.OPENAI_API_KEY exists: {config_key is not None}, length: {len(config_key) if config_key else 0}")
+                if config_key and config_key.strip():
+                    api_key = config_key.strip()
+                    print(f"📝 Found OpenAI API key in Config (length: {len(api_key)})")
+            else:
+                print("🔍 Config.OPENAI_API_KEY attribute not found")
+        except Exception as config_error:
+            print(f"📝 Config check failed: {config_error}")
+            import traceback
+            print(f"Traceback: {traceback.format_exc()}")
+    
+    # Also try direct Config import even if DAILY_NEWS_AVAILABLE is False
     if not api_key:
         try:
             from config import Config as ConfigDirect
-            if hasattr(ConfigDirect, 'OPENAI_API_KEY') and ConfigDirect.OPENAI_API_KEY:
-                api_key = ConfigDirect.OPENAI_API_KEY
-                print(f"📝 Found OpenAI API key in Config (direct) (length: {len(api_key) if api_key else 0})")
-        except:
-            pass
+            if hasattr(ConfigDirect, 'OPENAI_API_KEY'):
+                config_key = ConfigDirect.OPENAI_API_KEY
+                if config_key and config_key.strip():
+                    api_key = config_key.strip()
+                    print(f"📝 Found OpenAI API key in Config (direct import) (length: {len(api_key)})")
+        except Exception as direct_error:
+            print(f"📝 Direct Config import failed: {direct_error}")
     
     # Fallback to environment variable directly
     if not api_key:
-        api_key = os.getenv('OPENAI_API_KEY')
-        if api_key:
-            print(f"📝 Found OpenAI API key in environment (length: {len(api_key) if api_key else 0})")
+        env_key = os.getenv('OPENAI_API_KEY')
+        print(f"🔍 os.getenv('OPENAI_API_KEY'): {'Found' if env_key else 'Not found'}, length: {len(env_key) if env_key else 0}")
+        if env_key and env_key.strip():
+            api_key = env_key.strip()
+            print(f"📝 Found OpenAI API key in environment (length: {len(api_key)})")
         else:
             print("📝 OPENAI_API_KEY not found in environment variables")
             print("💡 To enable AI summaries, set OPENAI_API_KEY in Render environment variables")
+            print("💡 In Render: Dashboard > Your Service > Environment > Add OPENAI_API_KEY")
     
     if api_key and api_key.strip():
         try:
-            openai_client = OpenAI(api_key=api_key.strip())
-            print("✅ OpenAI client initialized for AI summaries")
+            # Validate key format (should start with sk-)
+            if api_key.startswith('sk-'):
+                openai_client = OpenAI(api_key=api_key)
+                print("✅ OpenAI client initialized for AI summaries")
+            else:
+                print(f"⚠️  OpenAI API key format looks incorrect (should start with 'sk-'), got: {api_key[:10]}...")
         except Exception as init_error:
             print(f"❌ Error creating OpenAI client: {init_error}")
             import traceback
@@ -229,6 +248,7 @@ try:
     else:
         print("⚠️  OPENAI_API_KEY not found or empty - AI summaries will not use OpenAI")
         print("💡 Make sure OPENAI_API_KEY is set in Render environment variables")
+        print("💡 Steps: Render Dashboard > Your Service > Environment tab > Add OPENAI_API_KEY")
 except Exception as e:
     print(f"⚠️  Error initializing OpenAI client: {e}")
     import traceback
