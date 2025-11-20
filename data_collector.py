@@ -579,17 +579,17 @@ class DataCollector:
             'credit card debt', 'personal finance', 'retirement planning',
             'mortgage advice', 'loan consolidation', 'budget tips',
             'money management', 'savings account', 'investment advice',
-            'financial planning', 'wealth management', 'tax advice',
+            'financial planning', 'tax advice',
             
             # Retirement and personal situations
-            'retired', 'retirement', 'ira', 'social security', 'pension',
+            'retired', 'ira', 'social security',
             '401k', '403b', 'roth ira', 'traditional ira', 'annuity',
             'medicare', 'medicaid', 'disability', 'unemployment',
-            'am i the biggest loser', 'biggest loser', 'losing money',
+            'am i the biggest loser',
             'live off', 'living off', 'income in retirement',
             
             # Consumer/general topics
-            'dating', 'relationship', 'marriage', 'divorce', 'family',
+            'dating', 'marriage', 'divorce', 'family',
             'home buying', 'car loan', 'student loan', 'credit score',
             'insurance advice', 'health insurance', 'life insurance',
             'home insurance', 'auto insurance', 'renters insurance',
@@ -653,7 +653,9 @@ class DataCollector:
                 'clo', 'collateralised loan obligation', 'collateralized loan obligation',
                 'securitised finance', 'securitized finance', 'asset backed securities',
                 'specialty finance', 'special situations', 'distressed credit', 'distressed lending',
-                'credit restructuring', 'debt restructuring', 'workout', 'credit workout'
+                'credit restructuring', 'debt restructuring', 'workout', 'credit workout',
+                'capital solutions', 'mezzanine', 'fundraising', 'capital raising', 'capital formation',
+                'successfully deploys', 'refinancing', 'debut fund', 'emerging manager'
             ]
             
             # Check for core credit terms first
