@@ -1555,11 +1555,11 @@ def get_ai_summary():
         print(f"🕐 Filtering articles from past 24 hours (current time: {now})")
         
         for article in articles:
-            article_date = None
-            date_fields = ['date', 'publishedAt', 'published_date', 'timestamp']
-            
+                article_date = None
+                date_fields = ['date', 'publishedAt', 'published_date', 'timestamp']
+                
             # Try to find a valid date field
-            for field in date_fields:
+                for field in date_fields:
                 if field not in article or not article[field]:
                     continue
                 
@@ -1652,15 +1652,15 @@ def get_ai_summary():
         
         # Prepare article data for OpenAI
         try:
-            sources = list(set([article.get('source', 'Unknown') for article in past_24_hours]))
-            categories = list(set([article.get('category', 'Unknown') for article in past_24_hours]))
-            
+        sources = list(set([article.get('source', 'Unknown') for article in past_24_hours]))
+        categories = list(set([article.get('category', 'Unknown') for article in past_24_hours]))
+        
             # Count articles by category and source
-            category_counts = {}
+        category_counts = {}
             source_counts = {}
-            for article in past_24_hours:
-                cat = article.get('category', 'Unknown')
-                category_counts[cat] = category_counts.get(cat, 0) + 1
+        for article in past_24_hours:
+            cat = article.get('category', 'Unknown')
+            category_counts[cat] = category_counts.get(cat, 0) + 1
                 src = article.get('source', 'Unknown')
                 source_counts[src] = source_counts.get(src, 0) + 1
             
@@ -1701,10 +1701,10 @@ def get_ai_summary():
                     cat = article.get('category', 'Unknown')
                     category_counts[cat] = category_counts.get(cat, 0) + 1
             if not source_counts:
-                source_counts = {}
-                for article in past_24_hours:
-                    src = article.get('source', 'Unknown')
-                    source_counts[src] = source_counts.get(src, 0) + 1
+        source_counts = {}
+        for article in past_24_hours:
+            src = article.get('source', 'Unknown')
+            source_counts[src] = source_counts.get(src, 0) + 1
             if not articles_text:
                 articles_text = "\n---\n".join([f"Title: {article.get('title', '')}\nSource: {article.get('source', 'Unknown')}\n" for article in past_24_hours[:20]])
         
@@ -1740,7 +1740,11 @@ def get_ai_summary():
         
         if openai_client:
             try:
+                # Log API key info for debugging (first 10 chars only for security)
+                api_key_preview = os.getenv('OPENAI_API_KEY', '')[:10] if os.getenv('OPENAI_API_KEY') else 'NOT SET'
                 print(f"🤖 Generating AI summary for {len(past_24_hours)} articles using OpenAI...")
+                print(f"🔑 API Key preview: {api_key_preview}... (checking if key is active)")
+                sys.stdout.flush()
                 
                 prompt = f"""CRITICAL: You are a credit markets analyst. Read the {num_articles_to_analyze} articles below and EXTRACT the actual key information from the most relevant ones.
 
@@ -1802,8 +1806,9 @@ REMEMBER:
 
 Provide valid JSON only, no additional text."""
 
-                # Try gpt-4o first, fallback to gpt-4o-mini (cheaper) or gpt-3.5-turbo if not available
-                models_to_try = ["gpt-4o", "gpt-4o-mini", "gpt-3.5-turbo"]
+                # Try gpt-4o-mini first (cheaper, works with free tier), then gpt-4o, then gpt-3.5-turbo
+                # gpt-4o-mini is more likely to work if there are billing/quota restrictions
+                models_to_try = ["gpt-4o-mini", "gpt-4o", "gpt-3.5-turbo"]
                 response = None
                 last_error = None
                 
@@ -1833,7 +1838,7 @@ Provide valid JSON only, no additional text."""
                         elif "rate_limit" in error_str.lower() or "429" in error_str:
                             print(f"⚠️  Model {model_name} failed: RATE LIMIT - {error_str}")
                             print(f"💡 Too many requests, will retry with next model")
-                        else:
+                else:
                             print(f"⚠️  Model {model_name} failed: {error_str}")
                         sys.stdout.flush()
                         continue
@@ -1863,7 +1868,7 @@ Provide valid JSON only, no additional text."""
                 sys.stdout.flush()
                 
                 # Add metadata
-                summary = {
+        summary = {
                     "executive_summary": ai_summary.get("executive_summary", ""),
                     "key_points": ai_summary.get("key_points", []),
                     "market_insights": ai_summary.get("market_insights", []),
