@@ -1401,31 +1401,70 @@ def get_ai_summary():
         sys.stdout.flush()
         
         # Get articles (either from Daily News or RSS)
+        articles = None
         try:
+            print(f"📚 Attempting to retrieve articles...")
+            sys.stdout.flush()
             articles = get_daily_news_articles() if DAILY_NEWS_AVAILABLE else get_comprehensive_rss_articles()
+            print(f"📚 Retrieved articles: {len(articles) if articles else 0} articles")
+            sys.stdout.flush()
         except Exception as e:
             print(f"❌ Error getting articles: {e}")
+            sys.stdout.flush()
             import traceback
             print(f"Traceback: {traceback.format_exc()}")
+            sys.stdout.flush()
             return jsonify({
                 "success": False,
                 "error": f"Error retrieving articles: {str(e)}"
             }), 500
         
-        if not articles:
+        # Check if articles were retrieved
+        if not articles or len(articles) == 0:
+            print(f"⚠️  No articles available, articles might not be collected yet")
+            sys.stdout.flush()
             return jsonify({
-                "success": False,
-                "error": "No articles available"
-            }), 500
+                "success": True,
+                "summary": {
+                    "executive_summary": "Articles are being collected. Please try again in a few moments.",
+                    "key_points": ["Articles collection in progress"],
+                    "market_insights": ["Please wait for articles to be collected"],
+                    "key_headlines": [],
+                    "articles_analyzed": 0,
+                    "analysis_period": "Past 24 hours only",
+                    "timestamp": datetime.now().isoformat(),
+                    "data_freshness": "Articles collection pending"
+                }
+            }), 200
         
         if not isinstance(articles, list):
             print(f"⚠️  Articles is not a list, type: {type(articles)}")
+            sys.stdout.flush()
             return jsonify({
                 "success": False,
                 "error": "Invalid articles format"
             }), 500
         
         print(f"📰 Retrieved {len(articles)} articles")
+        sys.stdout.flush()
+        
+        # If no articles, return early with helpful message
+        if len(articles) == 0:
+            print(f"⚠️  No articles found - articles may not be collected yet")
+            sys.stdout.flush()
+            return jsonify({
+                "success": True,
+                "summary": {
+                    "executive_summary": "Articles are being collected. Please try again in a few moments or trigger collection manually.",
+                    "key_points": ["Articles collection in progress", "Use /api/trigger-collection to manually collect articles"],
+                    "market_insights": ["Please wait for articles to be collected"],
+                    "key_headlines": [],
+                    "articles_analyzed": 0,
+                    "analysis_period": "Past 24 hours only",
+                    "timestamp": datetime.now().isoformat(),
+                    "data_freshness": "Articles collection pending"
+                }
+            }), 200
 
         # DEDUPLICATION FOR AI SUMMARY
         print(f"🔧 AI Summary deduplication: {len(articles)} articles before")
@@ -1519,8 +1558,11 @@ def get_ai_summary():
                 continue
         
         print(f"✅ Found {len(past_24_hours)} articles from past 24 hours")
+        sys.stdout.flush()
 
-        if not past_24_hours:
+        if not past_24_hours or len(past_24_hours) == 0:
+            print(f"⚠️  No articles from past 24 hours found - articles may need to be collected or are too old")
+            sys.stdout.flush()
             print("⚠️  No articles from past 24 hours found")
             sys.stdout.flush()
             return jsonify({
