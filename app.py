@@ -1555,11 +1555,11 @@ def get_ai_summary():
         print(f"🕐 Filtering articles from past 24 hours (current time: {now})")
         
         for article in articles:
-            article_date = None
-            date_fields = ['date', 'publishedAt', 'published_date', 'timestamp']
-            
+                article_date = None
+                date_fields = ['date', 'publishedAt', 'published_date', 'timestamp']
+                
             # Try to find a valid date field
-            for field in date_fields:
+                for field in date_fields:
                 if field not in article or not article[field]:
                     continue
                 
@@ -1573,11 +1573,11 @@ def get_ai_summary():
                     # Simple approach: try to parse as-is first
                     try:
                         # Remove Z and add timezone if needed
-                        if date_str.endswith('Z'):
-                            date_str = date_str[:-1]
+                            if date_str.endswith('Z'):
+                                date_str = date_str[:-1]
                         
                         # Try parsing
-                        article_date = datetime.fromisoformat(date_str)
+                            article_date = datetime.fromisoformat(date_str)
                     except (ValueError, TypeError):
                         # If that fails, try removing timezone info
                         try:
@@ -1604,13 +1604,13 @@ def get_ai_summary():
                         article_date = article_date.replace(tzinfo=None)
                     
                     if article_date:
-                        break
+                            break
                 except Exception:
-                    continue
-            
+                            continue
+                
             # Skip if no valid date found
-            if not article_date:
-                continue
+                if not article_date:
+                    continue
                 
             # Check if within 24 hours
             try:
@@ -1652,15 +1652,15 @@ def get_ai_summary():
         
         # Prepare article data for OpenAI
         try:
-            sources = list(set([article.get('source', 'Unknown') for article in past_24_hours]))
-            categories = list(set([article.get('category', 'Unknown') for article in past_24_hours]))
-            
+        sources = list(set([article.get('source', 'Unknown') for article in past_24_hours]))
+        categories = list(set([article.get('category', 'Unknown') for article in past_24_hours]))
+        
             # Count articles by category and source
-            category_counts = {}
+        category_counts = {}
             source_counts = {}
-            for article in past_24_hours:
-                cat = article.get('category', 'Unknown')
-                category_counts[cat] = category_counts.get(cat, 0) + 1
+        for article in past_24_hours:
+            cat = article.get('category', 'Unknown')
+            category_counts[cat] = category_counts.get(cat, 0) + 1
                 src = article.get('source', 'Unknown')
                 source_counts[src] = source_counts.get(src, 0) + 1
             
@@ -1701,10 +1701,10 @@ def get_ai_summary():
                     cat = article.get('category', 'Unknown')
                     category_counts[cat] = category_counts.get(cat, 0) + 1
             if not source_counts:
-                source_counts = {}
-                for article in past_24_hours:
-                    src = article.get('source', 'Unknown')
-                    source_counts[src] = source_counts.get(src, 0) + 1
+        source_counts = {}
+        for article in past_24_hours:
+            src = article.get('source', 'Unknown')
+            source_counts[src] = source_counts.get(src, 0) + 1
             if not articles_text:
                 articles_text = "\n---\n".join([f"Title: {article.get('title', '')}\nSource: {article.get('source', 'Unknown')}\n" for article in past_24_hours[:20]])
         
@@ -1714,6 +1714,30 @@ def get_ai_summary():
         # Generate AI summary using OpenAI
         print(f"🤖 OpenAI client available: {openai_client is not None}")
         sys.stdout.flush()
+        
+        # Try to initialize OpenAI client at runtime if not already initialized
+        if not openai_client:
+            print("🔄 OpenAI client not initialized, attempting runtime initialization...")
+            sys.stdout.flush()
+            try:
+                # Try environment variable again (in case it was set after startup)
+                api_key = os.getenv('OPENAI_API_KEY')
+                if api_key and api_key.strip():
+                    if api_key.startswith('sk-'):
+                        global openai_client
+                        openai_client = OpenAI(api_key=api_key.strip())
+                        print(f"✅ OpenAI client initialized at runtime (key length: {len(api_key)})")
+                        sys.stdout.flush()
+                    else:
+                        print(f"⚠️  OpenAI API key format incorrect (should start with 'sk-')")
+                        sys.stdout.flush()
+                else:
+                    print("⚠️  OPENAI_API_KEY still not found in environment at runtime")
+                    sys.stdout.flush()
+            except Exception as runtime_init_error:
+                print(f"❌ Error initializing OpenAI client at runtime: {runtime_init_error}")
+                sys.stdout.flush()
+        
         if openai_client:
             try:
                 print(f"🤖 Generating AI summary for {len(past_24_hours)} articles using OpenAI...")
@@ -1810,7 +1834,7 @@ Provide valid JSON only, no additional text."""
                 sys.stdout.flush()
                 
                 # Add metadata
-                summary = {
+        summary = {
                     "executive_summary": ai_summary.get("executive_summary", ""),
                     "key_points": ai_summary.get("key_points", []),
                     "market_insights": ai_summary.get("market_insights", []),
