@@ -189,6 +189,8 @@ openai_client = None
 try:
     # Try to get API key from Config if available, otherwise from environment
     api_key = None
+    
+    # First try Config (which loads from .env or environment)
     try:
         if DAILY_NEWS_AVAILABLE and hasattr(Config, 'OPENAI_API_KEY') and Config.OPENAI_API_KEY:
             api_key = Config.OPENAI_API_KEY
@@ -197,13 +199,24 @@ try:
         print(f"📝 Config check failed: {config_error}")
         pass
     
-    # Fallback to environment variable
+    # Also try direct Config access even if DAILY_NEWS_AVAILABLE is False
+    if not api_key:
+        try:
+            from config import Config as ConfigDirect
+            if hasattr(ConfigDirect, 'OPENAI_API_KEY') and ConfigDirect.OPENAI_API_KEY:
+                api_key = ConfigDirect.OPENAI_API_KEY
+                print(f"📝 Found OpenAI API key in Config (direct) (length: {len(api_key) if api_key else 0})")
+        except:
+            pass
+    
+    # Fallback to environment variable directly
     if not api_key:
         api_key = os.getenv('OPENAI_API_KEY')
         if api_key:
             print(f"📝 Found OpenAI API key in environment (length: {len(api_key) if api_key else 0})")
         else:
             print("📝 OPENAI_API_KEY not found in environment variables")
+            print("💡 To enable AI summaries, set OPENAI_API_KEY in Render environment variables")
     
     if api_key and api_key.strip():
         try:
@@ -1522,11 +1535,11 @@ def get_ai_summary():
         print(f"🕐 Filtering articles from past 24 hours (current time: {now})")
         
         for article in articles:
-            article_date = None
-            date_fields = ['date', 'publishedAt', 'published_date', 'timestamp']
-            
+                article_date = None
+                date_fields = ['date', 'publishedAt', 'published_date', 'timestamp']
+                
             # Try to find a valid date field
-            for field in date_fields:
+                for field in date_fields:
                 if field not in article or not article[field]:
                     continue
                 
@@ -1540,11 +1553,11 @@ def get_ai_summary():
                     # Simple approach: try to parse as-is first
                     try:
                         # Remove Z and add timezone if needed
-                        if date_str.endswith('Z'):
-                            date_str = date_str[:-1]
+                            if date_str.endswith('Z'):
+                                date_str = date_str[:-1]
                         
                         # Try parsing
-                        article_date = datetime.fromisoformat(date_str)
+                            article_date = datetime.fromisoformat(date_str)
                     except (ValueError, TypeError):
                         # If that fails, try removing timezone info
                         try:
@@ -1571,14 +1584,14 @@ def get_ai_summary():
                         article_date = article_date.replace(tzinfo=None)
                     
                     if article_date:
-                        break
+                            break
                 except Exception:
-                    continue
-            
+                            continue
+                
             # Skip if no valid date found
-            if not article_date:
-                continue
-            
+                if not article_date:
+                    continue
+                
             # Check if within 24 hours
             try:
                 time_diff = now - article_date
@@ -1587,7 +1600,7 @@ def get_ai_summary():
                     past_24_hours.append(article)
             except Exception:
                 continue
-        
+
         print(f"✅ Found {len(past_24_hours)} articles from past 24 hours")
         sys.stdout.flush()
 
@@ -1619,15 +1632,15 @@ def get_ai_summary():
         
         # Prepare article data for OpenAI
         try:
-            sources = list(set([article.get('source', 'Unknown') for article in past_24_hours]))
-            categories = list(set([article.get('category', 'Unknown') for article in past_24_hours]))
-            
+        sources = list(set([article.get('source', 'Unknown') for article in past_24_hours]))
+        categories = list(set([article.get('category', 'Unknown') for article in past_24_hours]))
+        
             # Count articles by category and source
-            category_counts = {}
+        category_counts = {}
             source_counts = {}
-            for article in past_24_hours:
-                cat = article.get('category', 'Unknown')
-                category_counts[cat] = category_counts.get(cat, 0) + 1
+        for article in past_24_hours:
+            cat = article.get('category', 'Unknown')
+            category_counts[cat] = category_counts.get(cat, 0) + 1
                 src = article.get('source', 'Unknown')
                 source_counts[src] = source_counts.get(src, 0) + 1
             
@@ -1668,10 +1681,10 @@ def get_ai_summary():
                     cat = article.get('category', 'Unknown')
                     category_counts[cat] = category_counts.get(cat, 0) + 1
             if not source_counts:
-                source_counts = {}
-                for article in past_24_hours:
-                    src = article.get('source', 'Unknown')
-                    source_counts[src] = source_counts.get(src, 0) + 1
+        source_counts = {}
+        for article in past_24_hours:
+            src = article.get('source', 'Unknown')
+            source_counts[src] = source_counts.get(src, 0) + 1
             if not articles_text:
                 articles_text = "\n---\n".join([f"Title: {article.get('title', '')}\nSource: {article.get('source', 'Unknown')}\n" for article in past_24_hours[:20]])
         
@@ -1777,7 +1790,7 @@ Provide valid JSON only, no additional text."""
                 sys.stdout.flush()
                 
                 # Add metadata
-                summary = {
+        summary = {
                     "executive_summary": ai_summary.get("executive_summary", ""),
                     "key_points": ai_summary.get("key_points", []),
                     "market_insights": ai_summary.get("market_insights", []),
@@ -1873,14 +1886,14 @@ Provide valid JSON only, no additional text."""
             summary = {
                 "executive_summary": f"24-Hour Credit Market Summary: {len(past_24_hours)} key developments from {len(sources)} sources.",
                 "key_points": [
-                    f"📊 {len(past_24_hours)} articles analyzed from past 24 hours",
-                    f"📰 Top sources: {', '.join([f'{src} ({count})' for src, count in list(source_counts.items())[:3]])}",
-                    f"📈 Market sectors: {', '.join([f'{cat} ({count})' for cat, count in list(category_counts.items())[:3]])}",
-                    f"⏰ Analysis period: Last 24 hours (as of {now.strftime('%Y-%m-%d %H:%M UTC')})"
-                ],
+                f"📊 {len(past_24_hours)} articles analyzed from past 24 hours",
+                f"📰 Top sources: {', '.join([f'{src} ({count})' for src, count in list(source_counts.items())[:3]])}",
+                f"📈 Market sectors: {', '.join([f'{cat} ({count})' for cat, count in list(category_counts.items())[:3]])}",
+                f"⏰ Analysis period: Last 24 hours (as of {now.strftime('%Y-%m-%d %H:%M UTC')})"
+            ],
                 "market_insights": [
-                    f"Recent activity shows {len(past_24_hours)} significant credit market developments",
-                    f"Primary coverage from: {', '.join(list(source_counts.keys())[:3])}",
+                f"Recent activity shows {len(past_24_hours)} significant credit market developments",
+                f"Primary coverage from: {', '.join(list(source_counts.keys())[:3])}",
                     "Credit market conditions reflect real-time developments"
                 ],
                 "articles_analyzed": len(past_24_hours),
@@ -1907,12 +1920,12 @@ Provide valid JSON only, no additional text."""
                     f"Primary coverage from: {', '.join(list(source_counts.keys())[:3])}",
                     "Credit market conditions reflect real-time developments"
                 ],
-                "articles_analyzed": len(past_24_hours),
-                "analysis_period": "Past 24 hours only",
-                "timestamp": datetime.now().isoformat(),
-                "data_freshness": "Real-time analysis of latest articles",
+            "articles_analyzed": len(past_24_hours),
+            "analysis_period": "Past 24 hours only",
+            "timestamp": datetime.now().isoformat(),
+            "data_freshness": "Real-time analysis of latest articles",
                 "key_headlines": key_headlines
-            }
+        }
         
         return jsonify({
             "success": True,
