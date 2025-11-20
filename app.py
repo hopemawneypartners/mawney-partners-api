@@ -1672,61 +1672,68 @@ def get_ai_summary():
             try:
                 print(f"🤖 Generating AI summary for {len(past_24_hours)} articles using OpenAI...")
                 
-                prompt = f"""You are a credit markets analyst extracting the most important information from financial news articles from the past 24 hours.
+                prompt = f"""You are a credit markets analyst. Read the {num_articles_to_analyze} articles below and EXTRACT the actual key information from the most relevant ones.
 
-Read through the following {num_articles_to_analyze} articles and extract the KEY POINTS and INSIGHTS from the most relevant ones. Focus on extracting actual information, facts, and developments - not just describing what articles exist.
+DO NOT describe that articles exist. DO EXTRACT what actually happened in them.
 
-Provide your analysis in JSON format with the following structure:
+EXAMPLE OF WHAT TO DO:
+❌ BAD: "Article about Blackstone raising funds"
+✅ GOOD: "Blackstone raised $5.2 billion for its latest credit fund, focusing on direct lending to mid-market companies"
+
+❌ BAD: "Article discussing interest rates"
+✅ GOOD: "Fed signals potential rate cuts as inflation cools to 2.1%, credit spreads tighten 15 basis points"
+
+❌ BAD: "People moves article"
+✅ GOOD: "John Smith joins Goldman Sachs as Head of Credit Trading, previously at JPMorgan where he managed $10B portfolio"
+
+Now extract the key information from these articles:
+
+{articles_text}
+
+Provide your response as JSON with this exact structure:
 {{
-    "executive_summary": "A 3-4 sentence synthesis of the most significant credit market developments, focusing on what actually happened",
+    "executive_summary": "3-4 sentences synthesizing the most significant developments - what actually happened",
     "key_points": [
-        "Extract the actual key point from the most relevant article - include specific facts: company names, deal amounts, interest rates, market data, people names and roles",
-        "Extract another key point from a different relevant article - be specific with facts and numbers",
-        "Extract another key point - focus on what actually happened, not that an article exists",
-        "Extract another key point - include specific details from the article",
-        "Extract another key point - focus on actionable information"
+        "Specific fact from most relevant article: Company/Person + Action + Numbers/Details",
+        "Specific fact from second article: What happened + Who/What + Details",
+        "Specific fact from third article: Actual development with specifics",
+        "Specific fact from fourth article: Concrete information extracted",
+        "Specific fact from fifth article: Real development with facts"
     ],
     "market_insights": [
-        "Extract the market insight or implication from the most important development - what does this mean?",
-        "Extract another insight - analyze the significance and implications",
-        "Extract another insight - connect developments to market trends"
+        "What the most important development means for credit markets - specific implications",
+        "Analysis of second development's market impact",
+        "Third insight connecting developments to market trends"
     ],
     "key_headlines": [
-        "The actual headline from the most important article",
-        "The actual headline from the second most important article",
-        "The actual headline from the third most important article",
-        "The actual headline from the fourth most important article",
-        "The actual headline from the fifth most important article"
+        "Copy the exact headline from the most important article",
+        "Copy the exact headline from the second most important article",
+        "Copy the exact headline from the third most important article",
+        "Copy the exact headline from the fourth most important article",
+        "Copy the exact headline from the fifth most important article"
     ],
     "article_breakdown": [
         {{
             "title": "Exact article title",
             "source": "Source name",
-            "key_takeaway": "Extract the main fact, development, or information from this article - what actually happened?",
-            "market_impact": "What this specific development means for credit markets"
+            "key_takeaway": "What actually happened in this article - extract the fact/development",
+            "market_impact": "What this means for credit markets specifically"
         }}
     ]
 }}
 
-CRITICAL INSTRUCTIONS:
-- EXTRACT information from articles, don't just describe that articles exist
-- Focus on the MOST RELEVANT articles (credit markets, bonds, debt, M&A, people moves, interest rates)
-- Each key_point should extract actual information: "Company X raised $Y billion in bonds" not "Article about bond issuance"
-- Include specific facts: names, numbers, dates, deal sizes, interest rates, market movements
-- The key_headlines should be the ACTUAL headlines from the most important articles
-- The article_breakdown should extract what actually happened in each article, not just summarize that an article exists
-- Prioritize articles with specific developments, deals, moves, or market data
-- Skip generic or less relevant articles - focus on the 5-10 most important ones
+REMEMBER:
+- Extract ACTUAL information, not descriptions of articles
+- Include specific names, numbers, amounts, rates, dates
+- Focus on the 5-10 most relevant articles
+- Each key_point should be a concrete fact extracted from an article
 
-Articles to analyze:
-{articles_text}
-
-Provide your response as valid JSON only, no additional text."""
+Provide valid JSON only, no additional text."""
 
                 response = openai_client.chat.completions.create(
                     model="gpt-4",
                     messages=[
-                        {"role": "system", "content": "You are an expert credit markets analyst. Your job is to EXTRACT the actual key information, facts, and developments from the most relevant articles. Focus on what actually happened - specific companies, deals, people, market movements, numbers - not on describing that articles exist. Extract actionable intelligence from the articles themselves."},
+                        {"role": "system", "content": "You are an expert credit markets analyst. Your ONLY job is to EXTRACT actual facts, information, and developments from articles. NEVER describe that an article exists. ALWAYS extract what happened: specific companies, people, deals, amounts, rates, movements. Be concrete and specific with facts and numbers."},
                         {"role": "user", "content": prompt}
                     ],
                     temperature=0.7,
