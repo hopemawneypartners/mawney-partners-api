@@ -3743,51 +3743,47 @@ def assign_task():
         # The task has assignedTo as user ID, but we need to find the email
         assigned_to_user_id = task.get('assignedTo')
         
-        # Add task to each user's list
+        # Map assigner email to user ID
+        email_to_id = {
+            'hg@mawneypartners.com': 'user_hope',
+            'jt@mawneypartners.com': 'user_josh',
+            'finance@mawneypartners.com': 'user_rachel',
+            'jd@mawneypartners.com': 'user_jack',
+            'he@mawneypartners.com': 'user_harry',
+            'tjt@mawneypartners.com': 'user_tyler'
+        }
+        assigner_id = email_to_id.get(assigner_email)
+        task_id = task.get('id')
+        
+        # Remove task from assigner's list (if it exists there)
+        if assigner_email in user_todos and task_id:
+            user_todos[assigner_email] = [
+                t for t in user_todos[assigner_email] 
+                if t.get('id') != task_id
+            ]
+            print(f"✅ Removed task from assigner's ({assigner_email}) list")
+        
+        # Add task to each recipient's list
         assigned_count = 0
         for user_email in user_emails:
             if user_email not in user_todos:
                 user_todos[user_email] = []
             
             # Check if task already exists (by ID)
-            task_id = task.get('id')
             if task_id and not any(t.get('id') == task_id for t in user_todos[user_email]):
-                # Update assignedTo to match the user's ID if needed
                 # Find user ID from email
-                user_id = None
-                for profile_email, profile in user_profiles.items():
-                    if profile_email == user_email:
-                        # Map email to user ID (this is a simple mapping)
-                        email_to_id = {
-                            'hg@mawneypartners.com': 'user_hope',
-                            'jt@mawneypartners.com': 'user_josh',
-                            'finance@mawneypartners.com': 'user_rachel',
-                            'jd@mawneypartners.com': 'user_jack',
-                            'he@mawneypartners.com': 'user_harry',
-                            'tjt@mawneypartners.com': 'user_tyler'
-                        }
-                        user_id = email_to_id.get(user_email)
-                        break
+                user_id = email_to_id.get(user_email)
                 
                 # Create a copy of the task with updated assignment
                 assigned_task = task.copy()
                 if user_id:
                     assigned_task['assignedTo'] = user_id
-                if assigner_email:
-                    # Map assigner email to user ID
-                    email_to_id = {
-                        'hg@mawneypartners.com': 'user_hope',
-                        'jt@mawneypartners.com': 'user_josh',
-                        'finance@mawneypartners.com': 'user_rachel',
-                        'jd@mawneypartners.com': 'user_jack',
-                        'he@mawneypartners.com': 'user_harry',
-                        'tjt@mawneypartners.com': 'user_tyler'
-                    }
-                    assigned_task['assignedBy'] = email_to_id.get(assigner_email)
+                if assigner_id:
+                    assigned_task['assignedBy'] = assigner_id
                 
                 user_todos[user_email].append(assigned_task)
                 assigned_count += 1
-                print(f"✅ Added task to {user_email}'s list")
+                print(f"✅ Added task to {user_email}'s list (assignedTo: {user_id})")
             else:
                 print(f"ℹ️ Task already exists for {user_email}")
         
