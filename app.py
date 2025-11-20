@@ -15,6 +15,7 @@ import feedparser  # Re-enabled for article monitoring
 from email.utils import parsedate_to_datetime
 import base64
 import json
+from openai import OpenAI
 
 # Import AI Assistant System
 from custom_ai_assistant import process_ai_query, process_ai_query_with_files
@@ -181,6 +182,17 @@ try:
 except ImportError:
     DAILY_NEWS_AVAILABLE = False
     print("Daily News system not available, using fallback RSS feeds")
+
+# Initialize OpenAI client for AI summaries
+openai_client = None
+try:
+    if Config.OPENAI_API_KEY:
+        openai_client = OpenAI(api_key=Config.OPENAI_API_KEY)
+        print("✅ OpenAI client initialized for AI summaries")
+    else:
+        print("⚠️  OPENAI_API_KEY not found in config - AI summaries will not use OpenAI")
+except Exception as e:
+    print(f"⚠️  Error initializing OpenAI client: {e}")
 
 def deduplicate_ft_articles(articles):
     """Aggressively deduplicate Financial Times articles that appear in multiple feeds"""
@@ -1436,109 +1448,146 @@ def get_ai_summary():
                 "error": "No articles from past 24 hours available for analysis"
             }), 500
 
-        # Comprehensive analysis of past 24 hours articles
-        titles = [article.get('title', '') for article in past_24_hours]
+        # Prepare article data for OpenAI
         sources = list(set([article.get('source', 'Unknown') for article in past_24_hours]))
         categories = list(set([article.get('category', 'Unknown') for article in past_24_hours]))
         
-        # Count articles by category
+        # Count articles by category and source
         category_counts = {}
+        source_counts = {}
         for article in past_24_hours:
             cat = article.get('category', 'Unknown')
             category_counts[cat] = category_counts.get(cat, 0) + 1
-        
-        # Count articles by source
-        source_counts = {}
-        for article in past_24_hours:
             src = article.get('source', 'Unknown')
             source_counts[src] = source_counts.get(src, 0) + 1
         
-        # Analyze content themes
-        content_themes = []
-        for article in past_24_hours:
-            title = article.get('title', '').lower()
-            content = article.get('content', '').lower()
-            combined_text = title + ' ' + content
-            
-            # Identify key themes
-            if any(word in combined_text for word in ['interest rate', 'fed', 'central bank', 'monetary policy']):
-                content_themes.append('Monetary Policy')
-            if any(word in combined_text for word in ['bond', 'yield', 'treasury', 'government debt']):
-                content_themes.append('Government Bonds')
-            if any(word in combined_text for word in ['corporate', 'credit', 'debt', 'issuance']):
-                content_themes.append('Corporate Credit')
-            if any(word in combined_text for word in ['default', 'distressed', 'restructuring']):
-                content_themes.append('Credit Risk')
-            if any(word in combined_text for word in ['merger', 'acquisition', 'm&a', 'deal']):
-                content_themes.append('M&A Activity')
-        
-        theme_counts = {}
-        for theme in content_themes:
-            theme_counts[theme] = theme_counts.get(theme, 0) + 1
-        
-        # Analyze actual article content for meaningful insights
-        article_insights = []
-        key_headlines = []
-        detailed_analysis = []
-        
-        # Analyze only top 5 most relevant articles for concise summary
-        for article in past_24_hours[:5]:
+        # Prepare article summaries for OpenAI (limit to top 20 to avoid token limits)
+        article_summaries = []
+        for article in past_24_hours[:20]:
             title = article.get('title', '')
-            content = article.get('content', '')
-            source = article.get('source', '')
-            
-            key_headlines.append(f"• {title} ({source})")
-            
-            # Create concise analysis of each article
-            if title and content:
-                # Extract key insights from article content
-                if any(word in (title + content).lower() for word in ['rate', 'interest', 'fed', 'central bank', 'monetary policy']):
-                    article_insights.append(f"Interest rate developments: {title}")
-                    detailed_analysis.append(f"Interest rates: {title} - {content[:80]}...")
-                elif any(word in (title + content).lower() for word in ['bond', 'yield', 'treasury', 'government debt']):
-                    article_insights.append(f"Fixed income activity: {title}")
-                    detailed_analysis.append(f"Bond markets: {title} - {content[:80]}...")
-                elif any(word in (title + content).lower() for word in ['credit', 'debt', 'issuance', 'corporate']):
-                    article_insights.append(f"Credit market news: {title}")
-                    detailed_analysis.append(f"Credit markets: {title} - {content[:80]}...")
-                elif any(word in (title + content).lower() for word in ['merger', 'acquisition', 'deal', 'm&a']):
-                    article_insights.append(f"M&A activity: {title}")
-                    detailed_analysis.append(f"M&A deals: {title} - {content[:80]}...")
-                elif any(word in (title + content).lower() for word in ['default', 'distressed', 'restructuring', 'bankruptcy']):
-                    article_insights.append(f"Credit risk developments: {title}")
-                    detailed_analysis.append(f"Credit risk: {title} - {content[:80]}...")
-                else:
-                    # General credit market news
-                    article_insights.append(f"Market development: {title}")
-                    detailed_analysis.append(f"General: {title} - {content[:80]}...")
+            content = article.get('content', '')[:500]  # Limit content length
+            source = article.get('source', 'Unknown')
+            category = article.get('category', 'Unknown')
+            article_summaries.append(f"Title: {title}\nSource: {source}\nCategory: {category}\nContent: {content}\n")
         
-        # Generate comprehensive summary based on actual article analysis
-        summary = {
-            "executive_summary": f"24-Hour Credit Market Summary: {len(past_24_hours)} key developments from {len(sources)} sources. Focus areas: {', '.join(list(category_counts.keys())[:2])} with {', '.join(list(theme_counts.keys())[:2]) if theme_counts else 'credit market activity'}.",
-            
-            "key_points": key_headlines[:5] if key_headlines else [
-                f"📊 {len(past_24_hours)} articles analyzed from past 24 hours",
-                f"📰 Top sources: {', '.join([f'{src} ({count})' for src, count in list(source_counts.items())[:3]])}",
-                f"📈 Market sectors: {', '.join([f'{cat} ({count})' for cat, count in list(category_counts.items())[:3]])}",
-                f"🎯 Key themes: {', '.join([f'{theme} ({count})' for theme, count in list(theme_counts.items())[:3]]) if theme_counts else 'Credit market developments'}",
-                f"⏰ Analysis period: Last 24 hours (as of {now.strftime('%Y-%m-%d %H:%M UTC')})"
-            ],
-            
-            "market_insights": detailed_analysis[:3] if detailed_analysis else [
-                f"Recent activity shows {len(past_24_hours)} significant credit market developments",
-                f"Primary coverage from: {', '.join(list(source_counts.keys())[:3])}",
-                f"Market focus areas: {', '.join(list(category_counts.keys())[:3])}",
-                f"Key themes emerging: {', '.join(list(theme_counts.keys())[:3]) if theme_counts else 'General market activity'}",
-                "Credit market conditions reflect real-time developments and immediate market responses",
-                "Investment implications based on current market intelligence"
-            ],
-            
-            "articles_analyzed": len(past_24_hours),
-            "analysis_period": "Past 24 hours only",
-            "timestamp": datetime.now().isoformat(),
-            "data_freshness": "Real-time analysis of latest articles",
-            "key_headlines": key_headlines if key_headlines else []
-        }
+        articles_text = "\n---\n".join(article_summaries)
+        
+        # Generate AI summary using OpenAI
+        if openai_client:
+            try:
+                print(f"🤖 Generating AI summary for {len(past_24_hours)} articles using OpenAI...")
+                
+                prompt = f"""You are a credit markets analyst providing a daily summary of financial news articles from the past 24 hours.
+
+Analyze the following {len(past_24_hours)} articles and provide a comprehensive summary in JSON format with the following structure:
+{{
+    "executive_summary": "A 2-3 sentence overview of the most important credit market developments",
+    "key_points": ["Bullet point 1", "Bullet point 2", "Bullet point 3", "Bullet point 4", "Bullet point 5"],
+    "market_insights": ["Insight 1", "Insight 2", "Insight 3"],
+    "key_headlines": ["Headline 1", "Headline 2", "Headline 3", "Headline 4", "Headline 5"]
+}}
+
+Focus on:
+- Credit markets, corporate bonds, debt issuance, and credit risk
+- Interest rates and monetary policy affecting credit markets
+- M&A activity and restructuring
+- Market moves and credit spreads
+- People moves in credit markets
+
+Articles to analyze:
+{articles_text}
+
+Provide your response as valid JSON only, no additional text."""
+
+                response = openai_client.chat.completions.create(
+                    model="gpt-4",
+                    messages=[
+                        {"role": "system", "content": "You are an expert credit markets analyst. Provide concise, insightful summaries of financial news focused on credit markets."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0.7,
+                    max_tokens=2000
+                )
+                
+                ai_summary_text = response.choices[0].message.content.strip()
+                
+                # Try to parse JSON from response (remove markdown code blocks if present)
+                if ai_summary_text.startswith("```json"):
+                    ai_summary_text = ai_summary_text[7:]
+                if ai_summary_text.startswith("```"):
+                    ai_summary_text = ai_summary_text[3:]
+                if ai_summary_text.endswith("```"):
+                    ai_summary_text = ai_summary_text[:-3]
+                ai_summary_text = ai_summary_text.strip()
+                
+                ai_summary = json.loads(ai_summary_text)
+                
+                # Add metadata
+                summary = {
+                    "executive_summary": ai_summary.get("executive_summary", ""),
+                    "key_points": ai_summary.get("key_points", []),
+                    "market_insights": ai_summary.get("market_insights", []),
+                    "key_headlines": ai_summary.get("key_headlines", []),
+                    "articles_analyzed": len(past_24_hours),
+                    "analysis_period": "Past 24 hours only",
+                    "timestamp": datetime.now().isoformat(),
+                    "data_freshness": "Real-time AI analysis of latest articles",
+                    "sources": sources[:10],
+                    "categories": list(category_counts.keys())[:10]
+                }
+                
+                print(f"✅ AI summary generated successfully")
+                
+            except json.JSONDecodeError as e:
+                print(f"⚠️  Error parsing OpenAI JSON response: {e}")
+                print(f"Response was: {ai_summary_text[:500]}")
+                # Fallback to basic summary
+                summary = {
+                    "executive_summary": f"AI summary generation encountered an error. {len(past_24_hours)} articles analyzed from past 24 hours.",
+                    "key_points": [f"📊 {len(past_24_hours)} articles analyzed", f"📰 {len(sources)} sources", f"📈 {len(categories)} categories"],
+                    "market_insights": ["AI summary temporarily unavailable"],
+                    "key_headlines": [article.get('title', '')[:100] for article in past_24_hours[:5]],
+                    "articles_analyzed": len(past_24_hours),
+                    "analysis_period": "Past 24 hours only",
+                    "timestamp": datetime.now().isoformat(),
+                    "data_freshness": "Real-time analysis of latest articles"
+                }
+            except Exception as e:
+                print(f"⚠️  Error generating AI summary: {e}")
+                # Fallback to basic summary
+                summary = {
+                    "executive_summary": f"AI summary generation encountered an error. {len(past_24_hours)} articles analyzed from past 24 hours.",
+                    "key_points": [f"📊 {len(past_24_hours)} articles analyzed", f"📰 {len(sources)} sources", f"📈 {len(categories)} categories"],
+                    "market_insights": ["AI summary temporarily unavailable"],
+                    "key_headlines": [article.get('title', '')[:100] for article in past_24_hours[:5]],
+                    "articles_analyzed": len(past_24_hours),
+                    "analysis_period": "Past 24 hours only",
+                    "timestamp": datetime.now().isoformat(),
+                    "data_freshness": "Real-time analysis of latest articles"
+                }
+        else:
+            # Fallback if OpenAI is not available
+            print("⚠️  OpenAI client not available, using basic summary")
+            key_headlines = [f"• {article.get('title', '')} ({article.get('source', 'Unknown')})" for article in past_24_hours[:5]]
+            summary = {
+                "executive_summary": f"24-Hour Credit Market Summary: {len(past_24_hours)} key developments from {len(sources)} sources.",
+                "key_points": [
+                    f"📊 {len(past_24_hours)} articles analyzed from past 24 hours",
+                    f"📰 Top sources: {', '.join([f'{src} ({count})' for src, count in list(source_counts.items())[:3]])}",
+                    f"📈 Market sectors: {', '.join([f'{cat} ({count})' for cat, count in list(category_counts.items())[:3]])}",
+                    f"⏰ Analysis period: Last 24 hours (as of {now.strftime('%Y-%m-%d %H:%M UTC')})"
+                ],
+                "market_insights": [
+                    f"Recent activity shows {len(past_24_hours)} significant credit market developments",
+                    f"Primary coverage from: {', '.join(list(source_counts.keys())[:3])}",
+                    "Credit market conditions reflect real-time developments"
+                ],
+                "articles_analyzed": len(past_24_hours),
+                "analysis_period": "Past 24 hours only",
+                "timestamp": datetime.now().isoformat(),
+                "data_freshness": "Real-time analysis of latest articles",
+                "key_headlines": key_headlines
+            }
         
         return jsonify({
             "success": True,
