@@ -3023,6 +3023,170 @@ def download_cv(filename):
             'error': f'Download error: {str(e)}'
         }), 500
 
+# MARK: - User-to-User Chat Endpoints
+
+@app.route('/api/user-chats', methods=['GET'])
+def get_user_chats():
+    """Get all chats for a user"""
+    global user_chats
+    try:
+        email = request.args.get('email')
+        if not email:
+            return jsonify({
+                'success': False,
+                'error': 'Email parameter is required'
+            }), 400
+        
+        print(f"📥 Fetching chats for user: {email}")
+        
+        # Get chats for this user, or return empty list
+        chats = user_chats.get(email, [])
+        
+        print(f"✅ Returning {len(chats)} chats for {email}")
+        
+        return jsonify({
+            'success': True,
+            'chats': chats
+        })
+        
+    except Exception as e:
+        print(f"❌ Error fetching user chats: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/user-chats', methods=['POST'])
+def save_user_chats():
+    """Save chats for a user"""
+    global user_chats
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': 'Request body is required'
+            }), 400
+        
+        email = data.get('email')
+        chats = data.get('chats', [])
+        
+        if not email:
+            return jsonify({
+                'success': False,
+                'error': 'Email is required'
+            }), 400
+        
+        if not isinstance(chats, list):
+            return jsonify({
+                'success': False,
+                'error': 'Chats must be an array'
+            }), 400
+        
+        print(f"💾 Saving {len(chats)} chats for user: {email}")
+        
+        # Save chats for this user
+        user_chats[email] = chats
+        
+        print(f"✅ Successfully saved {len(chats)} chats for {email}")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Saved {len(chats)} chats'
+        })
+        
+    except Exception as e:
+        print(f"❌ Error saving user chats: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/user-messages', methods=['GET'])
+def get_user_messages():
+    """Get all messages for a chat"""
+    global user_messages
+    try:
+        chat_id = request.args.get('chat_id')
+        if not chat_id:
+            return jsonify({
+                'success': False,
+                'error': 'chat_id parameter is required'
+            }), 400
+        
+        print(f"📥 Fetching messages for chat: {chat_id}")
+        
+        # Get messages for this chat, or return empty list
+        messages = user_messages.get(chat_id, [])
+        
+        print(f"✅ Returning {len(messages)} messages for chat {chat_id}")
+        
+        return jsonify({
+            'success': True,
+            'messages': messages
+        })
+        
+    except Exception as e:
+        print(f"❌ Error fetching user messages: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/user-messages', methods=['POST'])
+def save_user_messages():
+    """Save messages for a chat"""
+    global user_messages
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': 'Request body is required'
+            }), 400
+        
+        chat_id = data.get('chat_id')
+        messages = data.get('messages', [])
+        
+        if not chat_id:
+            return jsonify({
+                'success': False,
+                'error': 'chat_id is required'
+            }), 400
+        
+        if not isinstance(messages, list):
+            return jsonify({
+                'success': False,
+                'error': 'Messages must be an array'
+            }), 400
+        
+        print(f"💾 Saving {len(messages)} messages for chat: {chat_id}")
+        
+        # Save messages for this chat
+        user_messages[chat_id] = messages
+        
+        print(f"✅ Successfully saved {len(messages)} messages for chat {chat_id}")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Saved {len(messages)} messages'
+        })
+        
+    except Exception as e:
+        print(f"❌ Error saving user messages: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 if __name__ == '__main__':
     # Force restart to pick up new template and text parsing fixes
     port = int(os.environ.get('PORT', 5001))
