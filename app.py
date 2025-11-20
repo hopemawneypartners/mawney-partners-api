@@ -3523,6 +3523,186 @@ def share_call_note():
             'error': str(e)
         }), 500
 
+# MARK: - Todo Endpoints
+
+@app.route('/api/user-todos', methods=['GET'])
+def get_user_todos():
+    """Get all todos for a user"""
+    global user_todos
+    try:
+        email = request.args.get('email')
+        if not email:
+            return jsonify({
+                'success': False,
+                'error': 'Email parameter is required'
+            }), 400
+        
+        print(f"📥 Fetching todos for user: {email}")
+        
+        # Get todos for this user, or return empty list
+        todos = user_todos.get(email, [])
+        
+        print(f"✅ Returning {len(todos)} todos for {email}")
+        
+        return jsonify({
+            'success': True,
+            'todos': todos
+        })
+        
+    except Exception as e:
+        print(f"❌ Error fetching user todos: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/user-todos', methods=['POST'])
+def save_user_todos():
+    """Save todos for a user"""
+    global user_todos
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': 'Request body is required'
+            }), 400
+        
+        email = data.get('email')
+        todos = data.get('todos', [])
+        
+        if not email:
+            return jsonify({
+                'success': False,
+                'error': 'Email is required'
+            }), 400
+        
+        if not isinstance(todos, list):
+            return jsonify({
+                'success': False,
+                'error': 'Todos must be an array'
+            }), 400
+        
+        print(f"💾 Saving {len(todos)} todos for user: {email}")
+        
+        # Save todos for this user
+        user_todos[email] = todos
+        
+        print(f"✅ Successfully saved {len(todos)} todos for {email}")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Saved {len(todos)} todos'
+        })
+        
+    except Exception as e:
+        print(f"❌ Error saving user todos: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/assign-task', methods=['POST'])
+def assign_task():
+    """Assign a task to specific users (similar to sharing call notes)"""
+    global user_todos
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': 'Request body is required'
+            }), 400
+        
+        task = data.get('task')
+        user_emails = data.get('user_emails', [])
+        assigner_email = data.get('assigner_email')  # Email of person assigning the task
+        
+        if not task:
+            return jsonify({
+                'success': False,
+                'error': 'Task is required'
+            }), 400
+        
+        if not isinstance(user_emails, list) or len(user_emails) == 0:
+            return jsonify({
+                'success': False,
+                'error': 'At least one user email is required'
+            }), 400
+        
+        print(f"📤 Assigning task '{task.get('title', 'Unknown')}' to {len(user_emails)} users")
+        
+        # Map user IDs to emails for assignment
+        # The task has assignedTo as user ID, but we need to find the email
+        assigned_to_user_id = task.get('assignedTo')
+        
+        # Add task to each user's list
+        assigned_count = 0
+        for user_email in user_emails:
+            if user_email not in user_todos:
+                user_todos[user_email] = []
+            
+            # Check if task already exists (by ID)
+            task_id = task.get('id')
+            if task_id and not any(t.get('id') == task_id for t in user_todos[user_email]):
+                # Update assignedTo to match the user's ID if needed
+                # Find user ID from email
+                user_id = None
+                for profile_email, profile in user_profiles.items():
+                    if profile_email == user_email:
+                        # Map email to user ID (this is a simple mapping)
+                        email_to_id = {
+                            'hg@mawneypartners.com': 'user_hope',
+                            'jt@mawneypartners.com': 'user_josh',
+                            'finance@mawneypartners.com': 'user_rachel',
+                            'jd@mawneypartners.com': 'user_jack',
+                            'he@mawneypartners.com': 'user_harry',
+                            'tjt@mawneypartners.com': 'user_tyler'
+                        }
+                        user_id = email_to_id.get(user_email)
+                        break
+                
+                # Create a copy of the task with updated assignment
+                assigned_task = task.copy()
+                if user_id:
+                    assigned_task['assignedTo'] = user_id
+                if assigner_email:
+                    # Map assigner email to user ID
+                    email_to_id = {
+                        'hg@mawneypartners.com': 'user_hope',
+                        'jt@mawneypartners.com': 'user_josh',
+                        'finance@mawneypartners.com': 'user_rachel',
+                        'jd@mawneypartners.com': 'user_jack',
+                        'he@mawneypartners.com': 'user_harry',
+                        'tjt@mawneypartners.com': 'user_tyler'
+                    }
+                    assigned_task['assignedBy'] = email_to_id.get(assigner_email)
+                
+                user_todos[user_email].append(assigned_task)
+                assigned_count += 1
+                print(f"✅ Added task to {user_email}'s list")
+            else:
+                print(f"ℹ️ Task already exists for {user_email}")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Assigned task to {assigned_count} user(s)',
+            'assigned_count': assigned_count
+        })
+        
+    except Exception as e:
+        print(f"❌ Error assigning task: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 if __name__ == '__main__':
     # Force restart to pick up new template and text parsing fixes
     port = int(os.environ.get('PORT', 5001))
