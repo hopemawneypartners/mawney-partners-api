@@ -123,6 +123,10 @@ MIN_COMPENSATION_VALUE = 0  # Minimum salary/bonus value
 MAX_JOB_TITLE_LENGTH = 200
 MAX_PERSON_NAME_LENGTH = 100
 
+# Industry moves tracking (shared across all users)
+industry_moves = []  # List of industry moves
+user_move_counts = {}  # email -> count of moves added by user
+
 # User-to-user chat storage
 user_chats = {}  # user_email -> list of chats
 user_messages = {}  # chat_id -> list of messages
@@ -3795,6 +3799,330 @@ def assign_task():
         
     except Exception as e:
         print(f"❌ Error assigning task: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+# MARK: - Industry Moves Tracking Endpoints
+
+@app.route('/api/industry-moves', methods=['GET', 'POST'])
+def industry_moves_endpoint():
+    """Industry moves tracking endpoint - shared across all users"""
+    global industry_moves, user_move_counts
+    
+    try:
+        # Authentication check
+        email, auth_error, auth_status = authenticate_user()
+        if auth_error:
+            return auth_error, auth_status
+        
+        if request.method == 'GET':
+            # Get all moves with optional filters
+            from_company = request.args.get('from_company')
+            to_company = request.args.get('to_company')
+            position = request.args.get('position')
+            region = request.args.get('region')
+            start_date = request.args.get('start_date')
+            end_date = request.args.get('end_date')
+            
+            filtered_moves = industry_moves.copy()
+            
+            # Apply filters
+            if from_company:
+                filtered_moves = [m for m in filtered_moves if m.get('from_company', '').lower() == from_company.lower()]
+            if to_company:
+                filtered_moves = [m for m in filtered_moves if m.get('to_company', '').lower() == to_company.lower()]
+            if position:
+                # Check if position matches either from_position or to_position
+                filtered_moves = [m for m in filtered_moves if 
+                                 position.lower() in m.get('from_position', '').lower() or 
+                                 position.lower() in m.get('to_position', '').lower()]
+            if region:
+                filtered_moves = [m for m in filtered_moves if m.get('region', '').lower() == region.lower()]
+            if start_date:
+                try:
+                    start = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+                    filtered_moves = [m for m in filtered_moves if 
+                                     datetime.fromisoformat(m.get('created_at', '').replace('Z', '+00:00')) >= start]
+                except:
+                    pass
+            if end_date:
+                try:
+                    end = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+                    filtered_moves = [m for m in filtered_moves if 
+                                     datetime.fromisoformat(m.get('created_at', '').replace('Z', '+00:00')) <= end]
+                except:
+                    pass
+            
+            return jsonify({
+                'success': True,
+                'moves': filtered_moves,
+                'count': len(filtered_moves)
+            })
+        
+        elif request.method == 'POST':
+            # Add a new move
+            data = request.get_json()
+            if not data:
+                return jsonify({
+                    'success': False,
+                    'error': 'Request body is required'
+                }), 400
+            
+            # Validate required fields
+            required_fields = ['name', 'from_position', 'from_company', 'to_position', 'to_company']
+            for field in required_fields:
+                if field not in data or not data[field]:
+                    return jsonify({
+                        'success': False,
+                        'error': f'{field} is required'
+                    }), 400
+            
+            # Create move entry
+            move = {
+                'id': f"move_{len(industry_moves)}_{datetime.now().timestamp()}",
+                'name': data['name'].strip(),
+                'from_position': data['from_position'].strip(),
+                'from_company': data['from_company'].strip(),
+                'to_position': data['to_position'].strip(),
+                'to_company': data['to_company'].strip(),
+                'region': data.get('region', '').strip(),  # Optional region
+                'created_by': email,
+                'created_at': datetime.now().isoformat(),
+                'move_date': data.get('move_date', datetime.now().isoformat())  # Optional move date
+            }
+            
+            # Add to moves list
+            industry_moves.append(move)
+            
+            # Update user contribution count
+            user_move_counts[email] = user_move_counts.get(email, 0) + 1
+            
+            print(f"✅ Industry move added by {email}: {move['name']} from {move['from_company']} to {move['to_company']}")
+            
+            return jsonify({
+                'success': True,
+                'message': 'Move added successfully',
+                'move': move
+            })
+    
+    except Exception as e:
+        print(f"❌ Error in industry moves endpoint: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/industry-moves/autocomplete', methods=['GET'])
+def industry_moves_autocomplete():
+    """Get autocomplete suggestions for job titles and companies"""
+    global industry_moves
+    
+    try:
+        # Authentication check
+        email, auth_error, auth_status = authenticate_user()
+        if auth_error:
+            return auth_error, auth_status
+        
+        query = request.args.get('q', '').lower()
+        type_filter = request.args.get('type', 'all')  # 'job_title', 'company', or 'all'
+        
+        job_titles = set()
+        companies = set()
+        
+        # Extract unique job titles and companies from existing moves
+        for move in industry_moves:
+            if move.get('from_position'):
+                job_titles.add(move['from_position'])
+            if move.get('to_position'):
+                job_titles.add(move['to_position'])
+            if move.get('from_company'):
+                companies.add(move['from_company'])
+            if move.get('to_company'):
+                companies.add(move['to_company'])
+        
+        # Filter by query if provided
+        if query:
+            job_titles = [jt for jt in job_titles if query in jt.lower()]
+            companies = [c for c in companies if query in c.lower()]
+        else:
+            job_titles = list(job_titles)
+            companies = list(companies)
+        
+        # Sort alphabetically
+        job_titles.sort()
+        companies.sort()
+        
+        result = {}
+        if type_filter in ['all', 'job_title']:
+            result['job_titles'] = job_titles[:20]  # Limit to 20 suggestions
+        if type_filter in ['all', 'company']:
+            result['companies'] = companies[:20]  # Limit to 20 suggestions
+        
+        return jsonify({
+            'success': True,
+            'suggestions': result
+        })
+    
+    except Exception as e:
+        print(f"❌ Error in autocomplete endpoint: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/industry-moves/company/<path:company_name>', methods=['GET'])
+def industry_moves_by_company(company_name):
+    """Get all moves for a specific company (from or to)"""
+    global industry_moves
+    
+    try:
+        # Authentication check
+        email, auth_error, auth_status = authenticate_user()
+        if auth_error:
+            return auth_error, auth_status
+        
+        # URL decode company name
+        from urllib.parse import unquote
+        company_name = unquote(company_name)
+        
+        # Find moves where company is either from_company or to_company
+        company_moves = [
+            m for m in industry_moves 
+            if m.get('from_company', '').lower() == company_name.lower() or 
+               m.get('to_company', '').lower() == company_name.lower()
+        ]
+        
+        return jsonify({
+            'success': True,
+            'company': company_name,
+            'moves': company_moves,
+            'count': len(company_moves)
+        })
+    
+    except Exception as e:
+        print(f"❌ Error fetching company moves: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/industry-moves/search/<path:person_name>', methods=['GET'])
+def industry_moves_search(person_name):
+    """Search moves by person name"""
+    global industry_moves
+    
+    try:
+        # Authentication check
+        email, auth_error, auth_status = authenticate_user()
+        if auth_error:
+            return auth_error, auth_status
+        
+        # URL decode person name
+        from urllib.parse import unquote
+        person_name = unquote(person_name).lower()
+        
+        # Find moves matching person name (case-insensitive partial match)
+        matching_moves = [
+            m for m in industry_moves 
+            if person_name in m.get('name', '').lower()
+        ]
+        
+        # Sort by created_at descending (most recent first)
+        matching_moves.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+        
+        return jsonify({
+            'success': True,
+            'query': person_name,
+            'moves': matching_moves,
+            'count': len(matching_moves)
+        })
+    
+    except Exception as e:
+        print(f"❌ Error searching moves: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/industry-moves/leaderboard', methods=['GET'])
+def industry_moves_leaderboard():
+    """Get leaderboard of user contributions"""
+    global user_move_counts, user_profiles
+    
+    try:
+        # Authentication check
+        email, auth_error, auth_status = authenticate_user()
+        if auth_error:
+            return auth_error, auth_status
+        
+        # Build leaderboard with user names
+        leaderboard = []
+        for user_email, count in user_move_counts.items():
+            user_profile = user_profiles.get(user_email, {})
+            leaderboard.append({
+                'email': user_email,
+                'name': user_profile.get('name', user_email),
+                'count': count
+            })
+        
+        # Sort by count descending
+        leaderboard.sort(key=lambda x: x['count'], reverse=True)
+        
+        return jsonify({
+            'success': True,
+            'leaderboard': leaderboard
+        })
+    
+    except Exception as e:
+        print(f"❌ Error fetching leaderboard: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/industry-moves/stats', methods=['GET'])
+def industry_moves_stats():
+    """Get statistics for a specific user"""
+    global user_move_counts
+    
+    try:
+        # Authentication check
+        email, auth_error, auth_status = authenticate_user()
+        if auth_error:
+            return auth_error, auth_status
+        
+        user_count = user_move_counts.get(email, 0)
+        
+        # Get total moves count
+        total_moves = len(industry_moves)
+        
+        # Get user's rank
+        sorted_users = sorted(user_move_counts.items(), key=lambda x: x[1], reverse=True)
+        user_rank = next((i + 1 for i, (e, _) in enumerate(sorted_users) if e == email), None)
+        
+        return jsonify({
+            'success': True,
+            'user_count': user_count,
+            'total_moves': total_moves,
+            'user_rank': user_rank
+        })
+    
+    except Exception as e:
+        print(f"❌ Error fetching user stats: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({
