@@ -3244,39 +3244,70 @@ def save_user_messages():
 def send_push_notification(device_token, title, body, chat_id=None, message_id=None):
     """Send push notification using APNs"""
     try:
-        # For now, we'll use a simple HTTP/2 approach
-        # In production, you'd use PyAPNs2 or similar library
-        # This is a placeholder - you'll need to configure APNs certificates
-        
         # Get APNs key and team ID from environment variables
         apns_key_id = os.getenv('APNS_KEY_ID')
         apns_team_id = os.getenv('APNS_TEAM_ID')
         apns_key_path = os.getenv('APNS_KEY_PATH')
         apns_topic = os.getenv('APNS_TOPIC', 'MP.MP-APP-V4')  # Your bundle ID
+        apns_use_sandbox = os.getenv('APNS_USE_SANDBOX', 'false').lower() == 'true'
         
         if not all([apns_key_id, apns_team_id, apns_key_path]):
             print("⚠️ APNs credentials not configured - skipping push notification")
             print("💡 Set APNS_KEY_ID, APNS_TEAM_ID, and APNS_KEY_PATH environment variables")
             return False
         
-        # For now, just log that we would send a notification
-        # You'll need to implement actual APNs sending with PyAPNs2
-        print(f"📱 Would send push notification:")
-        print(f"   Device Token: {device_token[:20]}...")
-        print(f"   Title: {title}")
-        print(f"   Body: {body}")
-        print(f"   Chat ID: {chat_id}")
+        # Try to send using PyAPNs2
+        try:
+            from apns2.client import APNsClient
+            from apns2.payload import Payload
+            from apns2.credentials import TokenCredentials
+            
+            # Create credentials from key file
+            with open(apns_key_path, 'r') as f:
+                key_content = f.read()
+            
+            credentials = TokenCredentials(
+                auth_key_path=apns_key_path,
+                auth_key_id=apns_key_id,
+                team_id=apns_team_id
+            )
+            
+            # Create APNs client
+            client = APNsClient(
+                credentials=credentials,
+                use_sandbox=apns_use_sandbox,
+                use_alternative_port=False
+            )
+            
+            # Create payload
+            payload = Payload(
+                alert={"title": title, "body": body},
+                sound="default",
+                badge=1,
+                custom={"chat_id": chat_id, "message_id": message_id} if chat_id else {}
+            )
+            
+            # Send notification
+            client.send_notification(device_token, payload, topic=apns_topic)
+            print(f"✅ Push notification sent successfully to {device_token[:20]}...")
+            return True
+            
+        except ImportError:
+            print("⚠️ PyAPNs2 not installed - logging notification instead")
+            print(f"📱 Would send push notification:")
+            print(f"   Device Token: {device_token[:20]}...")
+            print(f"   Title: {title}")
+            print(f"   Body: {body}")
+            print(f"   Chat ID: {chat_id}")
+            return False
+        except Exception as apns_error:
+            print(f"❌ APNs error: {apns_error}")
+            return False
         
-        # TODO: Implement actual APNs sending
-        # from apns2.client import APNsClient
-        # from apns2.payload import Payload
-        # client = APNsClient(apns_key_path, use_sandbox=False, use_alternative_port=False)
-        # payload = Payload(alert={"title": title, "body": body}, sound="default", badge=1)
-        # client.send_notification(device_token, payload, topic=apns_topic)
-        
-        return True
     except Exception as e:
         print(f"❌ Error sending push notification: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 @app.route('/api/register-device-token', methods=['POST'])
