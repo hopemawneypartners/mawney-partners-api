@@ -1825,7 +1825,16 @@ Provide valid JSON only, no additional text."""
                         break
                     except Exception as model_error:
                         last_error = model_error
-                        print(f"⚠️  Model {model_name} failed: {model_error}")
+                        error_str = str(model_error)
+                        # Check if it's a quota issue vs rate limit
+                        if "insufficient_quota" in error_str or "quota" in error_str.lower():
+                            print(f"⚠️  Model {model_name} failed: QUOTA ISSUE - {error_str}")
+                            print(f"💡 Check OpenAI billing: https://platform.openai.com/account/billing")
+                        elif "rate_limit" in error_str.lower() or "429" in error_str:
+                            print(f"⚠️  Model {model_name} failed: RATE LIMIT - {error_str}")
+                            print(f"💡 Too many requests, will retry with next model")
+                        else:
+                            print(f"⚠️  Model {model_name} failed: {error_str}")
                         sys.stdout.flush()
                         continue
                 
