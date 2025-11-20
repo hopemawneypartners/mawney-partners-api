@@ -1803,7 +1803,7 @@ REMEMBER:
 Provide valid JSON only, no additional text."""
 
                 response = openai_client.chat.completions.create(
-                    model="gpt-4",
+                    model="gpt-4o",  # Updated to gpt-4o (latest model) - fallback to gpt-4-turbo if needed
                     messages=[
                         {"role": "system", "content": "You are an expert credit markets analyst. Your ONLY job is to EXTRACT actual facts, information, and developments from articles. NEVER describe that an article exists. ALWAYS extract what happened: specific companies, people, deals, amounts, rates, movements. Be concrete and specific with facts and numbers."},
                         {"role": "user", "content": prompt}
