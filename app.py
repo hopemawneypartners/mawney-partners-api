@@ -1397,15 +1397,33 @@ def get_ai_summary():
     """Get comprehensive AI summary of articles from past 24 hours only"""
     try:
         print(f"🤖 AI Summary endpoint called")
+        
         # Get articles (either from Daily News or RSS)
-        articles = get_daily_news_articles() if DAILY_NEWS_AVAILABLE else get_comprehensive_rss_articles()
-        print(f"📰 Retrieved {len(articles) if articles else 0} articles")
+        try:
+            articles = get_daily_news_articles() if DAILY_NEWS_AVAILABLE else get_comprehensive_rss_articles()
+        except Exception as e:
+            print(f"❌ Error getting articles: {e}")
+            import traceback
+            print(f"Traceback: {traceback.format_exc()}")
+            return jsonify({
+                "success": False,
+                "error": f"Error retrieving articles: {str(e)}"
+            }), 500
         
         if not articles:
             return jsonify({
                 "success": False,
                 "error": "No articles available"
             }), 500
+        
+        if not isinstance(articles, list):
+            print(f"⚠️  Articles is not a list, type: {type(articles)}")
+            return jsonify({
+                "success": False,
+                "error": "Invalid articles format"
+            }), 500
+        
+        print(f"📰 Retrieved {len(articles)} articles")
 
         # DEDUPLICATION FOR AI SUMMARY
         print(f"🔧 AI Summary deduplication: {len(articles)} articles before")
@@ -1432,44 +1450,70 @@ def get_ai_summary():
         print(f"🕐 Filtering articles from past 24 hours (current time: {now})")
         
         for article in articles:
-            try:
-                # Parse article date - handle multiple date formats
-                article_date = None
-                date_fields = ['date', 'publishedAt', 'published_date', 'timestamp']
-                
-                for field in date_fields:
-                    if field in article and article[field]:
-                        try:
-                            date_str = str(article[field])
-                            # Remove 'Z' suffix if present and handle timezone
-                            if date_str.endswith('Z'):
-                                date_str = date_str[:-1] + '+00:00'
-                            elif '+' not in date_str and date_str.count('-') >= 2:
-                                # If no timezone info, assume UTC
-                                if 'T' in date_str:
-                                    date_str = date_str + '+00:00'
-                            
-                            article_date = datetime.fromisoformat(date_str)
-                            # Convert to timezone-naive for comparison
-                            if article_date.tzinfo is not None:
-                                article_date = article_date.replace(tzinfo=None)
-                            break
-                        except Exception as parse_error:
-                            print(f"⚠️  Date parse error for field {field}: {parse_error}, value: {date_str[:50] if 'date_str' in locals() else 'N/A'}")
-                            continue
-                
-                if not article_date:
+            article_date = None
+            date_fields = ['date', 'publishedAt', 'published_date', 'timestamp']
+            
+            # Try to find a valid date field
+            for field in date_fields:
+                if field not in article or not article[field]:
                     continue
                 
-                # Check if within 24 hours only
+                try:
+                    date_value = article[field]
+                    if not date_value:
+                        continue
+                    
+                    date_str = str(date_value).strip()
+                    
+                    # Simple approach: try to parse as-is first
+                    try:
+                        # Remove Z and add timezone if needed
+                        if date_str.endswith('Z'):
+                            date_str = date_str[:-1]
+                        
+                        # Try parsing
+                        article_date = datetime.fromisoformat(date_str)
+                    except (ValueError, TypeError):
+                        # If that fails, try removing timezone info
+                        try:
+                            # Remove timezone offset if present
+                            if '+' in date_str:
+                                date_str = date_str.split('+')[0]
+                            elif date_str.count('-') > 2:  # Might have timezone as -05:00
+                                parts = date_str.rsplit('-', 1)
+                                if len(parts) == 2 and ':' in parts[1]:
+                                    date_str = parts[0]
+                            
+                            article_date = datetime.fromisoformat(date_str)
+                        except (ValueError, TypeError):
+                            # Last resort: try just the date part
+                            try:
+                                if 'T' in date_str:
+                                    date_str = date_str.split('T')[0]
+                                article_date = datetime.fromisoformat(date_str)
+                            except (ValueError, TypeError):
+                                continue
+                    
+                    # Convert to timezone-naive
+                    if article_date and article_date.tzinfo is not None:
+                        article_date = article_date.replace(tzinfo=None)
+                    
+                    if article_date:
+                        break
+                except Exception:
+                    continue
+            
+            # Skip if no valid date found
+            if not article_date:
+                continue
+            
+            # Check if within 24 hours
+            try:
                 time_diff = now - article_date
                 hours_diff = time_diff.total_seconds() / 3600
-                if hours_diff >= 0 and hours_diff <= 24:  # 24 hours in seconds
+                if hours_diff >= 0 and hours_diff <= 24:
                     past_24_hours.append(article)
-            except Exception as e:
-                print(f"⚠️  Error parsing date for article: {e}")
-                import traceback
-                print(f"Traceback: {traceback.format_exc()}")
+            except Exception:
                 continue
         
         print(f"✅ Found {len(past_24_hours)} articles from past 24 hours")
@@ -1481,28 +1525,44 @@ def get_ai_summary():
             }), 500
 
         # Prepare article data for OpenAI
-        sources = list(set([article.get('source', 'Unknown') for article in past_24_hours]))
-        categories = list(set([article.get('category', 'Unknown') for article in past_24_hours]))
+        try:
+            sources = list(set([article.get('source', 'Unknown') for article in past_24_hours]))
+            categories = list(set([article.get('category', 'Unknown') for article in past_24_hours]))
+            
+            # Count articles by category and source
+            category_counts = {}
+            source_counts = {}
+            for article in past_24_hours:
+                cat = article.get('category', 'Unknown')
+                category_counts[cat] = category_counts.get(cat, 0) + 1
+                src = article.get('source', 'Unknown')
+                source_counts[src] = source_counts.get(src, 0) + 1
+            
+            # Prepare article summaries for OpenAI (limit to top 20 to avoid token limits)
+            article_summaries = []
+            for article in past_24_hours[:20]:
+                try:
+                    title = str(article.get('title', ''))
+                    content = str(article.get('content', ''))[:500]  # Limit content length
+                    source = str(article.get('source', 'Unknown'))
+                    category = str(article.get('category', 'Unknown'))
+                    article_summaries.append(f"Title: {title}\nSource: {source}\nCategory: {category}\nContent: {content}\n")
+                except Exception as e:
+                    print(f"⚠️  Error preparing article summary: {e}")
+                    continue
+            
+            articles_text = "\n---\n".join(article_summaries)
+        except Exception as e:
+            print(f"❌ Error preparing article data: {e}")
+            import traceback
+            print(f"Traceback: {traceback.format_exc()}")
+            return jsonify({
+                "success": False,
+                "error": f"Error preparing articles: {str(e)}"
+            }), 500
         
-        # Count articles by category and source
-        category_counts = {}
-        source_counts = {}
-        for article in past_24_hours:
-            cat = article.get('category', 'Unknown')
-            category_counts[cat] = category_counts.get(cat, 0) + 1
-            src = article.get('source', 'Unknown')
-            source_counts[src] = source_counts.get(src, 0) + 1
-        
-        # Prepare article summaries for OpenAI (limit to top 20 to avoid token limits)
-        article_summaries = []
-        for article in past_24_hours[:20]:
-            title = article.get('title', '')
-            content = article.get('content', '')[:500]  # Limit content length
-            source = article.get('source', 'Unknown')
-            category = article.get('category', 'Unknown')
-            article_summaries.append(f"Title: {title}\nSource: {source}\nCategory: {category}\nContent: {content}\n")
-        
-        articles_text = "\n---\n".join(article_summaries)
+        # Initialize summary variable
+        summary = None
         
         # Generate AI summary using OpenAI
         print(f"🤖 OpenAI client available: {openai_client is not None}")
@@ -1606,6 +1666,30 @@ Provide your response as valid JSON only, no additional text."""
         else:
             # Fallback if OpenAI is not available
             print("⚠️  OpenAI client not available, using basic summary")
+            key_headlines = [f"• {article.get('title', '')} ({article.get('source', 'Unknown')})" for article in past_24_hours[:5]]
+            summary = {
+                "executive_summary": f"24-Hour Credit Market Summary: {len(past_24_hours)} key developments from {len(sources)} sources.",
+                "key_points": [
+                    f"📊 {len(past_24_hours)} articles analyzed from past 24 hours",
+                    f"📰 Top sources: {', '.join([f'{src} ({count})' for src, count in list(source_counts.items())[:3]])}",
+                    f"📈 Market sectors: {', '.join([f'{cat} ({count})' for cat, count in list(category_counts.items())[:3]])}",
+                    f"⏰ Analysis period: Last 24 hours (as of {now.strftime('%Y-%m-%d %H:%M UTC')})"
+                ],
+                "market_insights": [
+                    f"Recent activity shows {len(past_24_hours)} significant credit market developments",
+                    f"Primary coverage from: {', '.join(list(source_counts.keys())[:3])}",
+                    "Credit market conditions reflect real-time developments"
+                ],
+                "articles_analyzed": len(past_24_hours),
+                "analysis_period": "Past 24 hours only",
+                "timestamp": datetime.now().isoformat(),
+                "data_freshness": "Real-time analysis of latest articles",
+                "key_headlines": key_headlines
+            }
+        
+        # Ensure summary is defined
+        if summary is None:
+            print("⚠️  Summary was not generated, using fallback")
             key_headlines = [f"• {article.get('title', '')} ({article.get('source', 'Unknown')})" for article in past_24_hours[:5]]
             summary = {
                 "executive_summary": f"24-Hour Credit Market Summary: {len(past_24_hours)} key developments from {len(sources)} sources.",
