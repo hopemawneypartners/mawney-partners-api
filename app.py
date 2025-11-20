@@ -3195,10 +3195,33 @@ def save_user_messages():
         # Send push notifications to recipients (participants who aren't the sender)
         if new_messages and chat and sender_email:
             participants = chat.get('participants', [])
-            sender_name = chat.get('name', 'Someone')  # Fallback to chat name
             
-            # Find recipient emails (participants who aren't the sender)
-            recipient_emails = [p for p in participants if p != sender_email and isinstance(p, str) and '@' in p]
+            # Get sender name from user_profiles
+            sender_profile = user_profiles.get(sender_email, {})
+            sender_name = sender_profile.get('name', 'Someone')
+            
+            # Map participant IDs to emails
+            # Participants can be either emails or user IDs
+            # We need to find all users who have this chat and get their emails
+            recipient_emails = []
+            for email, user_chat_list in user_chats.items():
+                # Check if this user has this chat
+                for user_chat in user_chat_list:
+                    if isinstance(user_chat, dict) and user_chat.get('id') == chat_id:
+                        # This user is a participant, add their email if not the sender
+                        if email != sender_email:
+                            recipient_emails.append(email)
+                        break
+            
+            # Also check if participants are emails directly
+            for participant in participants:
+                if isinstance(participant, str):
+                    # If it's an email, use it directly
+                    if '@' in participant and participant != sender_email:
+                        if participant not in recipient_emails:
+                            recipient_emails.append(participant)
+            
+            print(f"📱 Push notification: sender={sender_email}, recipients={recipient_emails}, chat_id={chat_id}")
             
             # Get the last new message for notification
             last_message = new_messages[-1] if new_messages else None
@@ -3219,9 +3242,11 @@ def save_user_messages():
                             chat_id=chat_id,
                             message_id=last_message.get('id')
                         )
-                        print(f"📱 Sent push notification to {recipient_email}")
+                        print(f"✅ Sent push notification to {recipient_email}")
                     else:
-                        print(f"⚠️ No device token found for {recipient_email}")
+                        print(f"⚠️ No device token found for {recipient_email} (registered tokens: {list(device_tokens.keys())})")
+            else:
+                print(f"⚠️ No new messages to notify about")
         
         print(f"✅ Successfully saved {len(messages)} messages for chat {chat_id}")
         
