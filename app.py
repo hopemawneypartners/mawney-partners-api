@@ -1535,11 +1535,11 @@ def get_ai_summary():
         print(f"🕐 Filtering articles from past 24 hours (current time: {now})")
         
         for article in articles:
-                article_date = None
-                date_fields = ['date', 'publishedAt', 'published_date', 'timestamp']
-                
+            article_date = None
+            date_fields = ['date', 'publishedAt', 'published_date', 'timestamp']
+            
             # Try to find a valid date field
-                for field in date_fields:
+            for field in date_fields:
                 if field not in article or not article[field]:
                     continue
                 
@@ -1553,11 +1553,11 @@ def get_ai_summary():
                     # Simple approach: try to parse as-is first
                     try:
                         # Remove Z and add timezone if needed
-                            if date_str.endswith('Z'):
-                                date_str = date_str[:-1]
+                        if date_str.endswith('Z'):
+                            date_str = date_str[:-1]
                         
                         # Try parsing
-                            article_date = datetime.fromisoformat(date_str)
+                        article_date = datetime.fromisoformat(date_str)
                     except (ValueError, TypeError):
                         # If that fails, try removing timezone info
                         try:
@@ -1584,13 +1584,13 @@ def get_ai_summary():
                         article_date = article_date.replace(tzinfo=None)
                     
                     if article_date:
-                            break
+                        break
                 except Exception:
-                            continue
-                
-            # Skip if no valid date found
-                if not article_date:
                     continue
+            
+            # Skip if no valid date found
+            if not article_date:
+                continue
                 
             # Check if within 24 hours
             try:
@@ -1632,15 +1632,15 @@ def get_ai_summary():
         
         # Prepare article data for OpenAI
         try:
-        sources = list(set([article.get('source', 'Unknown') for article in past_24_hours]))
-        categories = list(set([article.get('category', 'Unknown') for article in past_24_hours]))
-        
+            sources = list(set([article.get('source', 'Unknown') for article in past_24_hours]))
+            categories = list(set([article.get('category', 'Unknown') for article in past_24_hours]))
+            
             # Count articles by category and source
-        category_counts = {}
+            category_counts = {}
             source_counts = {}
-        for article in past_24_hours:
-            cat = article.get('category', 'Unknown')
-            category_counts[cat] = category_counts.get(cat, 0) + 1
+            for article in past_24_hours:
+                cat = article.get('category', 'Unknown')
+                category_counts[cat] = category_counts.get(cat, 0) + 1
                 src = article.get('source', 'Unknown')
                 source_counts[src] = source_counts.get(src, 0) + 1
             
@@ -1681,10 +1681,10 @@ def get_ai_summary():
                     cat = article.get('category', 'Unknown')
                     category_counts[cat] = category_counts.get(cat, 0) + 1
             if not source_counts:
-        source_counts = {}
-        for article in past_24_hours:
-            src = article.get('source', 'Unknown')
-            source_counts[src] = source_counts.get(src, 0) + 1
+                source_counts = {}
+                for article in past_24_hours:
+                    src = article.get('source', 'Unknown')
+                    source_counts[src] = source_counts.get(src, 0) + 1
             if not articles_text:
                 articles_text = "\n---\n".join([f"Title: {article.get('title', '')}\nSource: {article.get('source', 'Unknown')}\n" for article in past_24_hours[:20]])
         
@@ -1790,7 +1790,7 @@ Provide valid JSON only, no additional text."""
                 sys.stdout.flush()
                 
                 # Add metadata
-        summary = {
+                summary = {
                     "executive_summary": ai_summary.get("executive_summary", ""),
                     "key_points": ai_summary.get("key_points", []),
                     "market_insights": ai_summary.get("market_insights", []),
