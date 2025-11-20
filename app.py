@@ -730,7 +730,11 @@ def is_credit_relevant(title, content=""):
         # Credit Regulation & Compliance
         'credit regulation', 'credit compliance', 'credit governance', 'credit policy',
         'credit limit', 'credit exposure', 'credit concentration', 'credit diversification',
-        'credit monitoring', 'credit reporting', 'credit disclosure', 'credit transparency'
+        'credit monitoring', 'credit reporting', 'credit disclosure', 'credit transparency',
+        
+        # Capital & Fundraising Terms
+        'capital solutions', 'mezzanine', 'fundraising', 'capital raising', 'capital formation',
+        'successfully deploys', 'refinancing', 'debut fund', 'emerging manager'
     ]
     
     # Secondary credit terms - need at least 2 matches AND must be in financial context
@@ -1615,15 +1619,20 @@ def get_ai_summary():
                 src = article.get('source', 'Unknown')
                 source_counts[src] = source_counts.get(src, 0) + 1
             
-            # Prepare article summaries for OpenAI (limit to top 20 to avoid token limits)
+            # Prepare article summaries for OpenAI (include more articles and more content for detailed analysis)
             article_summaries = []
-            for article in past_24_hours[:20]:
+            # Include all articles from past 24 hours (or up to 30 for detailed analysis)
+            articles_to_analyze = past_24_hours[:30] if len(past_24_hours) > 30 else past_24_hours
+            num_articles_to_analyze = len(articles_to_analyze)
+            for article in articles_to_analyze:
                 try:
                     title = str(article.get('title', ''))
-                    content = str(article.get('content', ''))[:500]  # Limit content length
+                    # Increase content length for better analysis
+                    content = str(article.get('content', ''))[:800]  # Increased from 500 to 800
                     source = str(article.get('source', 'Unknown'))
                     category = str(article.get('category', 'Unknown'))
-                    article_summaries.append(f"Title: {title}\nSource: {source}\nCategory: {category}\nContent: {content}\n")
+                    link = str(article.get('link', ''))
+                    article_summaries.append(f"Article {len(article_summaries) + 1}:\nTitle: {title}\nSource: {source}\nCategory: {category}\nLink: {link}\nContent: {content}\n")
                 except Exception as e:
                     print(f"⚠️  Error preparing article summary: {e}")
                     sys.stdout.flush()
@@ -1663,22 +1672,48 @@ def get_ai_summary():
             try:
                 print(f"🤖 Generating AI summary for {len(past_24_hours)} articles using OpenAI...")
                 
-                prompt = f"""You are a credit markets analyst providing a daily summary of financial news articles from the past 24 hours.
+                prompt = f"""You are a credit markets analyst providing a detailed daily summary of financial news articles from the past 24 hours.
 
-Analyze the following {len(past_24_hours)} articles and provide a comprehensive summary in JSON format with the following structure:
+Analyze the following {num_articles_to_analyze} articles and provide a comprehensive, detailed breakdown in JSON format with the following structure:
 {{
-    "executive_summary": "A 2-3 sentence overview of the most important credit market developments",
-    "key_points": ["Bullet point 1", "Bullet point 2", "Bullet point 3", "Bullet point 4", "Bullet point 5"],
-    "market_insights": ["Insight 1", "Insight 2", "Insight 3"],
-    "key_headlines": ["Headline 1", "Headline 2", "Headline 3", "Headline 4", "Headline 5"]
+    "executive_summary": "A 3-4 sentence overview synthesizing the most important credit market developments from the articles",
+    "key_points": [
+        "Detailed point 1 - include specific article details, companies, deals, or market movements",
+        "Detailed point 2 - include specific article details, companies, deals, or market movements",
+        "Detailed point 3 - include specific article details, companies, deals, or market movements",
+        "Detailed point 4 - include specific article details, companies, deals, or market movements",
+        "Detailed point 5 - include specific article details, companies, deals, or market movements"
+    ],
+    "market_insights": [
+        "Detailed insight 1 - analyze specific market implications, trends, or developments from the articles",
+        "Detailed insight 2 - analyze specific market implications, trends, or developments from the articles",
+        "Detailed insight 3 - analyze specific market implications, trends, or developments from the articles"
+    ],
+    "key_headlines": [
+        "Headline 1 with brief context",
+        "Headline 2 with brief context",
+        "Headline 3 with brief context",
+        "Headline 4 with brief context",
+        "Headline 5 with brief context"
+    ],
+    "article_breakdown": [
+        {{
+            "title": "Article title",
+            "source": "Source name",
+            "key_takeaway": "Main point or development from this article",
+            "market_impact": "What this means for credit markets"
+        }}
+    ]
 }}
 
-Focus on:
-- Credit markets, corporate bonds, debt issuance, and credit risk
-- Interest rates and monetary policy affecting credit markets
-- M&A activity and restructuring
-- Market moves and credit spreads
-- People moves in credit markets
+IMPORTANT INSTRUCTIONS:
+- Break down the KEY articles individually - don't just give an overview
+- Include specific details: company names, deal sizes, interest rates, market movements, people names and their new roles
+- For each key article, explain what happened and why it matters for credit markets
+- Focus on actionable intelligence and specific developments
+- Prioritize articles about: credit markets, corporate bonds, debt issuance, credit risk, interest rates, monetary policy, M&A, restructuring, market moves, credit spreads, and people moves
+- Make the key_points and market_insights detailed and specific, not generic
+- Include at least 5-10 articles in the article_breakdown array, focusing on the most important ones
 
 Articles to analyze:
 {articles_text}
@@ -1688,11 +1723,11 @@ Provide your response as valid JSON only, no additional text."""
                 response = openai_client.chat.completions.create(
                     model="gpt-4",
                     messages=[
-                        {"role": "system", "content": "You are an expert credit markets analyst. Provide concise, insightful summaries of financial news focused on credit markets."},
+                        {"role": "system", "content": "You are an expert credit markets analyst. Provide detailed, specific breakdowns of financial news articles, focusing on actionable intelligence and specific developments in credit markets. Break down individual articles rather than giving generic overviews."},
                         {"role": "user", "content": prompt}
                     ],
                     temperature=0.7,
-                    max_tokens=2000
+                    max_tokens=4000  # Increased from 2000 to allow for detailed breakdowns
                 )
                 
                 ai_summary_text = response.choices[0].message.content.strip()
@@ -1714,6 +1749,7 @@ Provide your response as valid JSON only, no additional text."""
                     "key_points": ai_summary.get("key_points", []),
                     "market_insights": ai_summary.get("market_insights", []),
                     "key_headlines": ai_summary.get("key_headlines", []),
+                    "article_breakdown": ai_summary.get("article_breakdown", []),  # Include detailed article breakdown
                     "articles_analyzed": len(past_24_hours),
                     "analysis_period": "Past 24 hours only",
                     "timestamp": datetime.now().isoformat(),
