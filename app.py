@@ -1802,15 +1802,35 @@ REMEMBER:
 
 Provide valid JSON only, no additional text."""
 
-                response = openai_client.chat.completions.create(
-                    model="gpt-4o",  # Updated to gpt-4o (latest model) - fallback to gpt-4-turbo if needed
-                    messages=[
-                        {"role": "system", "content": "You are an expert credit markets analyst. Your ONLY job is to EXTRACT actual facts, information, and developments from articles. NEVER describe that an article exists. ALWAYS extract what happened: specific companies, people, deals, amounts, rates, movements. Be concrete and specific with facts and numbers."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    temperature=0.7,
-                    max_tokens=4000  # Increased from 2000 to allow for detailed breakdowns
-                )
+                # Try gpt-4o first, fallback to gpt-4-turbo if not available
+                models_to_try = ["gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo"]
+                response = None
+                last_error = None
+                
+                for model_name in models_to_try:
+                    try:
+                        print(f"🤖 Attempting to use model: {model_name}")
+                        sys.stdout.flush()
+                        response = openai_client.chat.completions.create(
+                            model=model_name,
+                            messages=[
+                                {"role": "system", "content": "You are an expert credit markets analyst. Your ONLY job is to EXTRACT actual facts, information, and developments from articles. NEVER describe that an article exists. ALWAYS extract what happened: specific companies, people, deals, amounts, rates, movements. Be concrete and specific with facts and numbers."},
+                                {"role": "user", "content": prompt}
+                            ],
+                            temperature=0.7,
+                            max_tokens=4000  # Increased from 2000 to allow for detailed breakdowns
+                        )
+                        print(f"✅ Successfully using model: {model_name}")
+                        sys.stdout.flush()
+                        break
+                    except Exception as model_error:
+                        last_error = model_error
+                        print(f"⚠️  Model {model_name} failed: {model_error}")
+                        sys.stdout.flush()
+                        continue
+                
+                if not response:
+                    raise Exception(f"All models failed. Last error: {last_error}")
                 
                 ai_summary_text = response.choices[0].message.content.strip()
                 print(f"📝 Raw AI response (first 500 chars): {ai_summary_text[:500]}")
