@@ -3698,6 +3698,10 @@ def get_user_todos():
         # Get todos for this user, or return empty list
         todos = user_todos.get(email, [])
         
+        # Log task details for debugging
+        for todo in todos:
+            print(f"  - Task: '{todo.get('title', 'Unknown')}' (assignedTo: {todo.get('assignedTo', 'nil')}, id: {todo.get('id', 'no-id')})")
+        
         print(f"✅ Returning {len(todos)} todos for {email}")
         
         return jsonify({
