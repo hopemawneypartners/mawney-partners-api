@@ -1400,13 +1400,28 @@ def get_ai_summary():
         print(f"🤖 AI Summary endpoint called")
         sys.stdout.flush()
         
-        # Get articles (either from Daily News or RSS)
+        # Get articles (same logic as /api/articles endpoint - try Daily News first, then fallback to RSS)
         articles = None
         try:
             print(f"📚 Attempting to retrieve articles...")
+            print(f"📊 Daily News available: {DAILY_NEWS_AVAILABLE}")
             sys.stdout.flush()
-            articles = get_daily_news_articles() if DAILY_NEWS_AVAILABLE else get_comprehensive_rss_articles()
-            print(f"📚 Retrieved articles: {len(articles) if articles else 0} articles")
+            
+            # Try Daily News system first (same as /api/articles)
+            if DAILY_NEWS_AVAILABLE:
+                articles = get_daily_news_articles()
+                print(f"📊 Daily News articles: {len(articles) if articles else 0}")
+                sys.stdout.flush()
+            
+            # Fallback to RSS feeds if Daily News didn't return articles
+            if not articles or len(articles) == 0:
+                print(f"🔄 Falling back to RSS feeds...")
+                sys.stdout.flush()
+                articles = get_comprehensive_rss_articles()
+                print(f"📊 RSS articles: {len(articles) if articles else 0}")
+                sys.stdout.flush()
+            
+            print(f"📚 Final article count: {len(articles) if articles else 0} articles")
             sys.stdout.flush()
         except Exception as e:
             print(f"❌ Error getting articles: {e}")
