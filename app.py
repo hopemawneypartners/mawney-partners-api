@@ -1802,8 +1802,8 @@ REMEMBER:
 
 Provide valid JSON only, no additional text."""
 
-                # Try gpt-4o first, fallback to gpt-4-turbo if not available
-                models_to_try = ["gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo"]
+                # Try gpt-4o first, fallback to gpt-4o-mini (cheaper) or gpt-3.5-turbo if not available
+                models_to_try = ["gpt-4o", "gpt-4o-mini", "gpt-3.5-turbo"]
                 response = None
                 last_error = None
                 
