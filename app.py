@@ -3235,16 +3235,25 @@ def save_user_messages():
                 for recipient_email in recipient_emails:
                     device_token = device_tokens.get(recipient_email)
                     if device_token:
-                        send_push_notification(
+                        print(f"📤 Attempting to send push notification to {recipient_email}")
+                        print(f"   Device token: {device_token[:20]}...")
+                        print(f"   Title: 💬 {sender_name}")
+                        print(f"   Body: {message_text}")
+                        result = send_push_notification(
                             device_token=device_token,
                             title=f"💬 {sender_name}",
                             body=message_text,
                             chat_id=chat_id,
                             message_id=last_message.get('id')
                         )
-                        print(f"✅ Sent push notification to {recipient_email}")
+                        if result:
+                            print(f"✅ Push notification sent successfully to {recipient_email}")
+                        else:
+                            print(f"❌ Failed to send push notification to {recipient_email}")
                     else:
-                        print(f"⚠️ No device token found for {recipient_email} (registered tokens: {list(device_tokens.keys())})")
+                        print(f"⚠️ No device token found for {recipient_email}")
+                        print(f"   Registered tokens: {list(device_tokens.keys())}")
+                        print(f"   Total registered devices: {len(device_tokens)}")
             else:
                 print(f"⚠️ No new messages to notify about")
         
@@ -3276,9 +3285,16 @@ def send_push_notification(device_token, title, body, chat_id=None, message_id=N
         apns_topic = os.getenv('APNS_TOPIC', 'MP.MP-APP-V4')  # Your bundle ID
         apns_use_sandbox = os.getenv('APNS_USE_SANDBOX', 'false').lower() == 'true'
         
+        print(f"🔍 Checking APNs configuration...")
+        print(f"   APNS_KEY_ID: {'✅ Set' if apns_key_id else '❌ Missing'}")
+        print(f"   APNS_TEAM_ID: {'✅ Set' if apns_team_id else '❌ Missing'}")
+        print(f"   APNS_KEY_PATH: {'✅ Set' if apns_key_path else '❌ Missing'}")
+        print(f"   APNS_TOPIC: {apns_topic}")
+        print(f"   APNS_USE_SANDBOX: {apns_use_sandbox}")
+        
         if not all([apns_key_id, apns_team_id, apns_key_path]):
             print("⚠️ APNs credentials not configured - skipping push notification")
-            print("💡 Set APNS_KEY_ID, APNS_TEAM_ID, and APNS_KEY_PATH environment variables")
+            print("💡 Set APNS_KEY_ID, APNS_TEAM_ID, and APNS_KEY_PATH environment variables on Render")
             return False
         
         # Try to send using PyAPNs2
@@ -3287,9 +3303,20 @@ def send_push_notification(device_token, title, body, chat_id=None, message_id=N
             from apns2.payload import Payload
             from apns2.credentials import TokenCredentials
             
+            print(f"📂 Reading APNs key from: {apns_key_path}")
+            
+            # Check if key file exists
+            import os
+            if not os.path.exists(apns_key_path):
+                print(f"❌ APNs key file not found at: {apns_key_path}")
+                print(f"   Current working directory: {os.getcwd()}")
+                print(f"   Files in current directory: {os.listdir('.')}")
+                return False
+            
             # Create credentials from key file
             with open(apns_key_path, 'r') as f:
                 key_content = f.read()
+                print(f"✅ Read APNs key file ({len(key_content)} bytes)")
             
             credentials = TokenCredentials(
                 auth_key_path=apns_key_path,
@@ -3297,12 +3324,16 @@ def send_push_notification(device_token, title, body, chat_id=None, message_id=N
                 team_id=apns_team_id
             )
             
+            print(f"🔐 Created APNs credentials")
+            
             # Create APNs client
             client = APNsClient(
                 credentials=credentials,
                 use_sandbox=apns_use_sandbox,
                 use_alternative_port=False
             )
+            
+            print(f"📱 Created APNs client (sandbox: {apns_use_sandbox})")
             
             # Create payload
             payload = Payload(
@@ -3312,13 +3343,23 @@ def send_push_notification(device_token, title, body, chat_id=None, message_id=N
                 custom={"chat_id": chat_id, "message_id": message_id} if chat_id else {}
             )
             
-            # Send notification
-            client.send_notification(device_token, payload, topic=apns_topic)
-            print(f"✅ Push notification sent successfully to {device_token[:20]}...")
-            return True
+            print(f"📦 Created payload: title='{title}', body='{body[:50]}...'")
             
-        except ImportError:
-            print("⚠️ PyAPNs2 not installed - logging notification instead")
+            # Send notification (PyAPNs2 send_notification is fire-and-forget)
+            print(f"🚀 Sending push notification to device token: {device_token[:20]}...")
+            try:
+                client.send_notification(device_token, payload, topic=apns_topic)
+                print(f"✅ Push notification sent successfully!")
+                return True
+            except Exception as send_error:
+                print(f"❌ Error sending notification: {send_error}")
+                import traceback
+                traceback.print_exc()
+                return False
+            
+        except ImportError as import_error:
+            print(f"❌ PyAPNs2 not installed: {import_error}")
+            print(f"💡 Install with: pip install PyAPNs2")
             print(f"📱 Would send push notification:")
             print(f"   Device Token: {device_token[:20]}...")
             print(f"   Title: {title}")
@@ -3327,6 +3368,8 @@ def send_push_notification(device_token, title, body, chat_id=None, message_id=N
             return False
         except Exception as apns_error:
             print(f"❌ APNs error: {apns_error}")
+            import traceback
+            traceback.print_exc()
             return False
         
     except Exception as e:
@@ -3334,6 +3377,63 @@ def send_push_notification(device_token, title, body, chat_id=None, message_id=N
         import traceback
         traceback.print_exc()
         return False
+
+@app.route('/api/test-push-notification', methods=['POST'])
+def test_push_notification():
+    """Test endpoint to send a push notification"""
+    global device_tokens
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': 'Request body is required'
+            }), 400
+        
+        email = data.get('email')
+        if not email:
+            return jsonify({
+                'success': False,
+                'error': 'Email is required'
+            }), 400
+        
+        device_token = device_tokens.get(email)
+        if not device_token:
+            return jsonify({
+                'success': False,
+                'error': f'No device token found for {email}. Registered emails: {list(device_tokens.keys())}'
+            }), 400
+        
+        title = data.get('title', 'Test Notification')
+        body = data.get('body', 'This is a test push notification')
+        
+        result = send_push_notification(
+            device_token=device_token,
+            title=title,
+            body=body,
+            chat_id=None,
+            message_id=None
+        )
+        
+        if result:
+            return jsonify({
+                'success': True,
+                'message': 'Test push notification sent'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to send push notification (check server logs)'
+            }), 500
+        
+    except Exception as e:
+        print(f"❌ Error in test push notification: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 @app.route('/api/register-device-token', methods=['POST'])
 def register_device_token():
@@ -3366,6 +3466,9 @@ def register_device_token():
         device_tokens[email] = device_token
         
         print(f"✅ Registered device token for {email}")
+        print(f"   Token: {device_token[:20]}...{device_token[-10:]}")
+        print(f"   Total registered devices: {len(device_tokens)}")
+        print(f"   All registered emails: {list(device_tokens.keys())}")
         
         return jsonify({
             'success': True,
