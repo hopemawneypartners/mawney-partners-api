@@ -11,6 +11,7 @@ import xml.etree.ElementTree as ET
 import re
 import json
 import os
+import sys
 import feedparser  # Re-enabled for article monitoring
 from email.utils import parsedate_to_datetime
 import base64
@@ -1397,6 +1398,7 @@ def get_ai_summary():
     """Get comprehensive AI summary of articles from past 24 hours only"""
     try:
         print(f"🤖 AI Summary endpoint called")
+        sys.stdout.flush()
         
         # Get articles (either from Daily News or RSS)
         try:
@@ -1519,11 +1521,29 @@ def get_ai_summary():
         print(f"✅ Found {len(past_24_hours)} articles from past 24 hours")
 
         if not past_24_hours:
+            print("⚠️  No articles from past 24 hours found")
+            sys.stdout.flush()
             return jsonify({
-                "success": False,
-                "error": "No articles from past 24 hours available for analysis"
-            }), 500
+                "success": True,
+                "summary": {
+                    "executive_summary": "No articles from the past 24 hours available for analysis.",
+                    "key_points": ["No recent articles found"],
+                    "market_insights": ["No articles available in the past 24 hours"],
+                    "key_headlines": [],
+                    "articles_analyzed": 0,
+                    "analysis_period": "Past 24 hours only",
+                    "timestamp": datetime.now().isoformat(),
+                    "data_freshness": "Real-time analysis"
+                }
+            }), 200
 
+        # Initialize variables before try block
+        sources = []
+        categories = []
+        category_counts = {}
+        source_counts = {}
+        articles_text = ""
+        
         # Prepare article data for OpenAI
         try:
             sources = list(set([article.get('source', 'Unknown') for article in past_24_hours]))
@@ -1549,17 +1569,33 @@ def get_ai_summary():
                     article_summaries.append(f"Title: {title}\nSource: {source}\nCategory: {category}\nContent: {content}\n")
                 except Exception as e:
                     print(f"⚠️  Error preparing article summary: {e}")
+                    sys.stdout.flush()
                     continue
             
             articles_text = "\n---\n".join(article_summaries)
         except Exception as e:
             print(f"❌ Error preparing article data: {e}")
+            sys.stdout.flush()
             import traceback
             print(f"Traceback: {traceback.format_exc()}")
-            return jsonify({
-                "success": False,
-                "error": f"Error preparing articles: {str(e)}"
-            }), 500
+            sys.stdout.flush()
+            # Use initialized defaults
+            if not sources:
+                sources = list(set([article.get('source', 'Unknown') for article in past_24_hours]))
+            if not categories:
+                categories = list(set([article.get('category', 'Unknown') for article in past_24_hours]))
+            if not category_counts:
+                category_counts = {}
+                for article in past_24_hours:
+                    cat = article.get('category', 'Unknown')
+                    category_counts[cat] = category_counts.get(cat, 0) + 1
+            if not source_counts:
+                source_counts = {}
+                for article in past_24_hours:
+                    src = article.get('source', 'Unknown')
+                    source_counts[src] = source_counts.get(src, 0) + 1
+            if not articles_text:
+                articles_text = "\n---\n".join([f"Title: {article.get('title', '')}\nSource: {article.get('source', 'Unknown')}\n" for article in past_24_hours[:20]])
         
         # Initialize summary variable
         summary = None
@@ -1633,36 +1669,73 @@ Provide your response as valid JSON only, no additional text."""
                 
             except json.JSONDecodeError as e:
                 print(f"⚠️  Error parsing OpenAI JSON response: {e}")
+                sys.stdout.flush()
                 ai_summary_text_safe = ai_summary_text[:500] if 'ai_summary_text' in locals() else "No response received"
                 print(f"Response was: {ai_summary_text_safe}")
+                sys.stdout.flush()
                 import traceback
                 print(f"Traceback: {traceback.format_exc()}")
-                # Fallback to basic summary
-                summary = {
-                    "executive_summary": f"AI summary generation encountered an error. {len(past_24_hours)} articles analyzed from past 24 hours.",
-                    "key_points": [f"📊 {len(past_24_hours)} articles analyzed", f"📰 {len(sources)} sources", f"📈 {len(categories)} categories"],
-                    "market_insights": ["AI summary temporarily unavailable"],
-                    "key_headlines": [article.get('title', '')[:100] for article in past_24_hours[:5]],
-                    "articles_analyzed": len(past_24_hours),
-                    "analysis_period": "Past 24 hours only",
-                    "timestamp": datetime.now().isoformat(),
-                    "data_freshness": "Real-time analysis of latest articles"
-                }
+                sys.stdout.flush()
+                # Fallback to basic summary - ensure variables exist
+                try:
+                    sources_list = sources if 'sources' in locals() else []
+                    categories_list = categories if 'categories' in locals() else []
+                    summary = {
+                        "executive_summary": f"AI summary generation encountered an error. {len(past_24_hours)} articles analyzed from past 24 hours.",
+                        "key_points": [f"📊 {len(past_24_hours)} articles analyzed", f"📰 {len(sources_list)} sources", f"📈 {len(categories_list)} categories"],
+                        "market_insights": ["AI summary temporarily unavailable"],
+                        "key_headlines": [article.get('title', '')[:100] for article in past_24_hours[:5]],
+                        "articles_analyzed": len(past_24_hours),
+                        "analysis_period": "Past 24 hours only",
+                        "timestamp": datetime.now().isoformat(),
+                        "data_freshness": "Real-time analysis of latest articles"
+                    }
+                except Exception as fallback_error:
+                    print(f"❌ Error in fallback summary: {fallback_error}")
+                    sys.stdout.flush()
+                    summary = {
+                        "executive_summary": f"{len(past_24_hours)} articles analyzed from past 24 hours.",
+                        "key_points": [f"📊 {len(past_24_hours)} articles analyzed"],
+                        "market_insights": ["AI summary temporarily unavailable"],
+                        "key_headlines": [],
+                        "articles_analyzed": len(past_24_hours),
+                        "analysis_period": "Past 24 hours only",
+                        "timestamp": datetime.now().isoformat(),
+                        "data_freshness": "Real-time analysis of latest articles"
+                    }
             except Exception as e:
                 print(f"⚠️  Error generating AI summary: {e}")
+                sys.stdout.flush()
                 import traceback
                 print(f"Traceback: {traceback.format_exc()}")
-                # Fallback to basic summary
-                summary = {
-                    "executive_summary": f"AI summary generation encountered an error. {len(past_24_hours)} articles analyzed from past 24 hours.",
-                    "key_points": [f"📊 {len(past_24_hours)} articles analyzed", f"📰 {len(sources)} sources", f"📈 {len(categories)} categories"],
-                    "market_insights": ["AI summary temporarily unavailable"],
-                    "key_headlines": [article.get('title', '')[:100] for article in past_24_hours[:5]],
-                    "articles_analyzed": len(past_24_hours),
-                    "analysis_period": "Past 24 hours only",
-                    "timestamp": datetime.now().isoformat(),
-                    "data_freshness": "Real-time analysis of latest articles"
-                }
+                sys.stdout.flush()
+                # Fallback to basic summary - ensure variables exist
+                try:
+                    sources_list = sources if 'sources' in locals() else []
+                    categories_list = categories if 'categories' in locals() else []
+                    summary = {
+                        "executive_summary": f"AI summary generation encountered an error. {len(past_24_hours)} articles analyzed from past 24 hours.",
+                        "key_points": [f"📊 {len(past_24_hours)} articles analyzed", f"📰 {len(sources_list)} sources", f"📈 {len(categories_list)} categories"],
+                        "market_insights": ["AI summary temporarily unavailable"],
+                        "key_headlines": [article.get('title', '')[:100] for article in past_24_hours[:5]],
+                        "articles_analyzed": len(past_24_hours),
+                        "analysis_period": "Past 24 hours only",
+                        "timestamp": datetime.now().isoformat(),
+                        "data_freshness": "Real-time analysis of latest articles"
+                    }
+                except Exception as fallback_error:
+                    print(f"❌ Error in fallback summary: {fallback_error}")
+                    sys.stdout.flush()
+                    summary = {
+                        "executive_summary": f"{len(past_24_hours)} articles analyzed from past 24 hours.",
+                        "key_points": [f"📊 {len(past_24_hours)} articles analyzed"],
+                        "market_insights": ["AI summary temporarily unavailable"],
+                        "key_headlines": [],
+                        "articles_analyzed": len(past_24_hours),
+                        "analysis_period": "Past 24 hours only",
+                        "timestamp": datetime.now().isoformat(),
+                        "data_freshness": "Real-time analysis of latest articles"
+                    }
         else:
             # Fallback if OpenAI is not available
             print("⚠️  OpenAI client not available, using basic summary")
@@ -1721,6 +1794,7 @@ Provide your response as valid JSON only, no additional text."""
         error_traceback = traceback.format_exc()
         print(f"❌ Error in get_ai_summary: {e}")
         print(f"Full traceback:\n{error_traceback}")
+        sys.stdout.flush()
         return jsonify({
             "success": False,
             "error": str(e),
