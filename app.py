@@ -4243,23 +4243,42 @@ def assign_task():
             if user_email not in user_todos:
                 user_todos[user_email] = []
             
-            # Check if task already exists (by ID)
-            if task_id and not any(t.get('id') == task_id for t in user_todos[user_email]):
-                # Find user ID from email
-                user_id = email_to_id.get(user_email)
-                
+            # Find user ID from email
+            user_id = email_to_id.get(user_email)
+            if not user_id:
+                print(f"⚠️ Warning: No user ID found for email {user_email}, skipping assignment")
+                continue
+            
+            # Check if task already exists (by ID) - if it does, update it instead of skipping
+            existing_task_index = None
+            if task_id:
+                existing_task_index = next((i for i, t in enumerate(user_todos[user_email]) if t.get('id') == task_id), None)
+            
+            if existing_task_index is not None:
+                # Update existing task - ensure assignedTo is correct
+                existing_task = user_todos[user_email][existing_task_index]
+                existing_task['assignedTo'] = user_id
+                if assigner_id:
+                    existing_task['assignedBy'] = assigner_id
+                existing_task['updatedAt'] = datetime.now().isoformat()
+                print(f"🔄 Updated existing task in {user_email}'s list (assignedTo: {user_id})")
+                assigned_count += 1
+            else:
                 # Create a copy of the task with updated assignment
                 assigned_task = task.copy()
-                if user_id:
-                    assigned_task['assignedTo'] = user_id
+                assigned_task['assignedTo'] = user_id  # Always set assignedTo to recipient's ID
                 if assigner_id:
                     assigned_task['assignedBy'] = assigner_id
+                # Ensure updatedAt is set
+                assigned_task['updatedAt'] = datetime.now().isoformat()
                 
                 user_todos[user_email].append(assigned_task)
                 assigned_count += 1
-                print(f"✅ Added task to {user_email}'s list (assignedTo: {user_id})")
-            else:
-                print(f"ℹ️ Task already exists for {user_email}")
+                print(f"✅ Added task '{task.get('title', 'Unknown')}' to {user_email}'s list (assignedTo: {user_id}, task ID: {task_id})")
+                
+                # Verify it was added
+                print(f"🔍 Verification: {user_email} now has {len(user_todos[user_email])} tasks")
+                print(f"🔍 Latest task: '{user_todos[user_email][-1].get('title', 'Unknown')}' (assignedTo: {user_todos[user_email][-1].get('assignedTo', 'nil')})")
         
         return jsonify({
             'success': True,
@@ -4351,6 +4370,25 @@ def industry_moves_endpoint():
                         'error': f'{field} is required'
                     }), 400
             
+            # Handle move date - support both move_date (ISO string) and moveMonth/moveYear (Android format)
+            move_date = None
+            if 'move_date' in data and data['move_date']:
+                # iOS format: ISO date string
+                move_date = data['move_date']
+            elif 'moveMonth' in data and 'moveYear' in data and data['moveMonth'] and data['moveYear']:
+                # Android format: separate month and year
+                try:
+                    move_month = int(data['moveMonth'])
+                    move_year = int(data['moveYear'])
+                    # Create date for first day of the month
+                    move_date = datetime(move_year, move_month, 1).isoformat()
+                except (ValueError, TypeError) as e:
+                    print(f"⚠️ Invalid moveMonth/moveYear: {e}, using current date")
+                    move_date = datetime.now().isoformat()
+            else:
+                # Default to current date
+                move_date = datetime.now().isoformat()
+            
             # Create move entry
             move = {
                 'id': f"move_{len(industry_moves)}_{datetime.now().timestamp()}",
@@ -4362,7 +4400,10 @@ def industry_moves_endpoint():
                 'region': data.get('region', '').strip(),  # Optional region
                 'created_by': email,
                 'created_at': datetime.now().isoformat(),
-                'move_date': data.get('move_date', datetime.now().isoformat())  # Optional move date
+                'move_date': move_date,  # ISO date string
+                # Also store month/year for Android compatibility
+                'move_month': data.get('moveMonth'),
+                'move_year': data.get('moveYear')
             }
             
             # Add to moves list
