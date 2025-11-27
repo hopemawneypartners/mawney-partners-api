@@ -3642,12 +3642,34 @@ def save_user_messages():
         
         print(f"💾 Saving {len(messages)} messages for chat: {chat_id}")
         
-        # Get previous messages to detect new ones
+        # Get previous messages to merge with new ones (don't replace!)
         previous_messages = user_messages.get(chat_id, [])
         previous_message_ids = {msg.get('id') for msg in previous_messages if isinstance(msg, dict)}
         
-        # Save messages for this chat
-        user_messages[chat_id] = messages
+        # Merge messages: keep existing messages and add new ones
+        # Create a dict for quick lookup by message ID
+        merged_messages_dict = {}
+        for msg in previous_messages:
+            if isinstance(msg, dict) and msg.get('id'):
+                merged_messages_dict[msg['id']] = msg
+        
+        # Add/update messages from the request
+        for msg in messages:
+            if isinstance(msg, dict) and msg.get('id'):
+                merged_messages_dict[msg['id']] = msg
+        
+        # Convert back to list, sorted by timestamp if available
+        merged_messages = list(merged_messages_dict.values())
+        try:
+            # Try to sort by timestamp if it exists
+            merged_messages.sort(key=lambda m: m.get('timestamp', ''))
+        except:
+            pass  # If sorting fails, keep original order
+        
+        # Save merged messages for this chat
+        user_messages[chat_id] = merged_messages
+        
+        print(f"✅ Merged messages: {len(previous_messages)} previous + {len(messages)} new = {len(merged_messages)} total")
         
         # Find new messages (ones not in previous set)
         new_messages = [msg for msg in messages if isinstance(msg, dict) and msg.get('id') not in previous_message_ids]
