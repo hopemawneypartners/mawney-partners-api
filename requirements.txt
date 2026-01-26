@@ -49,14 +49,14 @@ flask-jwt-extended==4.6.0
 PyJWT==2.8.0
 cryptography==42.0.0
 flask-limiter==3.5.0
-pydantic==2.5.3
-pydantic-settings==2.1.0
+# pydantic==2.5.3  # Removed - not compatible with Python 3.13 on Render, config.py works without it
+# pydantic-settings==2.1.0  # Removed - not needed, config.py uses os.getenv fallback
 python-dotenv==1.0.0
 
 # Database
-psycopg2-binary==2.9.9
-SQLAlchemy==2.0.23
-alembic==1.13.1
+# psycopg2-binary==2.9.9  # Optional - only needed for PostgreSQL. SQLite works without it.
+SQLAlchemy>=2.0.0  # Use latest version for Python 3.13 compatibility
+# alembic==1.13.1  # Optional - only needed for database migrations
 
 # Redis (for rate limiting and token blacklist)
 redis==5.0.1
