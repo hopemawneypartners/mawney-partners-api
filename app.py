@@ -2422,7 +2422,7 @@ def handle_ai_assistant_text_only():
         # Return response in expected format (support both iOS and other clients)
         response_data = {
             "success": True,
-            "text": ai_response.get('text', 'I couldn't process that request. Please try again.'),  # iOS app expects 'text'
+            "text": ai_response.get('text', "I couldn't process that request. Please try again."),  # iOS app expects 'text'
             "response": ai_response.get('text', ''),  # Alternative key for compatibility
             "type": ai_response.get('type', 'answer'),
             "confidence": ai_response.get('confidence', 0.5),
@@ -2540,7 +2540,7 @@ def handle_ai_assistant_with_attachments():
         # Return response in expected format
         response_data = {
             "success": True,
-            "text": ai_response.get('text', 'I couldn't process that request. Please try again.'),  # iOS app expects 'text'
+            "text": ai_response.get('text', "I couldn't process that request. Please try again."),  # iOS app expects 'text'
             "response": ai_response.get('text', ''),  # Alternative key for compatibility
             "type": ai_response.get('type', 'answer'),
             "confidence": ai_response.get('confidence', 0.5),
