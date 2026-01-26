@@ -108,67 +108,110 @@ class CVFileGenerator:
             Dictionary with file info and download URL
         """
         try:
-            # Try to use pdfkit/wkhtmltopdf if available
+            # Helper to sanitize and create file path
+            import re
+            if not filename:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                filename = f"cv_formatted_{timestamp}.pdf"
+            filename = re.sub(r'[^\w\-_.]', '_', filename).replace(' ', '_').replace('(', '').replace(')', '')
+            if not filename.endswith('.pdf'):
+                filename += '.pdf'
+            filepath = os.path.join(self.output_dir, filename)
+
+            # Try PDF generation methods in order, prioritize pure Python solutions for Render
+            pdf_generated = False
+            last_error = None
+            
+            # 1) Try xhtml2pdf FIRST (pure Python, no system dependencies, most reliable on Render)
             try:
-                import pdfkit
-                
-                # Generate filename if not provided
-                if not filename:
-                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    filename = f"cv_formatted_{timestamp}.pdf"
-                
-                # Sanitize filename - remove spaces and special characters
-                import re
-                filename = re.sub(r'[^\w\-_.]', '_', filename)
-                filename = filename.replace(' ', '_').replace('(', '').replace(')', '')
-                
-                # Ensure .pdf extension
-                if not filename.endswith('.pdf'):
-                    filename += '.pdf'
-                
-                # Full file path
-                filepath = os.path.join(self.output_dir, filename)
-                
-                # Configure pdfkit options
-                options = {
-                    'page-size': 'A4',
-                    'margin-top': '0.75in',
-                    'margin-right': '0.75in',
-                    'margin-bottom': '0.75in',
-                    'margin-left': '0.75in',
-                    'encoding': "UTF-8",
-                    'no-outline': None,
-                    'enable-local-file-access': None
-                }
-                
-                # Generate PDF
-                pdfkit.from_string(html_content, filepath, options=options)
-                
-                logger.info(f"Generated PDF CV file: {filepath}")
-                
-                # Get file size
-                file_size = os.path.getsize(filepath)
-                
-                return {
-                    "success": True,
-                    "filename": filename,
-                    "filepath": filepath,
-                    "file_size": file_size,
-                    "format": "pdf",
-                    "download_url": f"/api/download-cv/{filename}",
-                    "message": "CV PDF generated successfully"
-                }
-                
+                from xhtml2pdf import pisa
+                with open(filepath, 'wb') as pdf_file:
+                    pisa_status = pisa.CreatePDF(src=html_content, dest=pdf_file)
+                if pisa_status.err:
+                    raise RuntimeError(f"xhtml2pdf failed: {pisa_status.err}")
+                if not os.path.exists(filepath) or os.path.getsize(filepath) == 0:
+                    raise RuntimeError("xhtml2pdf created file but it's empty or missing")
+                logger.info(f"✅ Generated PDF via xhtml2pdf: {filepath} ({os.path.getsize(filepath)} bytes)")
+                pdf_generated = True
             except ImportError:
-                # Fallback: Generate HTML file instead
-                logger.warning("pdfkit not available, generating HTML file instead")
-                return self.generate_html_file(html_content, filename.replace('.pdf', '.html') if filename else None)
+                logger.info("xhtml2pdf not available, trying WeasyPrint...")
+                last_error = "xhtml2pdf not installed"
+            except Exception as e_xhtml2pdf:
+                logger.warning(f"xhtml2pdf failed: {type(e_xhtml2pdf).__name__}: {e_xhtml2pdf}")
+                last_error = f"xhtml2pdf failed: {str(e_xhtml2pdf)}"
+            
+            # 2) Try WeasyPrint (may need system dependencies on Render)
+            if not pdf_generated:
+                try:
+                    from weasyprint import HTML
+                    HTML(string=html_content).write_pdf(filepath)
+                    if os.path.exists(filepath) and os.path.getsize(filepath) > 0:
+                        logger.info(f"✅ Generated PDF via WeasyPrint: {filepath} ({os.path.getsize(filepath)} bytes)")
+                        pdf_generated = True
+                    else:
+                        raise RuntimeError("WeasyPrint created file but it's empty or missing")
+                except ImportError:
+                    logger.info("WeasyPrint not available, trying pdfkit...")
+                    if not last_error:
+                        last_error = "WeasyPrint not installed"
+                except Exception as e_weasy:
+                    logger.warning(f"WeasyPrint failed: {type(e_weasy).__name__}: {e_weasy}")
+                    last_error = f"WeasyPrint failed: {str(e_weasy)}"
+            
+            # 3) Try pdfkit / wkhtmltopdf (requires system binary, least likely to work on Render)
+            if not pdf_generated:
+                try:
+                    import pdfkit
+                    options = {
+                        'page-size': 'A4',
+                        'margin-top': '0.75in',
+                        'margin-right': '0.75in',
+                        'margin-bottom': '0.75in',
+                        'margin-left': '0.75in',
+                        'encoding': "UTF-8",
+                        'no-outline': None,
+                        'enable-local-file-access': None
+                    }
+                    pdfkit.from_string(html_content, filepath, options=options)
+                    if os.path.exists(filepath) and os.path.getsize(filepath) > 0:
+                        logger.info(f"✅ Generated PDF via pdfkit: {filepath} ({os.path.getsize(filepath)} bytes)")
+                        pdf_generated = True
+                except ImportError:
+                    logger.info("pdfkit not available")
+                    if not last_error:
+                        last_error = "pdfkit not installed"
+                except Exception as e_pdfkit:
+                    logger.warning(f"pdfkit failed: {type(e_pdfkit).__name__}: {e_pdfkit}")
+                    if not last_error:
+                        last_error = f"pdfkit failed: {str(e_pdfkit)}"
+            
+            # If all methods failed, raise an error
+            if not pdf_generated:
+                error_msg = f"All PDF generation methods failed. Last error: {last_error}"
+                logger.error(f"❌ {error_msg}")
+                raise RuntimeError(error_msg)
+
+            # At this point, a PDF should exist
+            file_size = os.path.getsize(filepath)
+            return {
+                "success": True,
+                "filename": filename,
+                "filepath": filepath,
+                "file_size": file_size,
+                "format": "pdf",
+                "download_url": f"/api/download-cv/{filename}",
+                "message": "CV PDF generated successfully"
+            }
             
         except Exception as e:
-            logger.error(f"Error generating PDF file: {e}")
+            logger.error(f"❌ All PDF generation methods failed: {type(e).__name__}: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
             return {
                 "success": False,
-                "error": str(e)
+                "format": "pdf",
+                "error": f"PDF generation failed: {str(e)}",
+                "error_type": type(e).__name__
             }
     
     def get_file_as_base64(self, filepath: str) -> Optional[str]:

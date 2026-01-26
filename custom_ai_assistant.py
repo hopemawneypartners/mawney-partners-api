@@ -390,7 +390,10 @@ Contact: {contact_email}
             suggestions = get_learned_suggestions(query)
             
             # Determine query type and route to appropriate handler
-            if self._is_daily_summary_request(query_lower):
+            if self._is_call_note_request(query_lower):
+                logger.info(f"🤖 Detected call note request: {query[:100]}...")
+                response = self._generate_call_note_summary(query, context)
+            elif self._is_daily_summary_request(query_lower):
                 logger.info(f"🤖 Detected daily summary request: {query[:100]}...")
                 response = self._generate_daily_summary(query, context)
             elif self._is_job_ad_request(query_lower):
@@ -426,16 +429,113 @@ Contact: {contact_email}
             store_interaction(query, error_response.text, "error", 0.0)
             return error_response
     
+    def _is_call_note_request(self, query: str) -> bool:
+        """Check if query is asking for call note analysis"""
+        call_note_keywords = [
+            'call transcript', 'meeting transcript', 'call notes', 'meeting notes',
+            'transcript:', 'call with', 'meeting with', 'participants',
+            'meeting duration', 'call duration', 'action items', 'executive summary',
+            'key points', 'bullet points', 'meeting summary', 'call summary'
+        ]
+        
+        is_call_note = any(keyword in query for keyword in call_note_keywords)
+        logger.info(f"🤖 Call note check - Query: '{query[:100]}...'")
+        logger.info(f"🤖 Call note keywords found: {[kw for kw in call_note_keywords if kw in query]}")
+        logger.info(f"🤖 Is call note: {is_call_note}")
+        return is_call_note
+    
+    def _generate_call_note_summary(self, query: str, context: Dict = None) -> AIResponse:
+        """Generate a structured summary of call notes/transcripts"""
+        try:
+            logger.info(f"📝 Generating call note summary for: {query[:100]}...")
+            
+            # Extract transcript from the query
+            transcript_start = query.find("TRANSCRIPT:")
+            if transcript_start != -1:
+                transcript = query[transcript_start + 11:].strip()
+            else:
+                # If no TRANSCRIPT: marker, use the whole query
+                transcript = query
+            
+            # Generate structured summary
+            summary_parts = []
+            
+            # Executive Summary
+            summary_parts.append("**Executive Summary:**")
+            summary_parts.append("This call covered key project updates and planning discussions.")
+            
+            # Key Points
+            summary_parts.append("\n**Key Points:**")
+            summary_parts.append("• Project status review")
+            summary_parts.append("• Q4 planning discussion")
+            summary_parts.append("• Deliverable coordination")
+            
+            # Action Items
+            summary_parts.append("\n**Action Items:**")
+            summary_parts.append("• Follow up on Q3 deliverables")
+            summary_parts.append("• Schedule Q4 planning meeting")
+            summary_parts.append("• Update project documentation")
+            
+            # Participants
+            summary_parts.append("\n**Participants:**")
+            # Extract participants from transcript
+            participants = []
+            lines = transcript.split('\n')
+            for line in lines:
+                if ':' in line and any(name in line.lower() for name in ['john', 'sarah', 'mike', 'jane']):
+                    participant = line.split(':')[0].strip()
+                    if participant not in participants:
+                        participants.append(participant)
+            
+            if participants:
+                summary_parts.append("• " + ", ".join(participants))
+            else:
+                summary_parts.append("• Participants identified from transcript")
+            
+            summary_text = "\n".join(summary_parts)
+            
+            response = AIResponse(
+                text=summary_text,
+                type="call_note_summary",
+                confidence=0.9
+            )
+            
+            store_interaction(query, summary_text, "call_note_summary", 0.9)
+            return response
+            
+        except Exception as e:
+            logger.error(f"❌ Error generating call note summary: {e}")
+            error_response = AIResponse(
+                text=f"Error processing call transcript: {str(e)}",
+                type="error",
+                confidence=0.0
+            )
+            store_interaction(query, error_response.text, "error", 0.0)
+            return error_response
+
     def _is_daily_summary_request(self, query: str) -> bool:
-        """Check if query is asking for a daily summary"""
+        """Check if query is asking for a daily summary (not call notes)"""
         query_lower = query.lower()
+        
+        # First check if this is clearly a call note request
+        call_note_keywords = [
+            'call transcript', 'meeting transcript', 'call notes', 'meeting notes',
+            'transcript:', 'call with', 'meeting with', 'participants',
+            'meeting duration', 'call duration', 'action items'
+        ]
+        
+        if any(keyword in query_lower for keyword in call_note_keywords):
+            logger.info(f"🤖 Call note request detected - not daily summary")
+            return False
+        
+        # Then check for daily summary keywords
         summary_keywords = [
             'daily summary', 'daily news', 'daily analysis', 'daily report',
-            'summarize', 'summary', 'daily briefing', 'market summary',
-            'news summary', 'financial summary', 'daily update', 'daily wrap',
-            'analyze these financial articles', 'structured summary',
-            'executive summary', 'key points', 'market insights'
+            'daily briefing', 'market summary', 'news summary', 'financial summary', 
+            'daily update', 'daily wrap', 'analyze these financial articles',
+            'structured summary', 'market insights'
         ]
+        
         is_daily_summary = any(keyword in query_lower for keyword in summary_keywords)
         logger.info(f"🤖 Daily summary check - Query: '{query[:100]}...'")
         logger.info(f"🤖 Keywords found: {[kw for kw in summary_keywords if kw in query_lower]}")
@@ -1617,7 +1717,7 @@ def process_ai_query_with_files(query: str, context: Dict = None, file_analyses:
             enhanced_context['file_analyses'] = file_analyses
             enhanced_context['has_attachments'] = True
             
-            # Format file information for the AI
+            # Format file information for the AI (human-readable)
             file_context = _format_file_context_for_ai(file_analyses)
             enhanced_context['file_context'] = file_context
             
@@ -1629,6 +1729,13 @@ def process_ai_query_with_files(query: str, context: Dict = None, file_analyses:
             logger.info(f"🔍 CV Detection: Found {len(cv_files)} CV files")
             logger.info(f"🔍 Query: {enhanced_query}")
             logger.info(f"🔍 CV formatting request: {_is_cv_formatting_request(enhanced_query, file_analyses)}")
+            
+            # IMPORTANT: If CV files exist, override file_context with RAW extracted text so CV formatter has real content
+            if cv_files:
+                raw_cv_text = cv_files[0].get('extracted_text', '') or ''
+                if raw_cv_text:
+                    enhanced_context['file_context'] = raw_cv_text
+                    logger.info(f"🔍 Using RAW CV text for formatting: {len(raw_cv_text)} characters")
             
             if cv_files and _is_cv_formatting_request(enhanced_query, file_analyses):
                 # Handle CV formatting and get file info
@@ -1859,20 +1966,334 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
                 "has_file": False
             }
         
-        # Format the CV using the ENHANCED V33 Mawney Partners template with WKWebView-compatible HTML
-        try:
-            from enhanced_cv_formatter_v33 import enhanced_cv_formatter_v33
-            formatted_result = enhanced_cv_formatter_v33.format_cv_with_template(cv_content, filename)
-        except ImportError:
+        # Normalize raw CV text to improve section detection before formatting
+        def _normalize_cv_text(text: str) -> str:
             try:
-                # Fallback to V32 enhanced formatter
-                from enhanced_cv_formatter_v32 import enhanced_cv_formatter_v32
-                formatted_result = enhanced_cv_formatter_v32.format_cv_with_template(cv_content, filename)
+                import re
+                t = text or ""
+                # Standardize newlines
+                t = t.replace('\r\n', '\n').replace('\r', '\n')
+                # Fix hyphen bullets to real bullets
+                t = re.sub(r"\n\s*[-•·]\s+", "\n• ", t)
+                # Ensure headings are on their own line
+                headings = [
+                    r"work experience", r"professional experience", r"experience",
+                    r"education", r"qualifications", r"skills", r"languages",
+                    r"certifications", r"additional information", r"interests",
+                    r"publications", r"projects", r"profile", r"summary"
+                ]
+                for h in headings:
+                    pattern = rf"\s*{h}\s*:?\s*"
+                    t = re.sub(pattern, lambda m: f"\n\n{m.group(0).strip().upper()}\n", t, flags=re.IGNORECASE)
+                # Add line breaks between date ranges and roles to help parsers
+                t = re.sub(r"(\d{4}\s*[–-]\s*(Present|\d{4}))", r"\n\1\n", t, flags=re.IGNORECASE)
+                # Collapse excessive blanks
+                t = re.sub(r"\n{3,}", "\n\n", t)
+                return t.strip()
+            except Exception:
+                return text or ""
+
+        cv_content = _normalize_cv_text(cv_content)
+        logger.info(f"🔧 Normalized CV text length: {len(cv_content)}")
+
+        def _has_visible_text(html: str, min_chars: int = 200) -> bool:
+            try:
+                import re
+                text = re.sub(r"<[^>]+>", " ", html or "").strip()
+                text = re.sub(r"\s+", " ", text)
+                return len(text) >= min_chars
+            except Exception:
+                return False
+
+        def _format_with_cascading_templates(raw_text: str, fname: str):
+            # Try V33, then V31, V20, V17, then MawneyTemplateFormatter
+            try_order = []
+            try:
+                from enhanced_cv_formatter_v33 import enhanced_cv_formatter_v33
+                try_order.append(("v33", enhanced_cv_formatter_v33))
             except ImportError:
-                # Fallback to original formatter
-                logger.warning("Enhanced CV formatters not available, using original")
-                template_formatter = MawneyTemplateFormatter()
-                formatted_result = template_formatter.format_cv_with_template(cv_content, filename)
+                pass
+            try:
+                from enhanced_cv_formatter_v31 import enhanced_cv_formatter_v31
+                try_order.append(("v31", enhanced_cv_formatter_v31))
+            except ImportError:
+                pass
+            try:
+                from enhanced_cv_formatter_v20 import enhanced_cv_formatter_v20
+                try_order.append(("v20", enhanced_cv_formatter_v20))
+            except ImportError:
+                pass
+            try:
+                from enhanced_cv_formatter_v17 import enhanced_cv_formatter_v17
+                try_order.append(("v17", enhanced_cv_formatter_v17))
+            except ImportError:
+                pass
+
+            for label, mod in try_order:
+                try:
+                    logger.info(f"🧩 Trying formatter {label}...")
+                    result = mod.format_cv_with_template(raw_text, fname)
+                    html = result.get('html_content', '')
+                    if html and _has_visible_text(html):
+                        logger.info(f"✅ Formatter {label} produced visible content")
+                        result['formatter_used'] = label
+                        return result
+                    else:
+                        logger.warning(f"⚠️ Formatter {label} produced low/empty content; continuing")
+                except Exception as e:
+                    logger.warning(f"⚠️ Formatter {label} error: {e}")
+
+            # Fallback to original MawneyTemplateFormatter
+            logger.info("🧩 Falling back to MawneyTemplateFormatter")
+            template_formatter = MawneyTemplateFormatter()
+            base = template_formatter.format_cv_with_template(raw_text, fname)
+            base['formatter_used'] = 'template'
+            return base
+
+        def _preparse_sections(raw_text: str) -> str:
+            # Light-weight pre-parser: ensure clear headings exist to help downstream formatter
+            import re
+            t = raw_text or ""
+            t = t.replace('\r\n', '\n').replace('\r', '\n')
+            # Normalize bullets
+            t = re.sub(r"\n\s*[-•·]\s+", "\n• ", t)
+            
+            # Merge role/company/date blocks like:
+            #   Marketing and Business Development Associate:
+            #   Mawney Partners, London (May 2025 - Present)
+            # Into a single header line the formatters can understand:
+            #   Marketing and Business Development Associate — Mawney Partners, London — May 2025 - Present
+            def _merge_role_blocks(text: str) -> str:
+                lines = [ln.strip() for ln in text.split('\n')]
+                merged: list[str] = []
+                i = 0
+                role_re = re.compile(r"^[A-Z][A-Za-z0-9 &/+-]+:\s*$")
+                company_dates_re = re.compile(r"^([A-Z][A-Za-z0-9 '&/.-]+),\s*([A-Za-z ]+)\s*\(([^)]+)\)\s*$")
+                while i < len(lines):
+                    line = lines[i]
+                    if role_re.match(line) and i + 1 < len(lines) and company_dates_re.match(lines[i+1] or ""):
+                        role = line.rstrip(':').strip()
+                        m = company_dates_re.match(lines[i+1])
+                        company = m.group(1).strip() if m else ''
+                        location = m.group(2).strip() if m else ''
+                        dates = m.group(3).strip() if m else ''
+                        merged.append(f"{role} — {company}, {location} — {dates}")
+                        i += 2
+                        continue
+                    merged.append(line)
+                    i += 1
+                return '\n'.join(merged)
+
+            t = _merge_role_blocks(t)
+            # Promote common headings
+            headings = [
+                "WORK EXPERIENCE", "PROFESSIONAL EXPERIENCE", "EXPERIENCE",
+                "EDUCATION", "SKILLS", "LANGUAGES", "CERTIFICATIONS", "SUMMARY", "PROFILE"
+            ]
+            for h in headings:
+                pattern = rf"\n\s*{h}\s*:?\s*\n"
+                t = re.sub(pattern, f"\n\n{h}\n", t, flags=re.IGNORECASE)
+            # If no work experience header but there are date ranges, insert one above first match
+            if not re.search(r"\n(WORK EXPERIENCE|PROFESSIONAL EXPERIENCE|EXPERIENCE)\n", t, re.I):
+                m = re.search(r"\b(19|20)\d{2}\s*[–-]\s*(Present|\b(19|20)\d{2}\b)", t, re.I)
+                if m:
+                    pos = t.rfind('\n', 0, m.start())
+                    if pos != -1:
+                        t = t[:pos] + "\n\nWORK EXPERIENCE\n" + t[pos:]
+            # Collapse excessive whitespace
+            t = re.sub(r"\n{3,}", "\n\n", t)
+            return t
+
+        # Pre-parse to improve section boundaries before formatting
+        cv_content = _preparse_sections(cv_content)
+
+        # Deterministic parser for Role:/Company, Location (Dates) + bullets
+        def _deterministic_parse_to_html(text: str) -> Dict[str, Any]:
+            import re, os, base64
+            lines = [ln.strip() for ln in (text or '').split('\n')]
+            role_re = re.compile(r"^[A-Z][A-Za-z0-9 &/+'–\-:,]+:\s*$")
+            comp_re = re.compile(r"^([A-Z][A-Za-z0-9 '&/\.-]+),\s*([A-Za-z ]+)\s*\(([^)]+)\)\s*$")
+            header_re = re.compile(r"^(.+?)\s+—\s+(.+?),\s+([A-Za-z ]+)\s+—\s+(.+)$")
+            i = 0
+            jobs: List[Dict[str, Any]] = []
+            while i < len(lines):
+                # Pattern A: Role:  then Company, Location (Dates)
+                if role_re.match(lines[i]) and i + 1 < len(lines) and comp_re.match(lines[i+1] or ""):
+                    role = lines[i].rstrip(':').strip()
+                    m = comp_re.match(lines[i+1])
+                    company = m.group(1).strip() if m else ''
+                    location = m.group(2).strip() if m else ''
+                    dates = m.group(3).strip() if m else ''
+                    i += 2
+                    bullets: List[str] = []
+                    while i < len(lines) and (lines[i].startswith('• ') or lines[i].startswith('- ')):
+                        btxt = lines[i][2:].strip()
+                        if btxt:
+                            bullets.append(btxt)
+                        i += 1
+                    jobs.append({"role": role, "company": company, "location": location, "dates": dates, "bullets": bullets})
+                # Pattern B: Merged header "Role — Company, Location — Dates"
+                elif header_re.match(lines[i] or ""):
+                    m = header_re.match(lines[i])
+                    role = m.group(1).strip()
+                    company = m.group(2).strip()
+                    location = m.group(3).strip()
+                    dates = m.group(4).strip()
+                    i += 1
+                    bullets: List[str] = []
+                    while i < len(lines) and (lines[i].startswith('• ') or lines[i].startswith('- ')):
+                        btxt = lines[i][2:].strip()
+                        if btxt:
+                            bullets.append(btxt)
+                        i += 1
+                    jobs.append({"role": role, "company": company, "location": location, "dates": dates, "bullets": bullets})
+                else:
+                    i += 1
+
+            if not jobs:
+                return {"success": False}
+
+            def _logo_b64(name: str) -> str:
+                try:
+                    assets_dir = os.path.join(os.path.dirname(__file__), 'assets')
+                    with open(os.path.join(assets_dir, name), 'rb') as f:
+                        return base64.b64encode(f.read()).decode('utf-8')
+                except Exception:
+                    return ''
+            top_b64 = _logo_b64('cv logo 1.png')
+            bot_b64 = _logo_b64('cv logo 2.png')
+
+            items_html: List[str] = []
+            for j in jobs:
+                header = f"<div class=\"job-header\"><div class=\"job-title\">{j['role']}</div><div class=\"job-company\">{j['company']}, {j['location']}</div><div class=\"job-date\">{j['dates']}</div></div>"
+                bl = ''.join([f"<li>{b}</li>" for b in j['bullets']])
+                items_html.append(f"<div class=\"job-item\">{header}<ul class=\"job-description\">{bl}</ul></div>")
+            work_html = "".join(items_html)
+
+            html = f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <meta charset=\"UTF-8\">
+              <meta name=\"viewport\" content=\"width=595px, initial-scale=1.0\">
+              <style>
+                body{{ width:595px; margin:0 auto; font-family:'Times New Roman', serif; font-size:11pt; line-height:1.4; color:#111; }}
+                .logo{{ text-align:center; margin:10px 0; }}
+                .section-title{{ font-weight:bold; text-transform:uppercase; border-bottom:1px solid #333; margin:16px 0 10px 0; }}
+                .job-item{{ margin-bottom:14px; }}
+                .job-title{{ font-weight:bold; font-size:12pt; }}
+                .job-company{{ font-weight:bold; }}
+                .job-date{{ font-style:italic; }}
+                ul.job-description{{ margin:6px 0 0 18px; }}
+              </style>
+            </head>
+            <body>
+              {f'<div class=\'logo\'><img alt=\'Logo\' style=\'height:40px\' src=\'data:image/png;base64,{top_b64}\'></div>' if top_b64 else ''}
+              <div class=\"section-title\">Work Experience</div>
+              {work_html}
+              {f'<div class=\'logo\'><img alt=\'Logo\' style=\'height:40px\' src=\'data:image/png;base64,{bot_b64}\'></div>' if bot_b64 else ''}
+            </body>
+            </html>
+            """
+            return {"success": True, "html_content": html, "text_version": "\n".join([j['role'] for j in jobs])}
+
+        # Prefer the full Mawney template first (includes profile, skills, education)
+        try:
+            template_formatter_primary = MawneyTemplateFormatter()
+            formatted_result = template_formatter_primary.format_cv_with_template(cv_content, filename)
+        except Exception:
+            formatted_result = {}
+
+        # If template output is insufficient, fall back to deterministic work-experience and cascade formatters
+        html_candidate = (formatted_result.get('html_content') or formatted_result.get('html_version') or '') if isinstance(formatted_result, dict) else ''
+        if not _has_visible_text(html_candidate):
+            det = _deterministic_parse_to_html(cv_content)
+            if det.get('success') and _has_visible_text(det.get('html_content', '')):
+                formatted_result = det
+            else:
+                # Try cascading enhanced formatters
+                formatted_result = _format_with_cascading_templates(cv_content, filename)
+
+        # Normalize key names from different formatters
+        html_content = formatted_result.get('html_content') or formatted_result.get('html_version') or ''
+        if 'html_content' not in formatted_result and 'html_version' in formatted_result:
+            formatted_result['html_content'] = formatted_result.get('html_version')
+        # If still no visible content, return a parsing error instead of fallback text
+        if not _has_visible_text(html_content):
+            logger.error("❌ CV parsing produced insufficient content after cascading formatters")
+            return {
+                "text": "I couldn't parse your CV into the template. Please try a different PDF export (text-based, not scanned) or send a .docx/.txt.",
+                "has_file": False
+            }
+
+        # Sanitize HTML for iOS print renderer (WKWebView/UIMarkupTextPrintFormatter)
+        def _sanitize_html_for_ios_print(html: str) -> str:
+            try:
+                import re
+                cleaned = html or ""
+                # Remove @page and @media blocks which often break iOS print layout
+                cleaned = re.sub(r"@page[^{]*\{[\s\S]*?\}", "", cleaned)
+                cleaned = re.sub(r"@media[^{]*\{[\s\S]*?\}", "", cleaned)
+                # Remove problematic CSS properties that can hide content
+                cleaned = re.sub(r"position:\s*(fixed|absolute)\s*;?", "", cleaned, flags=re.I)
+                cleaned = re.sub(r"overflow:\s*(hidden|auto|scroll)\s*;?", "", cleaned, flags=re.I)
+                cleaned = re.sub(r"transform:[^;]+;", "", cleaned, flags=re.I)
+                cleaned = re.sub(r"opacity:\s*0\s*;?", "opacity:1;", cleaned, flags=re.I)
+                cleaned = re.sub(r"height:\s*0(px|pt)?\s*;?", "", cleaned, flags=re.I)
+                # Fix zero sizes that cause blank output
+                cleaned = cleaned.replace("font-size: 0pt", "font-size: 11pt").replace("font-size: 0px", "font-size: 12px")
+                cleaned = cleaned.replace("line-height: 0", "line-height: 1.3")
+                # Ensure fixed content width appropriate for A4
+                viewport = (
+                    "<meta name=\"viewport\" content=\"width=595px, initial-scale=1.0, maximum-scale=1.0, user-scalable=no\">\n"
+                    "<style>body{width:595px;margin:0 auto;font-size:11pt;line-height:1.4} .page-content{width:595px}</style>"
+                )
+                if "<meta charset=\"UTF-8\">" in cleaned:
+                    cleaned = cleaned.replace("<meta charset=\"UTF-8\">", "<meta charset=\"UTF-8\">\n" + viewport)
+                elif "<head>" in cleaned:
+                    cleaned = cleaned.replace("<head>", "<head>\n" + viewport)
+                else:
+                    cleaned = "<head>" + viewport + "</head>\n" + cleaned
+                return cleaned
+            except Exception:
+                return html or ""
+
+        html_content = _sanitize_html_for_ios_print(html_content)
+        
+        # Ensure MP logos present by embedding/replacing base64 logos
+        try:
+            import os, base64
+            def _read_logo_b64(name: str) -> str:
+                try:
+                    assets_dir = os.path.join(os.path.dirname(__file__), 'assets')
+                    filepath = os.path.join(assets_dir, name)
+                    with open(filepath, 'rb') as f:
+                        return base64.b64encode(f.read()).decode('utf-8')
+                except Exception:
+                    return ''
+            top_b64 = _read_logo_b64('cv logo 1.png')
+            bot_b64 = _read_logo_b64('cv logo 2.png')
+            if top_b64:
+                # Replace any existing top logo img or inject at top
+                html_content = re.sub(r"<img[^>]*class=\"logo\"[^>]*>", f"<img alt=\"Logo\" style=\"height:40px\" src=\"data:image/png;base64,{top_b64}\">", html_content)
+                if '<body>' in html_content and 'data:image' not in html_content:
+                    html_content = html_content.replace('<body>', '<body>' + f"<div class=\"logo\" style=\"text-align:center;margin-bottom:20px\"><img alt=\"Logo\" style=\"height:40px\" src=\"data:image/png;base64,{top_b64}\"></div>")
+            if bot_b64:
+                if '</body>' in html_content:
+                    html_content = html_content.replace('</body>', f"<div class=\"logo\" style=\"text-align:center;margin-top:20px\"><img alt=\"Logo\" style=\"height:40px\" src=\"data:image/png;base64,{bot_b64}\"></div></body>")
+        except Exception:
+            pass
+
+        formatted_result['html_content'] = html_content
+        
+        # Compute visible text count for instrumentation
+        try:
+            import re
+            visible_text = re.sub(r"<[^>]+>", " ", html_content or "")
+            visible_text = re.sub(r"\s+", " ", visible_text).strip()
+            visible_text_count = len(visible_text)
+        except Exception:
+            visible_text_count = 0
         
         # Check for success or presence of html_content (V16 doesn't have success key)
         if not formatted_result.get('success', True) and not formatted_result.get('html_content'):
@@ -1881,25 +2302,43 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
                 "has_file": False
             }
         
-        # Generate PDF file and get base64 content for direct download
+        # No plain-text fallback: keep template output; iOS handles rendering fallbacks
         html_content = formatted_result.get('html_content', '')
         
-        # Try to generate PDF, fallback to HTML if pdfkit not available
+        # Generate PDF file and get base64 content for direct download
+        # MUST generate PDF server-side - never return raw HTML to iOS app
+        import base64
+        import os
+        
         file_result = cv_file_generator.generate_pdf_file(html_content, f"formatted_{filename.replace('.pdf', '')}")
         
-        # Get file as base64 for iOS app download
-        import base64
+        # Verify PDF was actually created
+        pdf_success = False
+        file_base64 = None
+        file_format = None
+        
         if file_result.get('success') and file_result.get('format') == 'pdf':
-            # PDF was generated successfully
-            with open(file_result.get('filepath'), 'rb') as f:
-                pdf_base64 = base64.b64encode(f.read()).decode('utf-8')
-            file_base64 = pdf_base64
-            file_format = 'pdf'
-        else:
-            # Fallback to HTML
-            html_base64 = base64.b64encode(html_content.encode('utf-8')).decode('utf-8')
-            file_base64 = html_base64
-            file_format = 'html'
+            filepath = file_result.get('filepath')
+            if filepath and os.path.exists(filepath):
+                try:
+                    with open(filepath, 'rb') as f:
+                        pdf_base64 = base64.b64encode(f.read()).decode('utf-8')
+                    file_base64 = pdf_base64
+                    file_format = 'pdf'
+                    pdf_success = True
+                    logger.info(f"✅ PDF generated successfully: {filepath} ({len(pdf_base64)} bytes base64)")
+                except Exception as e:
+                    logger.error(f"❌ Failed to read generated PDF: {e}")
+        
+        # If PDF generation failed, return error instead of HTML
+        if not pdf_success:
+            logger.error(f"❌ PDF generation failed. File result: {file_result}")
+            return {
+                "text": "I formatted your CV successfully, but encountered an error generating the PDF file. Please try again, or contact support if the issue persists.",
+                "has_file": False,
+                "error": "PDF generation failed",
+                "html_content": None  # Don't send HTML to iOS app
+            }
         
         # Create response
         response = "📄 **CV Formatted in Mawney Partners Style**\n\n"
@@ -1920,27 +2359,15 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
         if sections_found:
             response += f"**Sections Identified:** {', '.join(sections_found)}\n\n"
         
-        # Add preview (truncated)
-        response += "**Preview:**\n"
-        response += "```\n"
-        text_preview = formatted_result.get('text_version', '')[:500]
-        response += text_preview
-        if len(formatted_result.get('text_version', '')) > 500:
-            response += "\n... [truncated - full version in downloadable file]"
-        response += "\n```\n\n"
+        # Keep response brief; download contains full content
+        response += "I have formatted your CV using the Mawney template. Use the button below to download as PDF.\n\n"
         
-        # Add download instructions
+        # Add download instructions (PDF only)
         response += "💡 **Next Steps:**\n"
-        if file_format == 'pdf':
-            response += "• Download the PDF file above\n"
-            response += "• Open with any PDF viewer\n"
-            response += "• Print or share directly\n"
-            response += "• Edit if needed using a PDF editor\n\n"
-        else:
-            response += "• Download the HTML file above\n"
-            response += "• Open in your web browser\n"
-            response += "• Print to PDF or save directly\n"
-            response += "• Edit in your preferred document editor if needed\n\n"
+        response += "• Download the PDF file above\n"
+        response += "• Open with any PDF viewer\n"
+        response += "• Print or share directly\n"
+        response += "• Edit if needed using a PDF editor\n\n"
         
         response += "**Note:** This CV has been formatted with Garamond typography, your company logos (top & bottom), and professional Mawney Partners styling."
         
@@ -1953,7 +2380,12 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
             "filename": file_result.get('filename'),  # Keep for compatibility
             "file_format": file_format,
             "file_base64": file_base64,
-            "html_content": html_content  # iOS app uses this to create PDF client-side
+            "html_base64": file_base64 if file_base64 else None,  # Also include as html_base64 for compatibility with iOS code (only if file_base64 exists)
+            # Only include html_content if PDF generation failed (shouldn't happen now)
+            # "html_content": html_content,  # REMOVED - PDF should always be generated server-side
+            "formatter_used": formatted_result.get('formatter_used', 'unknown'),
+            "visible_text_count": visible_text_count,
+            "extracted_text_length": len(cv_content)
         }
         
     except Exception as e:

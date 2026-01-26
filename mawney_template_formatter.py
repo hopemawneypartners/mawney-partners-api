@@ -66,6 +66,7 @@ class MawneyTemplateFormatter:
         return {
             'success': True,
             'html_version': formatted_html,
+            'html_content': formatted_html,  # ensure downstream callers find HTML consistently
             'text_version': self._extract_text_from_html(formatted_html),
             'analysis': f"CV formatted using Mawney Partners template. Extracted: {len(parsed_data.get('experience', []))} experience items, {len(parsed_data.get('education', []))} education items.",
             'sections_found': list(parsed_data.keys()),
@@ -450,6 +451,34 @@ class MawneyTemplateFormatter:
         if current_education:
             parsed['education'].append(current_education)
         
+        # Extract skills: capture lines under a SKILLS header or comma-separated skills
+        try:
+            skills_section = False
+            skills_collected: List[str] = []
+            for line in lines:
+                ll = line.lower()
+                if any(h in ll for h in ['skills', 'technical & creative skills', 'core strengths', 'competencies']):
+                    skills_section = True
+                    continue
+                if skills_section and any(h in ll for h in ['education', 'experience', 'summary', 'profile', 'interests', 'certifications']):
+                    break
+                if skills_section:
+                    # bullets
+                    if line.startswith(('•', '-', '·')):
+                        item = line.lstrip('•-· ').strip()
+                        if item:
+                            skills_collected.append(item)
+                    else:
+                        # comma separated within the same line
+                        if ',' in line:
+                            for part in [p.strip() for p in line.split(',') if p.strip()]:
+                                skills_collected.append(part)
+            # de-dup and keep reasonable length
+            seen = set()
+            parsed['skills'] = [s for s in skills_collected if not (s.lower() in seen or seen.add(s.lower()))][:30]
+        except Exception:
+            pass
+
         return parsed
     
     def _is_company_line(self, line: str) -> bool:
@@ -536,26 +565,27 @@ class MawneyTemplateFormatter:
             company = exp.get('company', '').strip()
             title = exp.get('title', '').strip()
             dates = exp.get('dates', '').strip()
-            responsibilities = exp.get('responsibilities', [])
-            
+            location = exp.get('location', '').strip()
+            responsibilities = exp.get('responsibilities', []) or []
+
             # Only add if we have substantial content
             if company or title or responsibilities:
                 responsibility_list = ''
                 if responsibilities:
                     responsibility_list = f'''
                     <ul>
-                        {''.join([f'<li>{resp.strip()}</li>' for resp in responsibilities if resp.strip()])}
+                        {''.join([f'<li>{resp.strip()}</li>' for resp in responsibilities if resp and resp.strip()])}
                     </ul>
                     '''
-                
-                    item_html = f'''
-                    <div class="experience-item">
-                        <div class="job-header">{title}, {company}, {exp.get('location', '')} {dates}</div>
-                        <div class="job-details">
-                            {responsibility_list}
-                        </div>
+
+                item_html = f'''
+                <div class="experience-item">
+                    <div class="job-header">{title}{', ' if title and company else ''}{company}{', ' if (title or company) and location else ''}{location} {dates}</div>
+                    <div class="job-details">
+                        {responsibility_list}
                     </div>
-                    '''
+                </div>
+                '''
                 items.append(item_html)
         
         return '\n'.join(items)
