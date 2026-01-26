@@ -3895,6 +3895,15 @@ def call_notes_summary():
             'error': str(e)
         }), 500
 
+# Initialize database on startup
+try:
+    from database.models import init_db
+    init_db()
+    print("✅ Database initialized")
+except Exception as e:
+    print(f"⚠️ Database initialization warning: {e}")
+    # Continue anyway - tables might already exist
+
 if __name__ == '__main__':
     # Force restart to pick up new template and text parsing fixes
     port = int(os.environ.get('PORT', 5001))
