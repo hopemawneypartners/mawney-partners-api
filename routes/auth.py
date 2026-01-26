@@ -48,21 +48,41 @@ def login():
                 'error': 'Email and password required'
             }), 400
         
-        # Get user from database
+            # Get user from database
         db = SessionLocal()
         try:
-            user = db.query(User).filter(User.email == email, User.is_deleted == False).first()
+            user = db.query(User).filter(User.email == email).first()
             
             if not user:
+                print(f"User not found: {email}")
                 log_authentication(email, False, 'password', 'User not found')
                 return jsonify({
                     'success': False,
                     'error': 'Invalid email or password'
                 }), 401
             
+            if user.is_deleted:
+                print(f"User is deleted: {email}")
+                log_authentication(email, False, 'password', 'User account deleted')
+                return jsonify({
+                    'success': False,
+                    'error': 'Invalid email or password'
+                }), 401
+            
             # Verify password
-            if not verify_password(password, user.password_hash):
-                log_authentication(email, False, 'password', 'Invalid password')
+            try:
+                password_valid = verify_password(password, user.password_hash)
+                if not password_valid:
+                    print(f"Password verification failed for {email}")
+                    print(f"Stored hash: {user.password_hash[:50]}...")
+                    log_authentication(email, False, 'password', 'Invalid password')
+                    return jsonify({
+                        'success': False,
+                        'error': 'Invalid email or password'
+                    }), 401
+            except Exception as e:
+                print(f"Error verifying password: {e}")
+                log_authentication(email, False, 'password', f'Password verification error: {str(e)}')
                 return jsonify({
                     'success': False,
                     'error': 'Invalid email or password'
