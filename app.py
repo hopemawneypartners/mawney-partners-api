@@ -5,6 +5,7 @@ Mawney Partners API with Full Daily News System Integration
 
 from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
+from flask_jwt_extended import JWTManager
 from datetime import datetime, timedelta
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -19,8 +20,33 @@ from custom_ai_assistant import process_ai_query, process_ai_query_with_files
 from ai_memory_system import store_interaction, get_memory_summary
 from file_analyzer import file_analyzer
 
+# Import Security System
+from config import settings
+from security.rate_limit import setup_rate_limiting
+from security.audit import log_event, log_data_access, log_data_modification
+from security.auth import get_current_user, require_auth
+from security.permissions import require_ownership, verify_data_ownership
+from security.encryption import encrypt_dict_fields, decrypt_dict_fields, SENSITIVE_FIELDS
+
+# Import Routes
+from routes.auth import auth_bp
+from routes.gdpr import gdpr_bp
+
 app = Flask(__name__)
 CORS(app)
+
+# Initialize JWT
+jwt = JWTManager(app)
+app.config['JWT_SECRET_KEY'] = settings.JWT_SECRET_KEY
+app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(seconds=settings.JWT_ACCESS_TOKEN_EXPIRES)
+app.config['JWT_REFRESH_TOKEN_EXPIRES'] = timedelta(seconds=settings.JWT_REFRESH_TOKEN_EXPIRES)
+
+# Set up rate limiting
+setup_rate_limiting(app)
+
+# Register blueprints
+app.register_blueprint(auth_bp)
+app.register_blueprint(gdpr_bp)
 
 # Track sent notifications to prevent duplicates
 sent_article_ids = set()
@@ -3329,51 +3355,149 @@ def get_autocomplete():
 # ============================================================================
 
 @app.route('/api/compensations', methods=['GET'])
+@require_auth
+@require_ownership('email', 'email')
 def get_compensations():
-    """Get compensations for a user"""
+    """Get user's compensations (with encryption/decryption)"""
     try:
-        email = request.args.get('email')
-        if not email:
-            return jsonify({
-                'success': False,
-                'error': 'Email parameter required'
-            }), 400
+        user = get_current_user()
+        user_email = request.args.get('email') or user.get('email')
         
-        compensations = user_compensations.get(email, [])
-        return jsonify({
-            'success': True,
-            'compensations': compensations
-        })
+        if not user_email:
+            return jsonify({"success": False, "error": "Email required"}), 400
+        
+        # Verify ownership
+        if user.get('email') != user_email and '*' not in user.get('permissions', []):
+            return jsonify({"success": False, "error": "Access denied"}), 403
+        
+        # Try database first, fallback to in-memory
+        try:
+            from database.models import Compensation, SessionLocal
+            db = SessionLocal()
+            try:
+                compensations = db.query(Compensation).filter(
+                    Compensation.user_email == user_email,
+                    Compensation.is_deleted == False
+                ).all()
+                
+                compensation_list = []
+                for comp in compensations:
+                    comp_dict = {
+                        'id': comp.id,
+                        'base_salary': comp.base_salary,
+                        'base_salary_currency': comp.base_salary_currency,
+                        'bonus': comp.bonus,
+                        'bonus_currency': comp.bonus_currency,
+                        'equity': comp.equity,
+                        'country': comp.country,
+                        'role': comp.role,
+                        'company': comp.company,
+                        'created_at': comp.created_at.isoformat() if comp.created_at else None,
+                        'updated_at': comp.updated_at.isoformat() if comp.updated_at else None,
+                    }
+                    # Decrypt sensitive fields
+                    comp_dict = decrypt_dict_fields(comp_dict, SENSITIVE_FIELDS.get('compensation', []))
+                    compensation_list.append(comp_dict)
+                
+                log_data_access(user.get('user_id'), user_email, 'compensation', len(compensation_list))
+                return jsonify({"success": True, "compensations": compensation_list})
+            finally:
+                db.close()
+        except Exception as db_error:
+            # Fallback to in-memory storage
+            print(f"Database error, using fallback: {db_error}")
+            compensations = user_compensations.get(user_email, [])
+            log_data_access(user.get('user_id'), user_email, 'compensation', len(compensations))
+            return jsonify({"success": True, "compensations": compensations})
+            
     except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        print(f"Error getting compensations: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": "Failed to retrieve compensations"}), 500
 
 @app.route('/api/compensations', methods=['POST'])
+@require_auth
+@require_ownership('email', 'email')
 def save_compensations():
-    """Save compensations for a user"""
+    """Save user's compensations (with encryption)"""
     try:
-        email = request.args.get('email')
+        user = get_current_user()
         data = request.get_json()
-        compensations = data.get('compensations', [])
+        user_email = data.get('email') or request.args.get('email') or user.get('email')
+        compensations_data = data.get('compensations', [])
         
-        if not email:
+        if not user_email:
+            return jsonify({"success": False, "error": "Email required"}), 400
+        
+        # Verify ownership
+        if user.get('email') != user_email and '*' not in user.get('permissions', []):
+            return jsonify({"success": False, "error": "Access denied"}), 403
+        
+        # Try database first, fallback to in-memory
+        try:
+            from database.models import Compensation, SessionLocal
+            import uuid
+            db = SessionLocal()
+            try:
+                saved_count = 0
+                for comp_data in compensations_data:
+                    # Encrypt sensitive fields
+                    encrypted_comp = encrypt_dict_fields(
+                        comp_data,
+                        SENSITIVE_FIELDS.get('compensation', [])
+                    )
+                    
+                    comp_id = comp_data.get('id') or str(uuid.uuid4())
+                    
+                    # Check if exists
+                    existing = db.query(Compensation).filter(Compensation.id == comp_id).first()
+                    
+                    if existing:
+                        # Update
+                        for key, value in encrypted_comp.items():
+                            if hasattr(existing, key):
+                                setattr(existing, key, value)
+                        existing.updated_at = datetime.utcnow()
+                        log_data_modification(user.get('user_id'), user_email, 'compensation', 'update', comp_id)
+                    else:
+                        # Create
+                        new_comp = Compensation(
+                            id=comp_id,
+                            user_email=user_email,
+                            **encrypted_comp
+                        )
+                        db.add(new_comp)
+                        log_data_modification(user.get('user_id'), user_email, 'compensation', 'create', comp_id)
+                    
+                    saved_count += 1
+                
+                db.commit()
+                return jsonify({
+                    "success": True,
+                    "message": f"Saved {saved_count} compensations",
+                    "count": saved_count
+                })
+            except Exception as db_error:
+                db.rollback()
+                raise db_error
+            finally:
+                db.close()
+        except Exception as db_error:
+            # Fallback to in-memory storage
+            print(f"Database error, using fallback: {db_error}")
+            user_compensations[user_email] = compensations_data
+            log_data_modification(user.get('user_id'), user_email, 'compensation', 'create', 'bulk')
             return jsonify({
-                'success': False,
-                'error': 'Email parameter required'
-            }), 400
-        
-        user_compensations[email] = compensations
-        return jsonify({
-            'success': True,
-            'message': f'Saved {len(compensations)} compensations for {email}'
-        })
+                "success": True,
+                "message": f"Saved {len(compensations_data)} compensations for {user_email}"
+            })
+            
     except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        print(f"Error saving compensations: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": "Failed to save compensations"}), 500
 
 # ============================================================================
 # SHARING & ASSIGNMENT ENDPOINTS
