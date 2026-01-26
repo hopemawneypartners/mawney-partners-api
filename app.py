@@ -5,15 +5,18 @@ Mawney Partners API with Full Daily News System Integration
 
 from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
-from flask_jwt_extended import JWTManager
 from datetime import datetime, timedelta
 import urllib.request
 import xml.etree.ElementTree as ET
 import re
 import json
 import os
+import sys
 import feedparser  # Re-enabled for article monitoring
 from email.utils import parsedate_to_datetime
+import base64
+import json
+from openai import OpenAI
 
 # Import AI Assistant System
 from custom_ai_assistant import process_ai_query, process_ai_query_with_files
@@ -28,34 +31,31 @@ from security.auth import get_current_user, require_auth
 from security.permissions import require_ownership, verify_data_ownership
 from security.encryption import encrypt_dict_fields, decrypt_dict_fields, SENSITIVE_FIELDS
 
+# Initialize Sentry for error monitoring (optional - only if SENTRY_DSN is set)
+sentry_dsn = os.getenv('SENTRY_DSN')
+if sentry_dsn:
+    import sentry_sdk
+    from sentry_sdk.integrations.flask import FlaskIntegration
+    from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
+    
+    sentry_sdk.init(
+        dsn=sentry_dsn,
+        integrations=[
+            FlaskIntegration(),
+            SqlalchemyIntegration(),
+        ],
+        # Set traces_sample_rate to 1.0 to capture 100% of transactions for performance monitoring
+        traces_sample_rate=1.0,
+        # Set profiles_sample_rate to 1.0 to profile 100% of sampled transactions
+        profiles_sample_rate=1.0,
+        # Enable sending of PII (personally identifiable information)
+        send_default_pii=True,
+        # Set environment
+        environment=os.getenv('ENVIRONMENT', 'production'),
+    )
+
 app = Flask(__name__)
 CORS(app)
-
-# Initialize JWT
-jwt = JWTManager(app)
-app.config['JWT_SECRET_KEY'] = settings.JWT_SECRET_KEY
-app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(seconds=settings.JWT_ACCESS_TOKEN_EXPIRES)
-app.config['JWT_REFRESH_TOKEN_EXPIRES'] = timedelta(seconds=settings.JWT_REFRESH_TOKEN_EXPIRES)
-
-# Set up rate limiting BEFORE importing routes (so limiter is available)
-setup_rate_limiting(app)
-
-# Import routes AFTER rate limiting is set up
-from routes.auth import auth_bp
-from routes.gdpr import gdpr_bp
-
-# Register blueprints
-app.register_blueprint(auth_bp)
-app.register_blueprint(gdpr_bp)
-
-# Initialize database on app startup (runs when module is imported)
-try:
-    from database.models import init_db
-    init_db()
-    print("✅ Database initialized")
-except Exception as e:
-    print(f"⚠️ Database initialization warning: {e}")
-    # Continue anyway - tables might already exist
 
 # Track sent notifications to prevent duplicates
 sent_article_ids = set()
@@ -145,9 +145,25 @@ user_todos = {}  # user_email -> todos
 user_call_notes = {}  # user_email -> call_notes
 user_saved_jobs = {}  # user_email -> saved_jobs
 
+# Shared compensation data (shared across all users)
+compensations = []  # List of compensation entries
+
+# Rate limiting for compensation endpoint
+compensation_rate_limits = {}  # email -> {count: int, reset_time: datetime}
+MAX_COMPENSATIONS_PER_REQUEST = 1000  # Maximum compensations that can be saved at once
+MAX_COMPENSATION_VALUE = 100000000  # Maximum salary/bonus value (100 million)
+MIN_COMPENSATION_VALUE = 0  # Minimum salary/bonus value
+MAX_JOB_TITLE_LENGTH = 200
+MAX_PERSON_NAME_LENGTH = 100
+
+# Industry moves tracking (shared across all users)
+industry_moves = []  # List of industry moves
+user_move_counts = {}  # email -> count of moves added by user
+
 # User-to-user chat storage
 user_chats = {}  # user_email -> list of chats
 user_messages = {}  # chat_id -> list of messages
+device_tokens = {}  # user_email -> device_token (for push notifications)
 
 def check_for_new_articles():
     """Check for new articles and create notifications for ones not yet sent"""
@@ -198,6 +214,76 @@ try:
 except ImportError:
     DAILY_NEWS_AVAILABLE = False
     print("Daily News system not available, using fallback RSS feeds")
+
+# Initialize OpenAI client for AI summaries
+openai_client = None
+try:
+    # Try to get API key from Config if available, otherwise from environment
+    api_key = None
+    
+    print(f"🔍 Checking for OpenAI API key...")
+    print(f"🔍 DAILY_NEWS_AVAILABLE: {DAILY_NEWS_AVAILABLE}")
+    
+    # First try Config (which loads from .env or environment)
+    if DAILY_NEWS_AVAILABLE:
+        try:
+            if hasattr(Config, 'OPENAI_API_KEY'):
+                config_key = Config.OPENAI_API_KEY
+                print(f"🔍 Config.OPENAI_API_KEY exists: {config_key is not None}, length: {len(config_key) if config_key else 0}")
+                if config_key and config_key.strip():
+                    api_key = config_key.strip()
+                    print(f"📝 Found OpenAI API key in Config (length: {len(api_key)})")
+            else:
+                print("🔍 Config.OPENAI_API_KEY attribute not found")
+        except Exception as config_error:
+            print(f"📝 Config check failed: {config_error}")
+            import traceback
+            print(f"Traceback: {traceback.format_exc()}")
+    
+    # Also try direct Config import even if DAILY_NEWS_AVAILABLE is False
+    if not api_key:
+        try:
+            from config import Config as ConfigDirect
+            if hasattr(ConfigDirect, 'OPENAI_API_KEY'):
+                config_key = ConfigDirect.OPENAI_API_KEY
+                if config_key and config_key.strip():
+                    api_key = config_key.strip()
+                    print(f"📝 Found OpenAI API key in Config (direct import) (length: {len(api_key)})")
+        except Exception as direct_error:
+            print(f"📝 Direct Config import failed: {direct_error}")
+    
+    # Fallback to environment variable directly
+    if not api_key:
+        env_key = os.getenv('OPENAI_API_KEY')
+        print(f"🔍 os.getenv('OPENAI_API_KEY'): {'Found' if env_key else 'Not found'}, length: {len(env_key) if env_key else 0}")
+        if env_key and env_key.strip():
+            api_key = env_key.strip()
+            print(f"📝 Found OpenAI API key in environment (length: {len(api_key)})")
+        else:
+            print("📝 OPENAI_API_KEY not found in environment variables")
+            print("💡 To enable AI summaries, set OPENAI_API_KEY in Render environment variables")
+            print("💡 In Render: Dashboard > Your Service > Environment > Add OPENAI_API_KEY")
+    
+    if api_key and api_key.strip():
+        try:
+            # Validate key format (should start with sk-)
+            if api_key.startswith('sk-'):
+                openai_client = OpenAI(api_key=api_key)
+                print("✅ OpenAI client initialized for AI summaries")
+            else:
+                print(f"⚠️  OpenAI API key format looks incorrect (should start with 'sk-'), got: {api_key[:10]}...")
+        except Exception as init_error:
+            print(f"❌ Error creating OpenAI client: {init_error}")
+            import traceback
+            print(f"Traceback: {traceback.format_exc()}")
+    else:
+        print("⚠️  OPENAI_API_KEY not found or empty - AI summaries will not use OpenAI")
+        print("💡 Make sure OPENAI_API_KEY is set in Render environment variables")
+        print("💡 Steps: Render Dashboard > Your Service > Environment tab > Add OPENAI_API_KEY")
+except Exception as e:
+    print(f"⚠️  Error initializing OpenAI client: {e}")
+    import traceback
+    print(f"Traceback: {traceback.format_exc()}")
 
 def deduplicate_ft_articles(articles):
     """Aggressively deduplicate Financial Times articles that appear in multiple feeds"""
@@ -720,7 +806,11 @@ def is_credit_relevant(title, content=""):
         # Credit Regulation & Compliance
         'credit regulation', 'credit compliance', 'credit governance', 'credit policy',
         'credit limit', 'credit exposure', 'credit concentration', 'credit diversification',
-        'credit monitoring', 'credit reporting', 'credit disclosure', 'credit transparency'
+        'credit monitoring', 'credit reporting', 'credit disclosure', 'credit transparency',
+        
+        # Capital & Fundraising Terms
+        'capital solutions', 'mezzanine', 'fundraising', 'capital raising', 'capital formation',
+        'successfully deploys', 'refinancing', 'debut fund', 'emerging manager'
     ]
     
     # Secondary credit terms - need at least 2 matches AND must be in financial context
@@ -1387,14 +1477,89 @@ def get_articles():
 def get_ai_summary():
     """Get comprehensive AI summary of articles from past 24 hours only"""
     try:
-        # Get articles (either from Daily News or RSS)
-        articles = get_daily_news_articles() if DAILY_NEWS_AVAILABLE else get_comprehensive_rss_articles()
+        print(f"🤖 AI Summary endpoint called")
+        sys.stdout.flush()
         
-        if not articles:
+        # Get articles (same logic as /api/articles endpoint - try Daily News first, then fallback to RSS)
+        articles = None
+        try:
+            print(f"📚 Attempting to retrieve articles...")
+            print(f"📊 Daily News available: {DAILY_NEWS_AVAILABLE}")
+            sys.stdout.flush()
+            
+            # Try Daily News system first (same as /api/articles)
+            if DAILY_NEWS_AVAILABLE:
+                articles = get_daily_news_articles()
+                print(f"📊 Daily News articles: {len(articles) if articles else 0}")
+                sys.stdout.flush()
+            
+            # Fallback to RSS feeds if Daily News didn't return articles
+            if not articles or len(articles) == 0:
+                print(f"🔄 Falling back to RSS feeds...")
+                sys.stdout.flush()
+                articles = get_comprehensive_rss_articles()
+                print(f"📊 RSS articles: {len(articles) if articles else 0}")
+                sys.stdout.flush()
+            
+            print(f"📚 Final article count: {len(articles) if articles else 0} articles")
+            sys.stdout.flush()
+        except Exception as e:
+            print(f"❌ Error getting articles: {e}")
+            sys.stdout.flush()
+            import traceback
+            print(f"Traceback: {traceback.format_exc()}")
+            sys.stdout.flush()
             return jsonify({
                 "success": False,
-                "error": "No articles available"
+                "error": f"Error retrieving articles: {str(e)}"
             }), 500
+        
+        # Check if articles were retrieved
+        if not articles or len(articles) == 0:
+            print(f"⚠️  No articles available, articles might not be collected yet")
+            sys.stdout.flush()
+            return jsonify({
+                "success": True,
+                "summary": {
+                    "executive_summary": "Articles are being collected. Please try again in a few moments.",
+                    "key_points": ["Articles collection in progress"],
+                    "market_insights": ["Please wait for articles to be collected"],
+                    "key_headlines": [],
+                    "articles_analyzed": 0,
+                    "analysis_period": "Past 24 hours only",
+                    "timestamp": datetime.now().isoformat(),
+                    "data_freshness": "Articles collection pending"
+                }
+            }), 200
+        
+        if not isinstance(articles, list):
+            print(f"⚠️  Articles is not a list, type: {type(articles)}")
+            sys.stdout.flush()
+            return jsonify({
+                "success": False,
+                "error": "Invalid articles format"
+            }), 500
+        
+        print(f"📰 Retrieved {len(articles)} articles")
+        sys.stdout.flush()
+        
+        # If no articles, return early with helpful message
+        if len(articles) == 0:
+            print(f"⚠️  No articles found - articles may not be collected yet")
+            sys.stdout.flush()
+            return jsonify({
+                "success": True,
+                "summary": {
+                    "executive_summary": "Articles are being collected. Please try again in a few moments or trigger collection manually.",
+                    "key_points": ["Articles collection in progress", "Use /api/trigger-collection to manually collect articles"],
+                    "market_insights": ["Please wait for articles to be collected"],
+                    "key_headlines": [],
+                    "articles_analyzed": 0,
+                    "analysis_period": "Past 24 hours only",
+                    "timestamp": datetime.now().isoformat(),
+                    "data_freshness": "Articles collection pending"
+                }
+            }), 200
 
         # DEDUPLICATION FOR AI SUMMARY
         print(f"🔧 AI Summary deduplication: {len(articles)} articles before")
@@ -1418,143 +1583,452 @@ def get_ai_summary():
         now = datetime.now()
         past_24_hours = []
         
+        print(f"🕐 Filtering articles from past 24 hours (current time: {now})")
+        
         for article in articles:
-            try:
-                # Parse article date - handle multiple date formats
-                article_date = None
-                date_fields = ['date', 'publishedAt', 'published_date', 'timestamp']
+            article_date = None
+            date_fields = ['date', 'publishedAt', 'published_date', 'timestamp']
+            
+            # Try to find a valid date field
+            for field in date_fields:
+                if field not in article or not article[field]:
+                    continue
                 
-                for field in date_fields:
-                    if field in article and article[field]:
-                        try:
-                            date_str = article[field]
-                            # Remove 'Z' suffix if present
+                try:
+                    date_value = article[field]
+                    if not date_value:
+                        continue
+                    
+                    date_str = str(date_value).strip()
+                    
+                    # Simple approach: try to parse as-is first
+                    try:
+                        # Remove Z and add timezone if needed
                             if date_str.endswith('Z'):
                                 date_str = date_str[:-1]
+                        
+                        # Try parsing
                             article_date = datetime.fromisoformat(date_str)
+                    except (ValueError, TypeError):
+                        # If that fails, try removing timezone info
+                        try:
+                            # Remove timezone offset if present
+                            if '+' in date_str:
+                                date_str = date_str.split('+')[0]
+                            elif date_str.count('-') > 2:  # Might have timezone as -05:00
+                                parts = date_str.rsplit('-', 1)
+                                if len(parts) == 2 and ':' in parts[1]:
+                                    date_str = parts[0]
+                            
+                            article_date = datetime.fromisoformat(date_str)
+                        except (ValueError, TypeError):
+                            # Last resort: try just the date part
+                            try:
+                                if 'T' in date_str:
+                                    date_str = date_str.split('T')[0]
+                                article_date = datetime.fromisoformat(date_str)
+                            except (ValueError, TypeError):
+                                continue
+                    
+                    # Convert to timezone-naive
+                    if article_date and article_date.tzinfo is not None:
+                        article_date = article_date.replace(tzinfo=None)
+                    
+                    if article_date:
                             break
-                        except:
+                except Exception:
                             continue
                 
+            # Skip if no valid date found
                 if not article_date:
                     continue
                 
-                # Check if within 24 hours only
-                time_diff = now - article_date.replace(tzinfo=None)
-                if time_diff.total_seconds() <= 24 * 3600:  # 24 hours in seconds
+            # Check if within 24 hours
+            try:
+                time_diff = now - article_date
+                hours_diff = time_diff.total_seconds() / 3600
+                if hours_diff >= 0 and hours_diff <= 24:
                     past_24_hours.append(article)
-            except Exception as e:
-                print(f"Error parsing date for article: {e}")
+            except Exception:
                 continue
 
-        if not past_24_hours:
-            return jsonify({
-                "success": False,
-                "error": "No articles from past 24 hours available for analysis"
-            }), 500
+        print(f"✅ Found {len(past_24_hours)} articles from past 24 hours")
+        sys.stdout.flush()
 
-        # Comprehensive analysis of past 24 hours articles
-        titles = [article.get('title', '') for article in past_24_hours]
-        sources = list(set([article.get('source', 'Unknown') for article in past_24_hours]))
-        categories = list(set([article.get('category', 'Unknown') for article in past_24_hours]))
-        
-        # Count articles by category
+        if not past_24_hours or len(past_24_hours) == 0:
+            print(f"⚠️  No articles from past 24 hours found - articles may need to be collected or are too old")
+            sys.stdout.flush()
+            print("⚠️  No articles from past 24 hours found")
+            sys.stdout.flush()
+            return jsonify({
+                "success": True,
+                "summary": {
+                    "executive_summary": "No articles from the past 24 hours available for analysis.",
+                    "key_points": ["No recent articles found"],
+                    "market_insights": ["No articles available in the past 24 hours"],
+                    "key_headlines": [],
+                    "articles_analyzed": 0,
+                    "analysis_period": "Past 24 hours only",
+                    "timestamp": datetime.now().isoformat(),
+                    "data_freshness": "Real-time analysis"
+                }
+            }), 200
+
+        # Initialize variables before try block
+        sources = []
+        categories = []
         category_counts = {}
-        for article in past_24_hours:
-            cat = article.get('category', 'Unknown')
-            category_counts[cat] = category_counts.get(cat, 0) + 1
-        
-        # Count articles by source
         source_counts = {}
-        for article in past_24_hours:
-            src = article.get('source', 'Unknown')
-            source_counts[src] = source_counts.get(src, 0) + 1
+        articles_text = ""
         
-        # Analyze content themes
-        content_themes = []
-        for article in past_24_hours:
-            title = article.get('title', '').lower()
-            content = article.get('content', '').lower()
-            combined_text = title + ' ' + content
+        # Prepare article data for OpenAI
+        try:
+            sources = list(set([article.get('source', 'Unknown') for article in past_24_hours]))
+            categories = list(set([article.get('category', 'Unknown') for article in past_24_hours]))
             
-            # Identify key themes
-            if any(word in combined_text for word in ['interest rate', 'fed', 'central bank', 'monetary policy']):
-                content_themes.append('Monetary Policy')
-            if any(word in combined_text for word in ['bond', 'yield', 'treasury', 'government debt']):
-                content_themes.append('Government Bonds')
-            if any(word in combined_text for word in ['corporate', 'credit', 'debt', 'issuance']):
-                content_themes.append('Corporate Credit')
-            if any(word in combined_text for word in ['default', 'distressed', 'restructuring']):
-                content_themes.append('Credit Risk')
-            if any(word in combined_text for word in ['merger', 'acquisition', 'm&a', 'deal']):
-                content_themes.append('M&A Activity')
-        
-        theme_counts = {}
-        for theme in content_themes:
-            theme_counts[theme] = theme_counts.get(theme, 0) + 1
-        
-        # Analyze actual article content for meaningful insights
-        article_insights = []
-        key_headlines = []
-        detailed_analysis = []
-        
-        # Analyze only top 5 most relevant articles for concise summary
-        for article in past_24_hours[:5]:
-            title = article.get('title', '')
-            content = article.get('content', '')
-            source = article.get('source', '')
+            # Count articles by category and source
+            category_counts = {}
+            source_counts = {}
+            for article in past_24_hours:
+                cat = article.get('category', 'Unknown')
+                category_counts[cat] = category_counts.get(cat, 0) + 1
+                src = article.get('source', 'Unknown')
+                source_counts[src] = source_counts.get(src, 0) + 1
             
-            key_headlines.append(f"• {title} ({source})")
+            # Prepare article summaries for OpenAI (include more articles and more content for detailed analysis)
+            article_summaries = []
+            # Include all articles from past 24 hours (or up to 30 for detailed analysis)
+            articles_to_analyze = past_24_hours[:30] if len(past_24_hours) > 30 else past_24_hours
+            num_articles_to_analyze = len(articles_to_analyze)
+            for article in articles_to_analyze:
+                try:
+                    title = str(article.get('title', ''))
+                    # Increase content length for better analysis
+                    content = str(article.get('content', ''))[:800]  # Increased from 500 to 800
+                    source = str(article.get('source', 'Unknown'))
+                    category = str(article.get('category', 'Unknown'))
+                    link = str(article.get('link', ''))
+                    article_summaries.append(f"Article {len(article_summaries) + 1}:\nTitle: {title}\nSource: {source}\nCategory: {category}\nLink: {link}\nContent: {content}\n")
+                except Exception as e:
+                    print(f"⚠️  Error preparing article summary: {e}")
+                    sys.stdout.flush()
+                    continue
             
-            # Create concise analysis of each article
-            if title and content:
-                # Extract key insights from article content
-                if any(word in (title + content).lower() for word in ['rate', 'interest', 'fed', 'central bank', 'monetary policy']):
-                    article_insights.append(f"Interest rate developments: {title}")
-                    detailed_analysis.append(f"Interest rates: {title} - {content[:80]}...")
-                elif any(word in (title + content).lower() for word in ['bond', 'yield', 'treasury', 'government debt']):
-                    article_insights.append(f"Fixed income activity: {title}")
-                    detailed_analysis.append(f"Bond markets: {title} - {content[:80]}...")
-                elif any(word in (title + content).lower() for word in ['credit', 'debt', 'issuance', 'corporate']):
-                    article_insights.append(f"Credit market news: {title}")
-                    detailed_analysis.append(f"Credit markets: {title} - {content[:80]}...")
-                elif any(word in (title + content).lower() for word in ['merger', 'acquisition', 'deal', 'm&a']):
-                    article_insights.append(f"M&A activity: {title}")
-                    detailed_analysis.append(f"M&A deals: {title} - {content[:80]}...")
-                elif any(word in (title + content).lower() for word in ['default', 'distressed', 'restructuring', 'bankruptcy']):
-                    article_insights.append(f"Credit risk developments: {title}")
-                    detailed_analysis.append(f"Credit risk: {title} - {content[:80]}...")
+            articles_text = "\n---\n".join(article_summaries)
+        except Exception as e:
+            print(f"❌ Error preparing article data: {e}")
+            sys.stdout.flush()
+            import traceback
+            print(f"Traceback: {traceback.format_exc()}")
+            sys.stdout.flush()
+            # Use initialized defaults
+            if not sources:
+                sources = list(set([article.get('source', 'Unknown') for article in past_24_hours]))
+            if not categories:
+                categories = list(set([article.get('category', 'Unknown') for article in past_24_hours]))
+            if not category_counts:
+                category_counts = {}
+                for article in past_24_hours:
+                    cat = article.get('category', 'Unknown')
+                    category_counts[cat] = category_counts.get(cat, 0) + 1
+            if not source_counts:
+                source_counts = {}
+                for article in past_24_hours:
+                    src = article.get('source', 'Unknown')
+                    source_counts[src] = source_counts.get(src, 0) + 1
+            if not articles_text:
+                articles_text = "\n---\n".join([f"Title: {article.get('title', '')}\nSource: {article.get('source', 'Unknown')}\n" for article in past_24_hours[:20]])
+        
+        # Initialize summary variable
+        summary = None
+        
+        # Generate AI summary using OpenAI
+        global openai_client
+        print(f"🤖 OpenAI client available: {openai_client is not None}")
+        sys.stdout.flush()
+        
+        # Try to initialize OpenAI client at runtime if not already initialized
+        if not openai_client:
+            print("🔄 OpenAI client not initialized, attempting runtime initialization...")
+            sys.stdout.flush()
+            try:
+                # Try environment variable again (in case it was set after startup)
+                api_key = os.getenv('OPENAI_API_KEY')
+                if api_key and api_key.strip():
+                    if api_key.startswith('sk-'):
+                        openai_client = OpenAI(api_key=api_key.strip())
+                        print(f"✅ OpenAI client initialized at runtime (key length: {len(api_key)})")
+                        sys.stdout.flush()
+                    else:
+                        print(f"⚠️  OpenAI API key format incorrect (should start with 'sk-')")
+                        sys.stdout.flush()
                 else:
-                    # General credit market news
-                    article_insights.append(f"Market development: {title}")
-                    detailed_analysis.append(f"General: {title} - {content[:80]}...")
+                    print("⚠️  OPENAI_API_KEY still not found in environment at runtime")
+                    sys.stdout.flush()
+            except Exception as runtime_init_error:
+                print(f"❌ Error initializing OpenAI client at runtime: {runtime_init_error}")
+                sys.stdout.flush()
         
-        # Generate comprehensive summary based on actual article analysis
-        summary = {
-            "executive_summary": f"24-Hour Credit Market Summary: {len(past_24_hours)} key developments from {len(sources)} sources. Focus areas: {', '.join(list(category_counts.keys())[:2])} with {', '.join(list(theme_counts.keys())[:2]) if theme_counts else 'credit market activity'}.",
-            
-            "key_points": key_headlines[:5] if key_headlines else [
+        if openai_client:
+            try:
+                print(f"🤖 Generating AI summary for {len(past_24_hours)} articles using OpenAI...")
+                
+                prompt = f"""CRITICAL: You are a credit markets analyst. Read the {num_articles_to_analyze} articles below and EXTRACT the actual key information from the most relevant ones.
+
+DO NOT write things like "5 articles analyzed" or "Top sources: Financial Times". 
+DO NOT describe that articles exist or summarize article counts.
+DO EXTRACT what actually happened in the articles - specific facts, developments, deals, people moves, market data.
+
+EXAMPLE OF WHAT TO DO:
+❌ BAD: "Article about Blackstone raising funds"
+✅ GOOD: "Blackstone raised $5.2 billion for its latest credit fund, focusing on direct lending to mid-market companies"
+
+❌ BAD: "Article discussing interest rates"
+✅ GOOD: "Fed signals potential rate cuts as inflation cools to 2.1%, credit spreads tighten 15 basis points"
+
+❌ BAD: "People moves article"
+✅ GOOD: "John Smith joins Goldman Sachs as Head of Credit Trading, previously at JPMorgan where he managed $10B portfolio"
+
+Now extract the key information from these articles:
+
+{articles_text}
+
+Provide your response as JSON with this exact structure:
+{{
+    "executive_summary": "3-4 sentences synthesizing the most significant developments - what actually happened",
+    "key_points": [
+        "Specific fact from most relevant article: Company/Person + Action + Numbers/Details",
+        "Specific fact from second article: What happened + Who/What + Details",
+        "Specific fact from third article: Actual development with specifics",
+        "Specific fact from fourth article: Concrete information extracted",
+        "Specific fact from fifth article: Real development with facts"
+    ],
+    "market_insights": [
+        "What the most important development means for credit markets - specific implications",
+        "Analysis of second development's market impact",
+        "Third insight connecting developments to market trends"
+    ],
+    "key_headlines": [
+        "Copy the exact headline from the most important article",
+        "Copy the exact headline from the second most important article",
+        "Copy the exact headline from the third most important article",
+        "Copy the exact headline from the fourth most important article",
+        "Copy the exact headline from the fifth most important article"
+    ],
+    "article_breakdown": [
+        {{
+            "title": "Exact article title",
+            "source": "Source name",
+            "key_takeaway": "What actually happened in this article - extract the fact/development",
+            "market_impact": "What this means for credit markets specifically"
+        }}
+    ]
+}}
+
+REMEMBER:
+- Extract ACTUAL information, not descriptions of articles
+- Include specific names, numbers, amounts, rates, dates
+- Focus on the 5-10 most relevant articles
+- Each key_point should be a concrete fact extracted from an article
+
+Provide valid JSON only, no additional text."""
+
+                # Try gpt-4o first, fallback to gpt-4o-mini (cheaper) or gpt-3.5-turbo if not available
+                models_to_try = ["gpt-4o", "gpt-4o-mini", "gpt-3.5-turbo"]
+                response = None
+                last_error = None
+                
+                for model_name in models_to_try:
+                    try:
+                        print(f"🤖 Attempting to use model: {model_name}")
+                        sys.stdout.flush()
+                        response = openai_client.chat.completions.create(
+                            model=model_name,
+                            messages=[
+                                {"role": "system", "content": "You are an expert credit markets analyst. Your ONLY job is to EXTRACT actual facts, information, and developments from articles. NEVER describe that an article exists. ALWAYS extract what happened: specific companies, people, deals, amounts, rates, movements. Be concrete and specific with facts and numbers."},
+                                {"role": "user", "content": prompt}
+                            ],
+                            temperature=0.7,
+                            max_tokens=4000  # Increased from 2000 to allow for detailed breakdowns
+                        )
+                        print(f"✅ Successfully using model: {model_name}")
+                        sys.stdout.flush()
+                        break
+                    except Exception as model_error:
+                        last_error = model_error
+                        error_str = str(model_error)
+                        # Check if it's a quota issue vs rate limit
+                        if "insufficient_quota" in error_str or "quota" in error_str.lower():
+                            print(f"⚠️  Model {model_name} failed: QUOTA ISSUE - {error_str}")
+                            print(f"💡 Check OpenAI billing: https://platform.openai.com/account/billing")
+                        elif "rate_limit" in error_str.lower() or "429" in error_str:
+                            print(f"⚠️  Model {model_name} failed: RATE LIMIT - {error_str}")
+                            print(f"💡 Too many requests, will retry with next model")
+                        else:
+                            print(f"⚠️  Model {model_name} failed: {error_str}")
+                        sys.stdout.flush()
+                        continue
+                
+                if not response:
+                    raise Exception(f"All models failed. Last error: {last_error}")
+                
+                ai_summary_text = response.choices[0].message.content.strip()
+                print(f"📝 Raw AI response (first 500 chars): {ai_summary_text[:500]}")
+                sys.stdout.flush()
+                
+                # Try to parse JSON from response (remove markdown code blocks if present)
+                if ai_summary_text.startswith("```json"):
+                    ai_summary_text = ai_summary_text[7:]
+                if ai_summary_text.startswith("```"):
+                    ai_summary_text = ai_summary_text[3:]
+                if ai_summary_text.endswith("```"):
+                    ai_summary_text = ai_summary_text[:-3]
+                ai_summary_text = ai_summary_text.strip()
+                
+                print(f"📝 Cleaned AI response (first 500 chars): {ai_summary_text[:500]}")
+                sys.stdout.flush()
+                
+                ai_summary = json.loads(ai_summary_text)
+                print(f"📝 Parsed AI summary keys: {list(ai_summary.keys())}")
+                print(f"📝 Key points in response: {len(ai_summary.get('key_points', []))}")
+                sys.stdout.flush()
+                
+                # Add metadata
+                summary = {
+                    "executive_summary": ai_summary.get("executive_summary", ""),
+                    "key_points": ai_summary.get("key_points", []),
+                    "market_insights": ai_summary.get("market_insights", []),
+                    "key_headlines": ai_summary.get("key_headlines", []),
+                    "article_breakdown": ai_summary.get("article_breakdown", []),  # Include detailed article breakdown
+                    "articles_analyzed": len(past_24_hours),
+                    "analysis_period": "Past 24 hours only",
+                    "timestamp": datetime.now().isoformat(),
+                    "data_freshness": "Real-time AI analysis of latest articles",
+                    "sources": sources[:10],
+                    "categories": list(category_counts.keys())[:10]
+                }
+                
+                print(f"✅ AI summary generated successfully")
+                print(f"📋 Executive summary: {summary.get('executive_summary', '')[:200]}")
+                print(f"📋 Key points count: {len(summary.get('key_points', []))}")
+                print(f"📋 First key point: {summary.get('key_points', [])[0] if summary.get('key_points', []) else 'None'}")
+                sys.stdout.flush()
+                
+            except json.JSONDecodeError as e:
+                print(f"⚠️  Error parsing OpenAI JSON response: {e}")
+                sys.stdout.flush()
+                ai_summary_text_safe = ai_summary_text[:500] if 'ai_summary_text' in locals() else "No response received"
+                print(f"Response was: {ai_summary_text_safe}")
+                sys.stdout.flush()
+                import traceback
+                print(f"Traceback: {traceback.format_exc()}")
+                sys.stdout.flush()
+                # Fallback to basic summary - ensure variables exist
+                try:
+                    sources_list = sources if 'sources' in locals() else []
+                    categories_list = categories if 'categories' in locals() else []
+                    summary = {
+                        "executive_summary": f"AI summary generation encountered an error. {len(past_24_hours)} articles analyzed from past 24 hours.",
+                        "key_points": [f"📊 {len(past_24_hours)} articles analyzed", f"📰 {len(sources_list)} sources", f"📈 {len(categories_list)} categories"],
+                        "market_insights": ["AI summary temporarily unavailable"],
+                        "key_headlines": [article.get('title', '')[:100] for article in past_24_hours[:5]],
+                        "articles_analyzed": len(past_24_hours),
+                        "analysis_period": "Past 24 hours only",
+                        "timestamp": datetime.now().isoformat(),
+                        "data_freshness": "Real-time analysis of latest articles"
+                    }
+                except Exception as fallback_error:
+                    print(f"❌ Error in fallback summary: {fallback_error}")
+                    sys.stdout.flush()
+                    summary = {
+                        "executive_summary": f"{len(past_24_hours)} articles analyzed from past 24 hours.",
+                        "key_points": [f"📊 {len(past_24_hours)} articles analyzed"],
+                        "market_insights": ["AI summary temporarily unavailable"],
+                        "key_headlines": [],
+                        "articles_analyzed": len(past_24_hours),
+                        "analysis_period": "Past 24 hours only",
+                        "timestamp": datetime.now().isoformat(),
+                        "data_freshness": "Real-time analysis of latest articles"
+                    }
+            except Exception as e:
+                print(f"⚠️  Error generating AI summary: {e}")
+                sys.stdout.flush()
+                import traceback
+                print(f"Traceback: {traceback.format_exc()}")
+                sys.stdout.flush()
+                # Fallback to basic summary - ensure variables exist
+                try:
+                    sources_list = sources if 'sources' in locals() else []
+                    categories_list = categories if 'categories' in locals() else []
+                    summary = {
+                        "executive_summary": f"AI summary generation encountered an error. {len(past_24_hours)} articles analyzed from past 24 hours.",
+                        "key_points": [f"📊 {len(past_24_hours)} articles analyzed", f"📰 {len(sources_list)} sources", f"📈 {len(categories_list)} categories"],
+                        "market_insights": ["AI summary temporarily unavailable"],
+                        "key_headlines": [article.get('title', '')[:100] for article in past_24_hours[:5]],
+                        "articles_analyzed": len(past_24_hours),
+                        "analysis_period": "Past 24 hours only",
+                        "timestamp": datetime.now().isoformat(),
+                        "data_freshness": "Real-time analysis of latest articles"
+                    }
+                except Exception as fallback_error:
+                    print(f"❌ Error in fallback summary: {fallback_error}")
+                    sys.stdout.flush()
+                    summary = {
+                        "executive_summary": f"{len(past_24_hours)} articles analyzed from past 24 hours.",
+                        "key_points": [f"📊 {len(past_24_hours)} articles analyzed"],
+                        "market_insights": ["AI summary temporarily unavailable"],
+                        "key_headlines": [],
+                        "articles_analyzed": len(past_24_hours),
+                        "analysis_period": "Past 24 hours only",
+                        "timestamp": datetime.now().isoformat(),
+                        "data_freshness": "Real-time analysis of latest articles"
+                    }
+        else:
+            # Fallback if OpenAI is not available
+            print("⚠️  OpenAI client not available, using basic summary")
+            key_headlines = [f"• {article.get('title', '')} ({article.get('source', 'Unknown')})" for article in past_24_hours[:5]]
+            summary = {
+                "executive_summary": f"24-Hour Credit Market Summary: {len(past_24_hours)} key developments from {len(sources)} sources.",
+                "key_points": [
                 f"📊 {len(past_24_hours)} articles analyzed from past 24 hours",
                 f"📰 Top sources: {', '.join([f'{src} ({count})' for src, count in list(source_counts.items())[:3]])}",
                 f"📈 Market sectors: {', '.join([f'{cat} ({count})' for cat, count in list(category_counts.items())[:3]])}",
-                f"🎯 Key themes: {', '.join([f'{theme} ({count})' for theme, count in list(theme_counts.items())[:3]]) if theme_counts else 'Credit market developments'}",
                 f"⏰ Analysis period: Last 24 hours (as of {now.strftime('%Y-%m-%d %H:%M UTC')})"
             ],
-            
-            "market_insights": detailed_analysis[:3] if detailed_analysis else [
+                "market_insights": [
                 f"Recent activity shows {len(past_24_hours)} significant credit market developments",
                 f"Primary coverage from: {', '.join(list(source_counts.keys())[:3])}",
-                f"Market focus areas: {', '.join(list(category_counts.keys())[:3])}",
-                f"Key themes emerging: {', '.join(list(theme_counts.keys())[:3]) if theme_counts else 'General market activity'}",
-                "Credit market conditions reflect real-time developments and immediate market responses",
-                "Investment implications based on current market intelligence"
-            ],
-            
+                    "Credit market conditions reflect real-time developments"
+                ],
+                "articles_analyzed": len(past_24_hours),
+                "analysis_period": "Past 24 hours only",
+                "timestamp": datetime.now().isoformat(),
+                "data_freshness": "Real-time analysis of latest articles",
+                "key_headlines": key_headlines
+            }
+        
+        # Ensure summary is defined
+        if summary is None:
+            print("⚠️  Summary was not generated, using fallback")
+            key_headlines = [f"• {article.get('title', '')} ({article.get('source', 'Unknown')})" for article in past_24_hours[:5]]
+            summary = {
+                "executive_summary": f"24-Hour Credit Market Summary: {len(past_24_hours)} key developments from {len(sources)} sources.",
+                "key_points": [
+                    f"📊 {len(past_24_hours)} articles analyzed from past 24 hours",
+                    f"📰 Top sources: {', '.join([f'{src} ({count})' for src, count in list(source_counts.items())[:3]])}",
+                    f"📈 Market sectors: {', '.join([f'{cat} ({count})' for cat, count in list(category_counts.items())[:3]])}",
+                    f"⏰ Analysis period: Last 24 hours (as of {now.strftime('%Y-%m-%d %H:%M UTC')})"
+                ],
+                "market_insights": [
+                    f"Recent activity shows {len(past_24_hours)} significant credit market developments",
+                    f"Primary coverage from: {', '.join(list(source_counts.keys())[:3])}",
+                    "Credit market conditions reflect real-time developments"
+                ],
             "articles_analyzed": len(past_24_hours),
             "analysis_period": "Past 24 hours only",
             "timestamp": datetime.now().isoformat(),
             "data_freshness": "Real-time analysis of latest articles",
-            "key_headlines": key_headlines if key_headlines else []
+                "key_headlines": key_headlines
         }
         
         return jsonify({
@@ -1563,9 +2037,15 @@ def get_ai_summary():
         })
         
     except Exception as e:
+        import traceback
+        error_traceback = traceback.format_exc()
+        print(f"❌ Error in get_ai_summary: {e}")
+        print(f"Full traceback:\n{error_traceback}")
+        sys.stdout.flush()
         return jsonify({
             "success": False,
-            "error": str(e)
+            "error": str(e),
+            "error_type": type(e).__name__
         }), 500
 
 @app.route('/api/notifications', methods=['GET'])
@@ -2428,50 +2908,36 @@ def handle_ai_assistant_text_only():
         # Store the interaction in memory system
         store_interaction(message, ai_response['text'], ai_response['type'], ai_response['confidence'])
         
-        # Return response in expected format (support both iOS and other clients)
-        response_data = {
+        # Build response (support both iOS and other clients)
+        response_payload = {
             "success": True,
-            "text": ai_response.get('text', "I couldn't process that request. Please try again."),  # iOS app expects 'text'
-            "response": ai_response.get('text', ''),  # Alternative key for compatibility
-            "type": ai_response.get('type', 'answer'),
-            "confidence": ai_response.get('confidence', 0.5),
+            "text": ai_response['text'],  # iOS app expects 'text'
+            "response": ai_response['text'],  # Alternative key for compatibility
+            "type": ai_response['type'],
+            "confidence": ai_response['confidence'],
             "sources": ai_response.get('sources', []),
             "actions": ai_response.get('actions', [])
         }
         
-        # Add any additional fields (like download info for CV formatting)
-        if 'download_url' in ai_response:
-            response_data['download_url'] = ai_response['download_url']
-        if 'download_filename' in ai_response:
-            response_data['download_filename'] = ai_response['download_filename']
-        if 'filename' in ai_response:
-            response_data['filename'] = ai_response['filename']
-        if 'file_format' in ai_response:
-            response_data['file_format'] = ai_response['file_format']
-        if 'file_base64' in ai_response:
-            response_data['file_base64'] = ai_response['file_base64']
-        if 'html_base64' in ai_response:
-            response_data['html_base64'] = ai_response['html_base64']
-        if 'html_content' in ai_response:
-            response_data['html_content'] = ai_response['html_content']
-        if 'error' in ai_response:
-            response_data['error'] = ai_response['error']
-            response_data['success'] = False
+        # If this is a CV formatting response and we only have text containing HTML,
+        # expose html_content and a sensible default filename so clients can download/share cleanly
+        try:
+            if ai_response.get('type') == 'cv_format':
+                text_lower = (ai_response.get('text') or '').lower()
+                if ('<html' in text_lower) or ('<head' in text_lower) or ('<body' in text_lower):
+                    response_payload['html_content'] = ai_response.get('text')
+                    response_payload['download_filename'] = 'formatted_cv.html'
+        except Exception:
+            # Non-fatal; keep base payload
+            pass
         
-        return jsonify(response_data)
+        return jsonify(response_payload)
         
     except Exception as e:
         print(f"❌ Error in text-only AI assistant: {e}")
-        import traceback
-        print(f"Traceback: {traceback.format_exc()}")
         return jsonify({
             "success": False,
-            "text": f"I encountered an error processing your request: {str(e)}. Please try again.",
-            "error": f"Text processing error: {str(e)}",
-            "type": "error",
-            "confidence": 0.0,
-            "sources": [],
-            "actions": []
+            "error": f"Text processing error: {str(e)}"
         }), 500
 
 def handle_ai_assistant_with_attachments():
@@ -2549,10 +3015,10 @@ def handle_ai_assistant_with_attachments():
         # Return response in expected format
         response_data = {
             "success": True,
-            "text": ai_response.get('text', "I couldn't process that request. Please try again."),  # iOS app expects 'text'
-            "response": ai_response.get('text', ''),  # Alternative key for compatibility
-            "type": ai_response.get('type', 'answer'),
-            "confidence": ai_response.get('confidence', 0.5),
+            "text": ai_response['text'],  # iOS app expects 'text'
+            "response": ai_response['text'],  # Alternative key for compatibility
+            "type": ai_response['type'],
+            "confidence": ai_response['confidence'],
             "sources": ai_response.get('sources', []),
             "actions": ai_response.get('actions', []),
             "attachments_processed": len(file_analyses),
@@ -2567,40 +3033,18 @@ def handle_ai_assistant_with_attachments():
         # Add CV file download info if available
         if ai_response.get('download_url'):
             response_data['download_url'] = ai_response['download_url']
-        if ai_response.get('download_filename'):
-            response_data['download_filename'] = ai_response['download_filename']
-        if ai_response.get('filename'):
-            response_data['filename'] = ai_response['filename']
-        if ai_response.get('file_format'):
-            response_data['file_format'] = ai_response['file_format']
-        if ai_response.get('file_base64'):
-            response_data['file_base64'] = ai_response['file_base64']
-        if ai_response.get('cv_file'):
-            response_data['cv_file'] = ai_response['cv_file']
-        if ai_response.get('html_content'):
-            response_data['html_content'] = ai_response['html_content']
-        if ai_response.get('html_base64'):
-            response_data['html_base64'] = ai_response['html_base64']
-        if ai_response.get('error'):
-            response_data['error'] = ai_response['error']
-            response_data['success'] = False
+            response_data['download_filename'] = ai_response.get('filename')
+            response_data['cv_file'] = ai_response.get('cv_file')
+            response_data['html_content'] = ai_response.get('html_content')
+            response_data['html_base64'] = ai_response.get('html_base64')
         
         return jsonify(response_data)
         
     except Exception as e:
         print(f"❌ Error in attachment AI assistant: {e}")
-        import traceback
-        print(f"Traceback: {traceback.format_exc()}")
         return jsonify({
             "success": False,
-            "text": f"I encountered an error processing your files: {str(e)}. Please try again.",
-            "error": f"Attachment processing error: {str(e)}",
-            "type": "error",
-            "confidence": 0.0,
-            "sources": [],
-            "actions": [],
-            "attachments_processed": 0,
-            "file_summaries": []
+            "error": f"Attachment processing error: {str(e)}"
         }), 500
 
 @app.route('/api/ai/chat', methods=['POST'])
@@ -2796,6 +3240,253 @@ def create_user_profile():
     """Create user profile endpoint"""
     return user_profile()
 
+def authenticate_user():
+    """Authenticate user by checking email in user_profiles"""
+    email = request.headers.get('X-User-Email') or request.args.get('email')
+    if not email:
+        return None, jsonify({
+            'success': False,
+            'error': 'Authentication required. Please provide user email.'
+        }), 401
+    
+    # Check if user exists in user_profiles
+    if email not in user_profiles:
+        return None, jsonify({
+            'success': False,
+            'error': 'Unauthorized. User not found.'
+        }), 403
+    
+    return email, None, None
+
+def check_rate_limit(email, max_requests=10, window_seconds=60):
+    """Check rate limiting for compensation endpoint"""
+    global compensation_rate_limits
+    
+    now = datetime.now()
+    
+    if email not in compensation_rate_limits:
+        compensation_rate_limits[email] = {
+            'count': 1,
+            'reset_time': now + timedelta(seconds=window_seconds)
+        }
+        return True, (None, None)
+    
+    rate_data = compensation_rate_limits[email]
+    
+    # Reset if window expired
+    if now > rate_data['reset_time']:
+        rate_data['count'] = 1
+        rate_data['reset_time'] = now + timedelta(seconds=window_seconds)
+        return True, (None, None)
+    
+    # Check if limit exceeded
+    if rate_data['count'] >= max_requests:
+        return False, (jsonify({
+            'success': False,
+            'error': f'Rate limit exceeded. Maximum {max_requests} requests per {window_seconds} seconds.'
+        }), 429)
+    
+    rate_data['count'] += 1
+    return True, (None, None)
+
+def validate_compensation(comp):
+    """Validate a single compensation entry"""
+    errors = []
+    
+    # Check required fields
+    if 'jobTitle' not in comp or not comp['jobTitle']:
+        errors.append('jobTitle is required')
+    elif len(comp['jobTitle']) > MAX_JOB_TITLE_LENGTH:
+        errors.append(f'jobTitle exceeds maximum length of {MAX_JOB_TITLE_LENGTH} characters')
+    
+    if 'baseSalary' not in comp:
+        errors.append('baseSalary is required')
+    else:
+        try:
+            base_salary = float(comp['baseSalary'])
+            if base_salary < MIN_COMPENSATION_VALUE or base_salary > MAX_COMPENSATION_VALUE:
+                errors.append(f'baseSalary must be between {MIN_COMPENSATION_VALUE} and {MAX_COMPENSATION_VALUE}')
+        except (ValueError, TypeError):
+            errors.append('baseSalary must be a valid number')
+    
+    if 'bonus' not in comp:
+        errors.append('bonus is required')
+    else:
+        try:
+            bonus = float(comp['bonus'])
+            if bonus < MIN_COMPENSATION_VALUE or bonus > MAX_COMPENSATION_VALUE:
+                errors.append(f'bonus must be between {MIN_COMPENSATION_VALUE} and {MAX_COMPENSATION_VALUE}')
+        except (ValueError, TypeError):
+            errors.append('bonus must be a valid number')
+    
+    # Validate currency
+    if 'currency' in comp:
+        valid_currencies = ['USD', 'GBP', 'EUR']
+        if comp['currency'] not in valid_currencies:
+            errors.append(f'currency must be one of: {", ".join(valid_currencies)}')
+    
+    # Validate person name (optional)
+    if 'personName' in comp and comp['personName']:
+        if len(comp['personName']) > MAX_PERSON_NAME_LENGTH:
+            errors.append(f'personName exceeds maximum length of {MAX_PERSON_NAME_LENGTH} characters')
+        # Sanitize person name - remove potentially dangerous characters
+        if not re.match(r'^[a-zA-Z0-9\s\-\'\.]+$', comp['personName']):
+            errors.append('personName contains invalid characters')
+    
+    # Validate dates
+    if 'addedDate' in comp:
+        try:
+            datetime.fromisoformat(comp['addedDate'].replace('Z', '+00:00'))
+        except (ValueError, AttributeError):
+            errors.append('addedDate must be a valid ISO 8601 date')
+    
+    return errors
+
+def sanitize_compensation(comp):
+    """Sanitize compensation data"""
+    sanitized = {}
+    
+    # Sanitize job title
+    if 'jobTitle' in comp:
+        sanitized['jobTitle'] = re.sub(r'[<>"\']', '', str(comp['jobTitle'])).strip()[:MAX_JOB_TITLE_LENGTH]
+    
+    # Sanitize numeric fields
+    if 'baseSalary' in comp:
+        try:
+            sanitized['baseSalary'] = float(comp['baseSalary'])
+        except (ValueError, TypeError):
+            sanitized['baseSalary'] = 0.0
+    
+    if 'bonus' in comp:
+        try:
+            sanitized['bonus'] = float(comp['bonus'])
+        except (ValueError, TypeError):
+            sanitized['bonus'] = 0.0
+    
+    # Sanitize currency
+    if 'currency' in comp:
+        sanitized['currency'] = str(comp['currency']).upper()
+        if sanitized['currency'] not in ['USD', 'GBP', 'EUR']:
+            sanitized['currency'] = 'USD'
+    
+    # Sanitize person name
+    if 'personName' in comp and comp['personName']:
+        sanitized['personName'] = re.sub(r'[<>"\']', '', str(comp['personName'])).strip()[:MAX_PERSON_NAME_LENGTH]
+    
+    # Preserve other fields
+    for key in ['id', 'addedDate', 'createdAt', 'updatedAt', 'workflowData']:
+        if key in comp:
+            sanitized[key] = comp[key]
+    
+    return sanitized
+
+@app.route('/api/compensations', methods=['GET', 'POST'])
+def compensations_endpoint():
+    """Compensation data endpoint - shared across all users with security"""
+    global compensations
+    
+    try:
+        # Authentication check
+        email, auth_error, auth_status = authenticate_user()
+        if auth_error:
+            return auth_error, auth_status
+        
+        # Rate limiting check
+        allowed, rate_error = check_rate_limit(email, max_requests=20, window_seconds=60)
+        if not allowed:
+            error_response, status_code = rate_error
+            return error_response, status_code
+        
+        if request.method == 'GET':
+            # Return all compensation data (read-only, no validation needed)
+            return jsonify({
+                'success': True,
+                'compensations': compensations,
+                'count': len(compensations)
+            })
+        
+        elif request.method == 'POST':
+            # Save compensation data (replace all) - requires validation
+            data = request.get_json()
+            if not data:
+                return jsonify({
+                    'success': False,
+                    'error': 'Request body is required'
+                }), 400
+            
+            if 'compensations' not in data:
+                return jsonify({
+                    'success': False,
+                    'error': 'Compensations data required'
+                }), 400
+            
+            comps = data['compensations']
+            
+            # Validate array
+            if not isinstance(comps, list):
+                return jsonify({
+                    'success': False,
+                    'error': 'Compensations must be an array'
+                }), 400
+            
+            # Check size limit
+            if len(comps) > MAX_COMPENSATIONS_PER_REQUEST:
+                return jsonify({
+                    'success': False,
+                    'error': f'Maximum {MAX_COMPENSATIONS_PER_REQUEST} compensations allowed per request'
+                }), 400
+            
+            # Validate and sanitize each compensation entry
+            validated_comps = []
+            all_errors = []
+            
+            for idx, comp in enumerate(comps):
+                if not isinstance(comp, dict):
+                    all_errors.append(f'Entry {idx}: Must be an object')
+                    continue
+                
+                errors = validate_compensation(comp)
+                if errors:
+                    all_errors.extend([f'Entry {idx}: {error}' for error in errors])
+                    continue
+                
+                # Sanitize and add
+                sanitized = sanitize_compensation(comp)
+                validated_comps.append(sanitized)
+            
+            if all_errors:
+                return jsonify({
+                    'success': False,
+                    'error': 'Validation errors',
+                    'errors': all_errors
+                }), 400
+            
+            # All validations passed - update compensations
+            compensations = validated_comps
+            
+            # Log the update
+            print(f"✅ Compensation data updated by {email}: {len(validated_comps)} entries")
+            
+            return jsonify({
+                'success': True,
+                'message': f'Saved {len(validated_comps)} compensation entries',
+                'count': len(validated_comps)
+            })
+    
+    except json.JSONDecodeError:
+        return jsonify({
+            'success': False,
+            'error': 'Invalid JSON in request body'
+        }), 400
+    except Exception as e:
+        print(f"❌ Error in compensations endpoint: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': 'Internal server error'
+        }), 500
+
 @app.route('/api/download-cv/<filename>', methods=['GET'])
 def download_cv(filename):
     """Download formatted CV file"""
@@ -2836,924 +3527,710 @@ def download_cv(filename):
             'error': f'Download error: {str(e)}'
         }), 500
 
-# ============================================================================
-# USER-SPECIFIC DATA ENDPOINTS
-# ============================================================================
-
-# Industry Moves storage
-user_industry_moves = {}  # user_email -> list of moves
-
-# Compensation storage
-user_compensations = {}  # user_email -> list of compensations
-
-# Device tokens for push notifications
-device_tokens = {}  # email -> {device_token, platform, updated_at}
-
-@app.route('/api/user-todos', methods=['GET'])
-@require_auth
-@require_ownership('email', 'email')
-def get_user_todos():
-    """Get todos for a specific user (secured)"""
-    try:
-        user = get_current_user()
-        user_email = request.args.get('email') or user.get('email')
-        
-        if not user_email:
-            return jsonify({
-                'success': False,
-                'error': 'Email parameter required'
-            }), 400
-        
-        # Verify ownership
-        if user.get('email') != user_email and '*' not in user.get('permissions', []):
-            return jsonify({
-                'success': False,
-                'error': 'Access denied'
-            }), 403
-        
-        todos = user_todos.get(user_email, [])
-        log_data_access(user.get('user_id'), user_email, 'todos', len(todos))
-        
-        return jsonify({
-            'success': True,
-            'todos': todos
-        })
-    except Exception as e:
-        print(f"Error getting todos: {e}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-@app.route('/api/user-todos', methods=['POST'])
-@require_auth
-@require_ownership('email', 'email')
-def save_user_todos():
-    """Save todos for a user (secured)"""
-    try:
-        user = get_current_user()
-        data = request.get_json()
-        user_email = data.get('email') or user.get('email')
-        todos = data.get('todos', [])
-        
-        if not user_email:
-            return jsonify({
-                'success': False,
-                'error': 'Email required'
-            }), 400
-        
-        # Verify ownership
-        if user.get('email') != user_email and '*' not in user.get('permissions', []):
-            return jsonify({
-                'success': False,
-                'error': 'Access denied'
-            }), 403
-        
-        user_todos[user_email] = todos
-        log_data_modification(user.get('user_id'), user_email, 'todos', 'update', 'bulk')
-        
-        return jsonify({
-            'success': True,
-            'message': f'Saved {len(todos)} todos for {user_email}'
-        })
-    except Exception as e:
-        print(f"Error saving todos: {e}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-@app.route('/api/user-call-notes', methods=['GET'])
-@require_auth
-@require_ownership('email', 'email')
-def get_user_call_notes():
-    """Get call notes for a specific user (secured with encryption)"""
-    try:
-        user = get_current_user()
-        user_email = request.args.get('email') or user.get('email')
-        
-        if not user_email:
-            return jsonify({
-                'success': False,
-                'error': 'Email parameter required'
-            }), 400
-        
-        # Verify ownership
-        if user.get('email') != user_email and '*' not in user.get('permissions', []):
-            return jsonify({
-                'success': False,
-                'error': 'Access denied'
-            }), 403
-        
-        # Try database first
-        try:
-            from database.models import CallNote, SessionLocal
-            db = SessionLocal()
-            try:
-                notes = db.query(CallNote).filter(
-                    CallNote.user_email == user_email,
-                    CallNote.is_deleted == False
-                ).all()
-                
-                call_notes_list = []
-                for note in notes:
-                    note_dict = {
-                        'id': note.id,
-                        'title': note.title,
-                        'transcript': note.transcript,
-                        'summary': note.summary,
-                        'notes': note.notes,
-                        'date': note.date.isoformat() if note.date else None,
-                        'participants': note.participants,
-                        'created_at': note.created_at.isoformat() if note.created_at else None,
-                        'updated_at': note.updated_at.isoformat() if note.updated_at else None,
-                    }
-                    # Decrypt sensitive fields
-                    note_dict = decrypt_dict_fields(note_dict, SENSITIVE_FIELDS.get('call_notes', []))
-                    call_notes_list.append(note_dict)
-                
-                log_data_access(user.get('user_id'), user_email, 'call_notes', len(call_notes_list))
-                return jsonify({
-                    'success': True,
-                    'call_notes': call_notes_list
-                })
-            finally:
-                db.close()
-        except Exception as db_error:
-            # Fallback to in-memory
-            print(f"Database error, using fallback: {db_error}")
-            call_notes = user_call_notes.get(user_email, [])
-            log_data_access(user.get('user_id'), user_email, 'call_notes', len(call_notes))
-            return jsonify({
-                'success': True,
-                'call_notes': call_notes
-            })
-            
-    except Exception as e:
-        print(f"Error getting call notes: {e}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-@app.route('/api/user-call-notes', methods=['POST'])
-@require_auth
-@require_ownership('email', 'email')
-def save_user_call_notes():
-    """Save call notes for a user (secured with encryption)"""
-    try:
-        user = get_current_user()
-        data = request.get_json()
-        user_email = data.get('email') or user.get('email')
-        call_notes = data.get('call_notes', [])
-        
-        if not user_email:
-            return jsonify({
-                'success': False,
-                'error': 'Email required'
-            }), 400
-        
-        # Verify ownership
-        if user.get('email') != user_email and '*' not in user.get('permissions', []):
-            return jsonify({
-                'success': False,
-                'error': 'Access denied'
-            }), 403
-        
-        # Try database first
-        try:
-            from database.models import CallNote, SessionLocal
-            import uuid
-            db = SessionLocal()
-            try:
-                saved_count = 0
-                for note_data in call_notes:
-                    # Encrypt sensitive fields
-                    encrypted_note = encrypt_dict_fields(
-                        note_data,
-                        SENSITIVE_FIELDS.get('call_notes', [])
-                    )
-                    
-                    note_id = note_data.get('id') or str(uuid.uuid4())
-                    
-                    # Check if exists
-                    existing = db.query(CallNote).filter(CallNote.id == note_id).first()
-                    
-                    if existing:
-                        # Update
-                        for key, value in encrypted_note.items():
-                            if hasattr(existing, key):
-                                setattr(existing, key, value)
-                        existing.updated_at = datetime.utcnow()
-                        log_data_modification(user.get('user_id'), user_email, 'call_notes', 'update', note_id)
-                    else:
-                        # Create
-                        new_note = CallNote(
-                            id=note_id,
-                            user_email=user_email,
-                            **encrypted_note
-                        )
-                        db.add(new_note)
-                        log_data_modification(user.get('user_id'), user_email, 'call_notes', 'create', note_id)
-                    
-                    saved_count += 1
-                
-                db.commit()
-                return jsonify({
-                    'success': True,
-                    'message': f'Saved {saved_count} call notes',
-                    'count': saved_count
-                })
-            except Exception as db_error:
-                db.rollback()
-                raise db_error
-            finally:
-                db.close()
-        except Exception as db_error:
-            # Fallback to in-memory
-            print(f"Database error, using fallback: {db_error}")
-            user_call_notes[user_email] = call_notes
-            log_data_modification(user.get('user_id'), user_email, 'call_notes', 'update', 'bulk')
-            return jsonify({
-                'success': True,
-                'message': f'Saved {len(call_notes)} call notes for {user_email}'
-            })
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+# MARK: - User-to-User Chat Endpoints
 
 @app.route('/api/user-chats', methods=['GET'])
-@require_auth
-@require_ownership('email', 'email')
 def get_user_chats():
-    """Get chats for a specific user (secured)"""
+    """Get all chats for a user"""
+    global user_chats
     try:
-        user = get_current_user()
-        user_email = request.args.get('email') or user.get('email')
-        
-        if not user_email:
+        email = request.args.get('email')
+        if not email:
             return jsonify({
                 'success': False,
-                'error': 'Email parameter required'
+                'error': 'Email parameter is required'
             }), 400
         
-        # Verify ownership
-        if user.get('email') != user_email and '*' not in user.get('permissions', []):
-            return jsonify({
-                'success': False,
-                'error': 'Access denied'
-            }), 403
+        print(f"📥 Fetching chats for user: {email}")
         
-        chats = user_chats.get(user_email, [])
-        log_data_access(user.get('user_id'), user_email, 'chats', len(chats))
+        # Get chats for this user, or return empty list
+        chats = user_chats.get(email, [])
+        
+        print(f"✅ Returning {len(chats)} chats for {email}")
         
         return jsonify({
             'success': True,
             'chats': chats
         })
+        
     except Exception as e:
-        print(f"Error getting chats: {e}")
+        print(f"❌ Error fetching user chats: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({
             'success': False,
             'error': str(e)
         }), 500
 
 @app.route('/api/user-chats', methods=['POST'])
-@require_auth
-@require_ownership('email', 'email')
 def save_user_chats():
-    """Save chats for a user (secured)"""
+    """Save chats for a user"""
+    global user_chats
     try:
-        user = get_current_user()
         data = request.get_json()
-        user_email = data.get('email') or user.get('email')
-        chats = data.get('chats', [])
-        
-        if not user_email:
+        if not data:
             return jsonify({
                 'success': False,
-                'error': 'Email required'
+                'error': 'Request body is required'
             }), 400
         
-        # Verify ownership
-        if user.get('email') != user_email and '*' not in user.get('permissions', []):
+        email = data.get('email')
+        chats = data.get('chats', [])
+        
+        if not email:
             return jsonify({
                 'success': False,
-                'error': 'Access denied'
-            }), 403
+                'error': 'Email is required'
+            }), 400
         
-        user_chats[user_email] = chats
-        log_data_modification(user.get('user_id'), user_email, 'chats', 'update', 'bulk')
+        if not isinstance(chats, list):
+            return jsonify({
+                'success': False,
+                'error': 'Chats must be an array'
+            }), 400
+        
+        print(f"💾 Saving {len(chats)} chats for user: {email}")
+        
+        # Save chats for this user
+        user_chats[email] = chats
+        
+        print(f"✅ Successfully saved {len(chats)} chats for {email}")
         
         return jsonify({
             'success': True,
-            'message': f'Saved {len(chats)} chats for {user_email}'
+            'message': f'Saved {len(chats)} chats'
         })
+        
     except Exception as e:
-        print(f"Error saving chats: {e}")
+        print(f"❌ Error saving user chats: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({
             'success': False,
             'error': str(e)
         }), 500
 
 @app.route('/api/user-messages', methods=['GET'])
-@require_auth
 def get_user_messages():
-    """Get messages for a specific chat (secured)"""
+    """Get all messages for a chat"""
+    global user_messages
     try:
-        user = get_current_user()
         chat_id = request.args.get('chat_id')
-        
         if not chat_id:
             return jsonify({
                 'success': False,
-                'error': 'chat_id parameter required'
+                'error': 'chat_id parameter is required'
             }), 400
         
-        # Verify user owns the chat (check if chat belongs to user)
-        # For now, we'll allow access if chat_id is provided
-        # In production, verify chat ownership from database
+        print(f"📥 Fetching messages for chat: {chat_id}")
+        
+        # Get messages for this chat, or return empty list
         messages = user_messages.get(chat_id, [])
-        log_data_access(user.get('user_id'), user.get('email'), 'messages', len(messages))
+        
+        print(f"✅ Returning {len(messages)} messages for chat {chat_id}")
         
         return jsonify({
             'success': True,
             'messages': messages
         })
+        
     except Exception as e:
-        print(f"Error getting messages: {e}")
+        print(f"❌ Error fetching user messages: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({
             'success': False,
             'error': str(e)
         }), 500
 
 @app.route('/api/user-messages', methods=['POST'])
-@require_auth
 def save_user_messages():
-    """Save messages for a chat (secured)"""
+    """Save messages for a chat and send push notifications to recipients"""
+    global user_messages, user_chats, device_tokens
     try:
-        user = get_current_user()
         data = request.get_json()
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': 'Request body is required'
+            }), 400
+        
         chat_id = data.get('chat_id')
         messages = data.get('messages', [])
+        sender_email = data.get('sender_email')  # Email of the person sending the message
         
         if not chat_id:
             return jsonify({
                 'success': False,
-                'error': 'chat_id required'
+                'error': 'chat_id is required'
             }), 400
         
-        user_messages[chat_id] = messages
-        log_data_modification(user.get('user_id'), user.get('email'), 'messages', 'update', chat_id)
-        
-        return jsonify({
-            'success': True,
-            'message': f'Saved {len(messages)} messages for chat {chat_id}'
-        })
-    except Exception as e:
-        print(f"Error saving messages: {e}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-# ============================================================================
-# INDUSTRY MOVES ENDPOINTS
-# ============================================================================
-
-@app.route('/api/industry-moves', methods=['GET'])
-def get_industry_moves():
-    """Get industry moves for a user"""
-    try:
-        email = request.args.get('email')
-        if not email:
+        if not isinstance(messages, list):
             return jsonify({
                 'success': False,
-                'error': 'Email parameter required'
+                'error': 'Messages must be an array'
             }), 400
         
-        moves = user_industry_moves.get(email, [])
-        return jsonify({
-            'success': True,
-            'moves': moves
-        })
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-@app.route('/api/industry-moves', methods=['POST'])
-@require_auth
-@require_ownership('email', 'email')
-def create_industry_move():
-    """Create a new industry move (secured)"""
-    try:
-        user = get_current_user()
-        data = request.get_json()
-        user_email = data.get('email') or user.get('email')
-        move = data.get('move', {})
+        print(f"💾 Saving {len(messages)} messages for chat: {chat_id}")
         
-        if not user_email:
-            return jsonify({
-                'success': False,
-                'error': 'Email required'
-            }), 400
+        # Get previous messages to merge with new ones (don't replace!)
+        previous_messages = user_messages.get(chat_id, [])
+        previous_message_ids = {msg.get('id') for msg in previous_messages if isinstance(msg, dict)}
         
-        # Verify ownership
-        if user.get('email') != user_email and '*' not in user.get('permissions', []):
-            return jsonify({
-                'success': False,
-                'error': 'Access denied'
-            }), 403
+        # Merge messages: keep existing messages and add new ones
+        # Create a dict for quick lookup by message ID
+        merged_messages_dict = {}
+        for msg in previous_messages:
+            if isinstance(msg, dict) and msg.get('id'):
+                merged_messages_dict[msg['id']] = msg
         
-        if not move:
-            return jsonify({
-                'success': False,
-                'error': 'Move data required'
-            }), 400
+        # Add/update messages from the request
+        for msg in messages:
+            if isinstance(msg, dict) and msg.get('id'):
+                merged_messages_dict[msg['id']] = msg
         
-        # Initialize user's moves list if needed
-        if email not in user_industry_moves:
-            user_industry_moves[email] = []
+        # Convert back to list, sorted by timestamp if available
+        merged_messages = list(merged_messages_dict.values())
+        try:
+            # Try to sort by timestamp if it exists
+            merged_messages.sort(key=lambda m: m.get('timestamp', ''))
+        except:
+            pass  # If sorting fails, keep original order
         
-        # Add ID if not present
-        if 'id' not in move:
-            move['id'] = f"move_{int(datetime.now().timestamp() * 1000)}"
+        # Save merged messages for this chat
+        user_messages[chat_id] = merged_messages
         
-        # Add timestamps
-        if 'created_at' not in move:
-            move['created_at'] = datetime.now().isoformat()
-        move['updated_at'] = datetime.now().isoformat()
+        print(f"✅ Merged messages: {len(previous_messages)} previous + {len(messages)} new = {len(merged_messages)} total")
         
-        user_industry_moves[email].append(move)
+        # Find new messages (ones not in previous set)
+        new_messages = [msg for msg in messages if isinstance(msg, dict) and msg.get('id') not in previous_message_ids]
         
-        return jsonify({
-            'success': True,
-            'move': move
-        })
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-@app.route('/api/industry-moves/<move_id>', methods=['DELETE'])
-def delete_industry_move(move_id):
-    """Delete an industry move"""
-    try:
-        email = request.args.get('email')
-        if not email:
-            return jsonify({
-                'success': False,
-                'error': 'Email parameter required'
-            }), 400
-        
-        if email not in user_industry_moves:
-            return jsonify({
-                'success': False,
-                'error': 'No moves found for user'
-            }), 404
-        
-        # Remove move with matching ID
-        original_count = len(user_industry_moves[email])
-        user_industry_moves[email] = [m for m in user_industry_moves[email] if m.get('id') != move_id]
-        
-        if len(user_industry_moves[email]) == original_count:
-            return jsonify({
-                'success': False,
-                'error': 'Move not found'
-            }), 404
-        
-        return jsonify({
-            'success': True,
-            'message': 'Move deleted successfully'
-        })
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-@app.route('/api/industry-moves/<move_id>', methods=['PUT'])
-def update_industry_move(move_id):
-    """Update an industry move"""
-    try:
-        email = request.args.get('email')
-        data = request.get_json()
-        move_data = data.get('move', {})
-        
-        if not email:
-            return jsonify({
-                'success': False,
-                'error': 'Email parameter required'
-            }), 400
-        
-        if email not in user_industry_moves:
-            return jsonify({
-                'success': False,
-                'error': 'No moves found for user'
-            }), 404
-        
-        # Find and update move
-        move_found = False
-        for i, move in enumerate(user_industry_moves[email]):
-            if move.get('id') == move_id:
-                move_data['id'] = move_id
-                move_data['updated_at'] = datetime.now().isoformat()
-                if 'created_at' not in move_data:
-                    move_data['created_at'] = move.get('created_at', datetime.now().isoformat())
-                user_industry_moves[email][i] = move_data
-                move_found = True
+        # Find the chat to get participants
+        chat = None
+        for email, chats in user_chats.items():
+            for c in chats:
+                if isinstance(c, dict) and c.get('id') == chat_id:
+                    chat = c
+                    break
+            if chat:
                 break
         
-        if not move_found:
-            return jsonify({
-                'success': False,
-                'error': 'Move not found'
-            }), 404
-        
-        return jsonify({
-            'success': True,
-            'move': move_data
-        })
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-@app.route('/api/industry-moves/search/<name>', methods=['GET'])
-def search_industry_moves(name):
-    """Search industry moves by name"""
-    try:
-        email = request.args.get('email')
-        if not email:
-            return jsonify({
-                'success': False,
-                'error': 'Email parameter required'
-            }), 400
-        
-        moves = user_industry_moves.get(email, [])
-        name_lower = name.lower()
-        
-        # Search in person name, company, or role
-        matching_moves = [
-            m for m in moves
-            if name_lower in m.get('person_name', '').lower() or
-               name_lower in m.get('company', '').lower() or
-               name_lower in m.get('role', '').lower()
-        ]
-        
-        return jsonify({
-            'success': True,
-            'moves': matching_moves
-        })
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-@app.route('/api/industry-moves/company/<company>', methods=['GET'])
-def get_company_moves(company):
-    """Get moves for a specific company"""
-    try:
-        email = request.args.get('email')
-        if not email:
-            return jsonify({
-                'success': False,
-                'error': 'Email parameter required'
-            }), 400
-        
-        moves = user_industry_moves.get(email, [])
-        company_lower = company.lower()
-        
-        matching_moves = [
-            m for m in moves
-            if company_lower in m.get('company', '').lower()
-        ]
-        
-        return jsonify({
-            'success': True,
-            'moves': matching_moves
-        })
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-@app.route('/api/industry-moves/leaderboard', methods=['GET'])
-def get_leaderboard():
-    """Get leaderboard of top movers"""
-    try:
-        email = request.args.get('email')
-        if not email:
-            return jsonify({
-                'success': False,
-                'error': 'Email parameter required'
-            }), 400
-        
-        # Aggregate moves across all users to create leaderboard
-        all_moves = []
-        for user_email, moves in user_industry_moves.items():
-            all_moves.extend(moves)
-        
-        # Count moves by person
-        person_counts = {}
-        for move in all_moves:
-            person_name = move.get('person_name', 'Unknown')
-            person_counts[person_name] = person_counts.get(person_name, 0) + 1
-        
-        # Sort by count
-        leaderboard = sorted(
-            [{'name': name, 'count': count} for name, count in person_counts.items()],
-            key=lambda x: x['count'],
-            reverse=True
-        )[:10]  # Top 10
-        
-        return jsonify({
-            'success': True,
-            'leaderboard': leaderboard
-        })
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-@app.route('/api/industry-moves/stats', methods=['GET'])
-def get_industry_moves_stats():
-    """Get statistics about moves"""
-    try:
-        email = request.args.get('email')
-        if not email:
-            return jsonify({
-                'success': False,
-                'error': 'Email parameter required'
-            }), 400
-        
-        moves = user_industry_moves.get(email, [])
-        
-        stats = {
-            'total_moves': len(moves),
-            'unique_companies': len(set(m.get('company', '') for m in moves)),
-            'unique_people': len(set(m.get('person_name', '') for m in moves)),
-            'recent_moves': len([m for m in moves if 'created_at' in m])
-        }
-        
-        return jsonify({
-            'success': True,
-            'stats': stats
-        })
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-@app.route('/api/industry-moves/autocomplete', methods=['GET'])
-def get_autocomplete():
-    """Get autocomplete suggestions"""
-    try:
-        query = request.args.get('query', '').lower()
-        email = request.args.get('email')
-        
-        if not email:
-            return jsonify({
-                'success': False,
-                'error': 'Email parameter required'
-            }), 400
-        
-        moves = user_industry_moves.get(email, [])
-        suggestions = set()
-        
-        # Collect unique names and companies that match query
-        for move in moves:
-            person_name = move.get('person_name', '')
-            company = move.get('company', '')
+        # Send push notifications to recipients (participants who aren't the sender)
+        if new_messages and chat and sender_email:
+            participants = chat.get('participants', [])
             
-            if query in person_name.lower():
-                suggestions.add(person_name)
-            if query in company.lower():
-                suggestions.add(company)
-        
-        return jsonify({
-            'success': True,
-            'suggestions': sorted(list(suggestions))[:10]  # Top 10
-        })
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-# ============================================================================
-# COMPENSATION ENDPOINTS
-# ============================================================================
-
-@app.route('/api/compensations', methods=['GET'])
-@require_auth
-@require_ownership('email', 'email')
-def get_compensations():
-    """Get user's compensations (with encryption/decryption)"""
-    try:
-        user = get_current_user()
-        user_email = request.args.get('email') or user.get('email')
-        
-        if not user_email:
-            return jsonify({"success": False, "error": "Email required"}), 400
-        
-        # Verify ownership
-        if user.get('email') != user_email and '*' not in user.get('permissions', []):
-            return jsonify({"success": False, "error": "Access denied"}), 403
-        
-        # Try database first, fallback to in-memory
-        try:
-            from database.models import Compensation, SessionLocal
-            db = SessionLocal()
-            try:
-                compensations = db.query(Compensation).filter(
-                    Compensation.user_email == user_email,
-                    Compensation.is_deleted == False
-                ).all()
-                
-                compensation_list = []
-                for comp in compensations:
-                    comp_dict = {
-                        'id': comp.id,
-                        'base_salary': comp.base_salary,
-                        'base_salary_currency': comp.base_salary_currency,
-                        'bonus': comp.bonus,
-                        'bonus_currency': comp.bonus_currency,
-                        'equity': comp.equity,
-                        'country': comp.country,
-                        'role': comp.role,
-                        'company': comp.company,
-                        'created_at': comp.created_at.isoformat() if comp.created_at else None,
-                        'updated_at': comp.updated_at.isoformat() if comp.updated_at else None,
-                    }
-                    # Decrypt sensitive fields
-                    comp_dict = decrypt_dict_fields(comp_dict, SENSITIVE_FIELDS.get('compensation', []))
-                    compensation_list.append(comp_dict)
-                
-                log_data_access(user.get('user_id'), user_email, 'compensation', len(compensation_list))
-                return jsonify({"success": True, "compensations": compensation_list})
-            finally:
-                db.close()
-        except Exception as db_error:
-            # Fallback to in-memory storage
-            print(f"Database error, using fallback: {db_error}")
-            compensations = user_compensations.get(user_email, [])
-            log_data_access(user.get('user_id'), user_email, 'compensation', len(compensations))
-            return jsonify({"success": True, "compensations": compensations})
+            # Get sender name from user_profiles
+            sender_profile = user_profiles.get(sender_email, {})
+            sender_name = sender_profile.get('name', 'Someone')
             
-    except Exception as e:
-        print(f"Error getting compensations: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({"success": False, "error": "Failed to retrieve compensations"}), 500
-
-@app.route('/api/compensations', methods=['POST'])
-@require_auth
-@require_ownership('email', 'email')
-def save_compensations():
-    """Save user's compensations (with encryption)"""
-    try:
-        user = get_current_user()
-        data = request.get_json()
-        user_email = data.get('email') or request.args.get('email') or user.get('email')
-        compensations_data = data.get('compensations', [])
-        
-        if not user_email:
-            return jsonify({"success": False, "error": "Email required"}), 400
-        
-        # Verify ownership
-        if user.get('email') != user_email and '*' not in user.get('permissions', []):
-            return jsonify({"success": False, "error": "Access denied"}), 403
-        
-        # Try database first, fallback to in-memory
-        try:
-            from database.models import Compensation, SessionLocal
-            import uuid
-            db = SessionLocal()
-            try:
-                saved_count = 0
-                for comp_data in compensations_data:
-                    # Encrypt sensitive fields
-                    encrypted_comp = encrypt_dict_fields(
-                        comp_data,
-                        SENSITIVE_FIELDS.get('compensation', [])
-                    )
-                    
-                    comp_id = comp_data.get('id') or str(uuid.uuid4())
-                    
-                    # Check if exists
-                    existing = db.query(Compensation).filter(Compensation.id == comp_id).first()
-                    
-                    if existing:
-                        # Update
-                        for key, value in encrypted_comp.items():
-                            if hasattr(existing, key):
-                                setattr(existing, key, value)
-                        existing.updated_at = datetime.utcnow()
-                        log_data_modification(user.get('user_id'), user_email, 'compensation', 'update', comp_id)
-                    else:
-                        # Create
-                        new_comp = Compensation(
-                            id=comp_id,
-                            user_email=user_email,
-                            **encrypted_comp
+            # Map participant IDs to emails
+            # Participants can be either emails or user IDs
+            # We need to find all users who have this chat and get their emails
+            recipient_emails = []
+            for email, user_chat_list in user_chats.items():
+                # Check if this user has this chat
+                for user_chat in user_chat_list:
+                    if isinstance(user_chat, dict) and user_chat.get('id') == chat_id:
+                        # This user is a participant, add their email if not the sender
+                        if email != sender_email:
+                            recipient_emails.append(email)
+                        break
+            
+            # Also check if participants are emails directly
+            for participant in participants:
+                if isinstance(participant, str):
+                    # If it's an email, use it directly
+                    if '@' in participant and participant != sender_email:
+                        if participant not in recipient_emails:
+                            recipient_emails.append(participant)
+            
+            print(f"📱 Push notification: sender={sender_email}, recipients={recipient_emails}, chat_id={chat_id}")
+            
+            # Get the last new message for notification
+            last_message = new_messages[-1] if new_messages else None
+            if last_message:
+                message_text = last_message.get('text', 'New message')
+                # Truncate long messages
+                if len(message_text) > 100:
+                    message_text = message_text[:100] + "..."
+                
+                # Send push notification to each recipient
+                for recipient_email in recipient_emails:
+                    device_token = device_tokens.get(recipient_email)
+                    if device_token:
+                        print(f"📤 Attempting to send push notification to {recipient_email}")
+                        print(f"   Device token: {device_token[:20]}...")
+                        print(f"   Title: 💬 {sender_name}")
+                        print(f"   Body: {message_text}")
+                        result = send_push_notification(
+                            device_token=device_token,
+                            title=f"💬 {sender_name}",
+                            body=message_text,
+                            chat_id=chat_id,
+                            message_id=last_message.get('id')
                         )
-                        db.add(new_comp)
-                        log_data_modification(user.get('user_id'), user_email, 'compensation', 'create', comp_id)
-                    
-                    saved_count += 1
-                
-                db.commit()
-                return jsonify({
-                    "success": True,
-                    "message": f"Saved {saved_count} compensations",
-                    "count": saved_count
-                })
-            except Exception as db_error:
-                db.rollback()
-                raise db_error
-            finally:
-                db.close()
-        except Exception as db_error:
-            # Fallback to in-memory storage
-            print(f"Database error, using fallback: {db_error}")
-            user_compensations[user_email] = compensations_data
-            log_data_modification(user.get('user_id'), user_email, 'compensation', 'create', 'bulk')
-            return jsonify({
-                "success": True,
-                "message": f"Saved {len(compensations_data)} compensations for {user_email}"
-            })
-            
+                        if result:
+                            print(f"✅ Push notification sent successfully to {recipient_email}")
+                        else:
+                            print(f"❌ Failed to send push notification to {recipient_email}")
+                    else:
+                        print(f"⚠️ No device token found for {recipient_email}")
+                        print(f"   Registered tokens: {list(device_tokens.keys())}")
+                        print(f"   Total registered devices: {len(device_tokens)}")
+            else:
+                print(f"⚠️ No new messages to notify about")
+        
+        print(f"✅ Successfully saved {len(messages)} messages for chat {chat_id}")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Saved {len(messages)} messages'
+        })
+        
     except Exception as e:
-        print(f"Error saving compensations: {e}")
+        print(f"❌ Error saving user messages: {e}")
         import traceback
         traceback.print_exc()
-        return jsonify({"success": False, "error": "Failed to save compensations"}), 500
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
-# ============================================================================
-# SHARING & ASSIGNMENT ENDPOINTS
-# ============================================================================
+# MARK: - Push Notifications
+
+def send_push_notification(device_token, title, body, chat_id=None, message_id=None):
+    """Send push notification using APNs"""
+    try:
+        # Get APNs key and team ID from environment variables
+        apns_key_id = os.getenv('APNS_KEY_ID')
+        apns_team_id = os.getenv('APNS_TEAM_ID')
+        apns_key_path = os.getenv('APNS_KEY_PATH')
+        apns_topic = os.getenv('APNS_TOPIC', 'MP.MP-APP-V4')  # Your bundle ID
+        apns_use_sandbox = os.getenv('APNS_USE_SANDBOX', 'false').lower() == 'true'
+        
+        print(f"🔍 Checking APNs configuration...")
+        print(f"   APNS_KEY_ID: {'✅ Set' if apns_key_id else '❌ Missing'}")
+        print(f"   APNS_TEAM_ID: {'✅ Set' if apns_team_id else '❌ Missing'}")
+        print(f"   APNS_KEY_PATH: {'✅ Set' if apns_key_path else '❌ Missing'}")
+        print(f"   APNS_TOPIC: {apns_topic}")
+        print(f"   APNS_USE_SANDBOX: {apns_use_sandbox}")
+        
+        if not all([apns_key_id, apns_team_id, apns_key_path]):
+            print("⚠️ APNs credentials not configured - skipping push notification")
+            print("💡 Set APNS_KEY_ID, APNS_TEAM_ID, and APNS_KEY_PATH environment variables on Render")
+            return False
+        
+        # Try to send using PyAPNs2
+        try:
+            from apns2.client import APNsClient
+            from apns2.payload import Payload
+            from apns2.credentials import TokenCredentials
+            
+            print(f"📂 Reading APNs key from: {apns_key_path}")
+            
+            # Check if key file exists
+            import os
+            if not os.path.exists(apns_key_path):
+                print(f"❌ APNs key file not found at: {apns_key_path}")
+                print(f"   Current working directory: {os.getcwd()}")
+                print(f"   Files in current directory: {os.listdir('.')}")
+                return False
+            
+            # Create credentials from key file
+            with open(apns_key_path, 'r') as f:
+                key_content = f.read()
+                print(f"✅ Read APNs key file ({len(key_content)} bytes)")
+            
+            credentials = TokenCredentials(
+                auth_key_path=apns_key_path,
+                auth_key_id=apns_key_id,
+                team_id=apns_team_id
+            )
+            
+            print(f"🔐 Created APNs credentials")
+            
+            # Create APNs client
+            client = APNsClient(
+                credentials=credentials,
+                use_sandbox=apns_use_sandbox,
+                use_alternative_port=False
+            )
+            
+            print(f"📱 Created APNs client (sandbox: {apns_use_sandbox})")
+            
+            # Create payload
+            payload = Payload(
+                alert={"title": title, "body": body},
+                sound="default",
+                badge=1,
+                custom={"chat_id": chat_id, "message_id": message_id} if chat_id else {}
+            )
+            
+            print(f"📦 Created payload: title='{title}', body='{body[:50]}...'")
+            
+            # Send notification (PyAPNs2 send_notification is fire-and-forget)
+            print(f"🚀 Sending push notification to device token: {device_token[:20]}...")
+            try:
+                client.send_notification(device_token, payload, topic=apns_topic)
+                print(f"✅ Push notification sent successfully!")
+                return True
+            except Exception as send_error:
+                print(f"❌ Error sending notification: {send_error}")
+                import traceback
+                traceback.print_exc()
+                return False
+            
+        except ImportError as import_error:
+            print(f"❌ PyAPNs2 not installed: {import_error}")
+            print(f"💡 Install with: pip install PyAPNs2")
+            print(f"📱 Would send push notification:")
+            print(f"   Device Token: {device_token[:20]}...")
+            print(f"   Title: {title}")
+            print(f"   Body: {body}")
+            print(f"   Chat ID: {chat_id}")
+            return False
+        except Exception as apns_error:
+            print(f"❌ APNs error: {apns_error}")
+            import traceback
+            traceback.print_exc()
+            return False
+        
+    except Exception as e:
+        print(f"❌ Error sending push notification: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+@app.route('/api/test-push-notification', methods=['POST'])
+def test_push_notification():
+    """Test endpoint to send a push notification"""
+    global device_tokens
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': 'Request body is required'
+            }), 400
+        
+        email = data.get('email')
+        if not email:
+            return jsonify({
+                'success': False,
+                'error': 'Email is required'
+            }), 400
+        
+        device_token = device_tokens.get(email)
+        if not device_token:
+            return jsonify({
+                'success': False,
+                'error': f'No device token found for {email}. Registered emails: {list(device_tokens.keys())}'
+            }), 400
+        
+        title = data.get('title', 'Test Notification')
+        body = data.get('body', 'This is a test push notification')
+        
+        result = send_push_notification(
+            device_token=device_token,
+            title=title,
+            body=body,
+            chat_id=None,
+            message_id=None
+        )
+        
+        if result:
+            return jsonify({
+                'success': True,
+                'message': 'Test push notification sent'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to send push notification (check server logs)'
+            }), 500
+        
+    except Exception as e:
+        print(f"❌ Error in test push notification: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/register-device-token', methods=['POST'])
+def register_device_token():
+    """Register a device token for push notifications"""
+    global device_tokens
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': 'Request body is required'
+            }), 400
+        
+        email = data.get('email')
+        device_token = data.get('device_token')
+        
+        if not email:
+            return jsonify({
+                'success': False,
+                'error': 'Email is required'
+            }), 400
+        
+        if not device_token:
+            return jsonify({
+                'success': False,
+                'error': 'Device token is required'
+            }), 400
+        
+        # Store device token for this user
+        device_tokens[email] = device_token
+        
+        print(f"✅ Registered device token for {email}")
+        print(f"   Token: {device_token[:20]}...{device_token[-10:]}")
+        print(f"   Total registered devices: {len(device_tokens)}")
+        print(f"   All registered emails: {list(device_tokens.keys())}")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Device token registered'
+        })
+        
+    except Exception as e:
+        print(f"❌ Error registering device token: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+# MARK: - Call Notes Endpoints
+
+@app.route('/api/user-call-notes', methods=['GET'])
+def get_user_call_notes():
+    """Get all call notes for a user"""
+    global user_call_notes
+    try:
+        email = request.args.get('email')
+        if not email:
+            return jsonify({
+                'success': False,
+                'error': 'Email parameter is required'
+            }), 400
+        
+        print(f"📥 Fetching call notes for user: {email}")
+        
+        # Get call notes for this user, or return empty list
+        call_notes = user_call_notes.get(email, [])
+        
+        print(f"✅ Returning {len(call_notes)} call notes for {email}")
+        
+        return jsonify({
+            'success': True,
+            'call_notes': call_notes
+        })
+        
+    except Exception as e:
+        print(f"❌ Error fetching user call notes: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/user-call-notes', methods=['POST'])
+def save_user_call_notes():
+    """Save call notes for a user"""
+    global user_call_notes
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': 'Request body is required'
+            }), 400
+        
+        email = data.get('email')
+        call_notes = data.get('call_notes', [])
+        
+        if not email:
+            return jsonify({
+                'success': False,
+                'error': 'Email is required'
+            }), 400
+        
+        if not isinstance(call_notes, list):
+            return jsonify({
+                'success': False,
+                'error': 'Call notes must be an array'
+            }), 400
+        
+        print(f"💾 Saving {len(call_notes)} call notes for user: {email}")
+        
+        # Save call notes for this user
+        user_call_notes[email] = call_notes
+        
+        print(f"✅ Successfully saved {len(call_notes)} call notes for {email}")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Saved {len(call_notes)} call notes'
+        })
+        
+    except Exception as e:
+        print(f"❌ Error saving user call notes: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 @app.route('/api/share-call-note', methods=['POST'])
 def share_call_note():
-    """Share a call note with other users"""
+    """Share a call note with specific users"""
+    global user_call_notes
     try:
         data = request.get_json()
-        call_note_id = data.get('call_note_id')
-        recipient_emails = data.get('recipient_emails', [])
-        sender_email = data.get('sender_email')
-        
-        if not call_note_id or not sender_email:
+        if not data:
             return jsonify({
                 'success': False,
-                'error': 'call_note_id and sender_email required'
+                'error': 'Request body is required'
             }), 400
         
-        # Find the call note in sender's notes
-        sender_notes = user_call_notes.get(sender_email, [])
-        call_note = None
-        for note in sender_notes:
-            if note.get('id') == call_note_id:
-                call_note = note
-                break
+        call_note = data.get('call_note')
+        user_emails = data.get('user_emails', [])
         
         if not call_note:
             return jsonify({
                 'success': False,
-                'error': 'Call note not found'
-            }), 404
+                'error': 'Call note is required'
+            }), 400
         
-        # Share with recipients
+        if not isinstance(user_emails, list) or len(user_emails) == 0:
+            return jsonify({
+                'success': False,
+                'error': 'At least one user email is required'
+            }), 400
+        
+        print(f"📤 Sharing call note '{call_note.get('title', 'Unknown')}' with {len(user_emails)} users")
+        
+        # Add call note to each user's list
         shared_count = 0
-        for recipient_email in recipient_emails:
-            if recipient_email not in user_call_notes:
-                user_call_notes[recipient_email] = []
+        for user_email in user_emails:
+            if user_email not in user_call_notes:
+                user_call_notes[user_email] = []
             
-            # Check if already shared
-            existing_ids = [n.get('id') for n in user_call_notes[recipient_email]]
-            if call_note_id not in existing_ids:
-                # Create a copy for the recipient
-                shared_note = call_note.copy()
-                shared_note['shared_by'] = sender_email
-                shared_note['shared_at'] = datetime.now().isoformat()
-                user_call_notes[recipient_email].append(shared_note)
+            # Check if call note already exists (by ID)
+            call_note_id = call_note.get('id')
+            if call_note_id and not any(note.get('id') == call_note_id for note in user_call_notes[user_email]):
+                user_call_notes[user_email].append(call_note)
                 shared_count += 1
+                print(f"✅ Added call note to {user_email}'s list")
+            else:
+                print(f"ℹ️ Call note already exists for {user_email}")
         
         return jsonify({
             'success': True,
-            'message': f'Shared call note with {shared_count} recipients'
+            'message': f'Shared call note with {shared_count} user(s)',
+            'shared_count': shared_count
         })
+        
     except Exception as e:
+        print(f"❌ Error sharing call note: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+# MARK: - Todo Endpoints
+
+@app.route('/api/user-todos', methods=['GET'])
+def get_user_todos():
+    """Get all todos for a user"""
+    global user_todos
+    try:
+        email = request.args.get('email')
+        if not email:
+            return jsonify({
+                'success': False,
+                'error': 'Email parameter is required'
+            }), 400
+        
+        print(f"📥 Fetching todos for user: {email}")
+        
+        # Get todos for this user, or return empty list
+        todos = user_todos.get(email, [])
+        
+        # Log task details for debugging
+        for todo in todos:
+            print(f"  - Task: '{todo.get('title', 'Unknown')}' (assignedTo: {todo.get('assignedTo', 'nil')}, id: {todo.get('id', 'no-id')})")
+        
+        print(f"✅ Returning {len(todos)} todos for {email}")
+        
+        return jsonify({
+            'success': True,
+            'todos': todos
+        })
+        
+    except Exception as e:
+        print(f"❌ Error fetching user todos: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/user-todos', methods=['POST'])
+def save_user_todos():
+    """Save todos for a user"""
+    global user_todos
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': 'Request body is required'
+            }), 400
+        
+        email = data.get('email')
+        todos = data.get('todos', [])
+        
+        if not email:
+            return jsonify({
+                'success': False,
+                'error': 'Email is required'
+            }), 400
+        
+        if not isinstance(todos, list):
+            return jsonify({
+                'success': False,
+                'error': 'Todos must be an array'
+            }), 400
+        
+        print(f"💾 Saving {len(todos)} todos for user: {email}")
+        
+        # Save todos for this user
+        user_todos[email] = todos
+        
+        print(f"✅ Successfully saved {len(todos)} todos for {email}")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Saved {len(todos)} todos'
+        })
+        
+    except Exception as e:
+        print(f"❌ Error saving user todos: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({
             'success': False,
             'error': str(e)
@@ -3761,144 +4238,560 @@ def share_call_note():
 
 @app.route('/api/assign-task', methods=['POST'])
 def assign_task():
-    """Assign a task to other users"""
+    """Assign a task to specific users (similar to sharing call notes)"""
+    global user_todos
     try:
         data = request.get_json()
-        task_id = data.get('task_id')
-        assignee_emails = data.get('assignee_emails', [])
-        assigner_email = data.get('assigner_email')
-        
-        if not task_id or not assigner_email:
+        if not data:
             return jsonify({
                 'success': False,
-                'error': 'task_id and assigner_email required'
+                'error': 'Request body is required'
             }), 400
         
-        # Find the task in assigner's todos
-        assigner_todos = user_todos.get(assigner_email, [])
-        task = None
-        for todo in assigner_todos:
-            if todo.get('id') == task_id:
-                task = todo
-                break
+        task = data.get('task')
+        user_emails = data.get('user_emails', [])
+        assigner_email = data.get('assigner_email')  # Email of person assigning the task
         
         if not task:
             return jsonify({
                 'success': False,
-                'error': 'Task not found'
+                'error': 'Task is required'
+            }), 400
+        
+        if not isinstance(user_emails, list) or len(user_emails) == 0:
+            return jsonify({
+                'success': False,
+                'error': 'At least one user email is required'
+            }), 400
+        
+        print(f"📤 Assigning task '{task.get('title', 'Unknown')}' to {len(user_emails)} users")
+        
+        # Map user IDs to emails for assignment
+        # The task has assignedTo as user ID, but we need to find the email
+        assigned_to_user_id = task.get('assignedTo')
+        
+        # Map assigner email to user ID
+        email_to_id = {
+            'hg@mawneypartners.com': 'user_hope',
+            'jt@mawneypartners.com': 'user_josh',
+            'finance@mawneypartners.com': 'user_rachel',
+            'jd@mawneypartners.com': 'user_jack',
+            'he@mawneypartners.com': 'user_harry',
+            'tjt@mawneypartners.com': 'user_tyler'
+        }
+        assigner_id = email_to_id.get(assigner_email)
+        task_id = task.get('id')
+        
+        # Remove task from assigner's list (if it exists there)
+        if assigner_email in user_todos and task_id:
+            user_todos[assigner_email] = [
+                t for t in user_todos[assigner_email] 
+                if t.get('id') != task_id
+            ]
+            print(f"✅ Removed task from assigner's ({assigner_email}) list")
+        
+        # Add task to each recipient's list
+        assigned_count = 0
+        for user_email in user_emails:
+            if user_email not in user_todos:
+                user_todos[user_email] = []
+            
+            # Find user ID from email
+            user_id = email_to_id.get(user_email)
+            if not user_id:
+                print(f"⚠️ Warning: No user ID found for email {user_email}, skipping assignment")
+                continue
+            
+            # Check if task already exists (by ID) - if it does, update it instead of skipping
+            existing_task_index = None
+            if task_id:
+                existing_task_index = next((i for i, t in enumerate(user_todos[user_email]) if t.get('id') == task_id), None)
+            
+            if existing_task_index is not None:
+                # Update existing task - ensure assignedTo is correct
+                existing_task = user_todos[user_email][existing_task_index]
+                existing_task['assignedTo'] = user_id
+                if assigner_id:
+                    existing_task['assignedBy'] = assigner_id
+                existing_task['updatedAt'] = datetime.now().isoformat()
+                print(f"🔄 Updated existing task in {user_email}'s list (assignedTo: {user_id})")
+                assigned_count += 1
+            else:
+                # Create a copy of the task with updated assignment
+                assigned_task = task.copy()
+                assigned_task['assignedTo'] = user_id  # Always set assignedTo to recipient's ID
+                if assigner_id:
+                    assigned_task['assignedBy'] = assigner_id
+                # Ensure updatedAt is set
+                assigned_task['updatedAt'] = datetime.now().isoformat()
+                
+                user_todos[user_email].append(assigned_task)
+                assigned_count += 1
+                print(f"✅ Added task '{task.get('title', 'Unknown')}' to {user_email}'s list (assignedTo: {user_id}, task ID: {task_id})")
+                
+                # Verify it was added
+                print(f"🔍 Verification: {user_email} now has {len(user_todos[user_email])} tasks")
+                print(f"🔍 Latest task: '{user_todos[user_email][-1].get('title', 'Unknown')}' (assignedTo: {user_todos[user_email][-1].get('assignedTo', 'nil')})")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Assigned task to {assigned_count} user(s)',
+            'assigned_count': assigned_count
+        })
+        
+    except Exception as e:
+        print(f"❌ Error assigning task: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+# MARK: - Industry Moves Tracking Endpoints
+
+@app.route('/api/industry-moves', methods=['GET', 'POST'])
+def industry_moves_endpoint():
+    """Industry moves tracking endpoint - shared across all users"""
+    global industry_moves, user_move_counts
+    
+    try:
+        # Authentication check
+        email, auth_error, auth_status = authenticate_user()
+        if auth_error:
+            return auth_error, auth_status
+        
+        if request.method == 'GET':
+            # Get all moves with optional filters
+            from_company = request.args.get('from_company')
+            to_company = request.args.get('to_company')
+            position = request.args.get('position')
+            region = request.args.get('region')
+            start_date = request.args.get('start_date')
+            end_date = request.args.get('end_date')
+            
+            filtered_moves = industry_moves.copy()
+            
+            # Apply filters
+            if from_company:
+                filtered_moves = [m for m in filtered_moves if m.get('from_company', '').lower() == from_company.lower()]
+            if to_company:
+                filtered_moves = [m for m in filtered_moves if m.get('to_company', '').lower() == to_company.lower()]
+            if position:
+                # Check if position matches either from_position or to_position
+                filtered_moves = [m for m in filtered_moves if 
+                                 position.lower() in m.get('from_position', '').lower() or 
+                                 position.lower() in m.get('to_position', '').lower()]
+            if region:
+                filtered_moves = [m for m in filtered_moves if m.get('region', '').lower() == region.lower()]
+            if start_date:
+                try:
+                    start = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+                    filtered_moves = [m for m in filtered_moves if 
+                                     datetime.fromisoformat(m.get('created_at', '').replace('Z', '+00:00')) >= start]
+                except:
+                    pass
+            if end_date:
+                try:
+                    end = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+                    filtered_moves = [m for m in filtered_moves if 
+                                     datetime.fromisoformat(m.get('created_at', '').replace('Z', '+00:00')) <= end]
+                except:
+                    pass
+            
+            return jsonify({
+                'success': True,
+                'moves': filtered_moves,
+                'count': len(filtered_moves)
+            })
+        
+        elif request.method == 'POST':
+            # Add a new move
+            data = request.get_json()
+            if not data:
+                return jsonify({
+                    'success': False,
+                    'error': 'Request body is required'
+                }), 400
+            
+            # Validate required fields
+            required_fields = ['name', 'from_position', 'from_company', 'to_position', 'to_company']
+            for field in required_fields:
+                if field not in data or not data[field]:
+                    return jsonify({
+                        'success': False,
+                        'error': f'{field} is required'
+                    }), 400
+            
+            # Handle move date - support both move_date (ISO string) and moveMonth/moveYear (Android format)
+            move_date = None
+            if 'move_date' in data and data['move_date']:
+                # iOS format: ISO date string
+                move_date = data['move_date']
+            elif 'moveMonth' in data and 'moveYear' in data and data['moveMonth'] and data['moveYear']:
+                # Android format: separate month and year
+                try:
+                    move_month = int(data['moveMonth'])
+                    move_year = int(data['moveYear'])
+                    # Create date for first day of the month
+                    move_date = datetime(move_year, move_month, 1).isoformat()
+                except (ValueError, TypeError) as e:
+                    print(f"⚠️ Invalid moveMonth/moveYear: {e}, using current date")
+                    move_date = datetime.now().isoformat()
+            else:
+                # Default to current date
+                move_date = datetime.now().isoformat()
+            
+            # Create move entry
+            move = {
+                'id': f"move_{len(industry_moves)}_{datetime.now().timestamp()}",
+                'name': data['name'].strip(),
+                'from_position': data['from_position'].strip(),
+                'from_company': data['from_company'].strip(),
+                'to_position': data['to_position'].strip(),
+                'to_company': data['to_company'].strip(),
+                'region': data.get('region', '').strip(),  # Optional region
+                'created_by': email,
+                'created_at': datetime.now().isoformat(),
+                'move_date': move_date,  # ISO date string
+                # Also store month/year for Android compatibility
+                'move_month': data.get('moveMonth'),
+                'move_year': data.get('moveYear')
+            }
+            
+            # Add to moves list
+            industry_moves.append(move)
+            
+            # Update user contribution count
+            user_move_counts[email] = user_move_counts.get(email, 0) + 1
+            
+            print(f"✅ Industry move added by {email}: {move['name']} from {move['from_company']} to {move['to_company']}")
+            
+            return jsonify({
+                'success': True,
+                'message': 'Move added successfully',
+                'move': move
+            })
+    
+    except Exception as e:
+        print(f"❌ Error in industry moves endpoint: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/industry-moves/<move_id>', methods=['PUT', 'DELETE'])
+def industry_move_endpoint(move_id):
+    """Update or delete a specific industry move"""
+    global industry_moves, user_move_counts
+    
+    try:
+        # Authentication check
+        email, auth_error, auth_status = authenticate_user()
+        if auth_error:
+            return auth_error, auth_status
+        
+        # Find the move
+        move_index = None
+        for i, move in enumerate(industry_moves):
+            if move.get('id') == move_id:
+                move_index = i
+                break
+        
+        if move_index is None:
+            return jsonify({
+                'success': False,
+                'error': 'Move not found'
             }), 404
         
-        # Assign to recipients
-        assigned_count = 0
-        for assignee_email in assignee_emails:
-            if assignee_email not in user_todos:
-                user_todos[assignee_email] = []
+        move = industry_moves[move_index]
+        
+        # Check if user created this move (only creator can edit/delete)
+        if move.get('created_by') != email:
+            return jsonify({
+                'success': False,
+                'error': 'You can only edit or delete moves you created'
+            }), 403
+        
+        if request.method == 'PUT':
+            # Update the move
+            data = request.get_json()
+            if not data:
+                return jsonify({
+                    'success': False,
+                    'error': 'Request body is required'
+                }), 400
             
-            # Create assigned task copy
-            assigned_task = task.copy()
-            assigned_task['id'] = f"{task_id}_{assignee_email}_{int(datetime.now().timestamp())}"
-            assigned_task['assigned_by'] = assigner_email
-            assigned_task['assigned_at'] = datetime.now().isoformat()
-            assigned_task['assigned_to'] = assignee_email
-            user_todos[assignee_email].append(assigned_task)
-            assigned_count += 1
+            # Update move fields
+            if 'name' in data:
+                move['name'] = data['name'].strip()
+            if 'from_position' in data:
+                move['from_position'] = data['from_position'].strip()
+            if 'from_company' in data:
+                move['from_company'] = data['from_company'].strip()
+            if 'to_position' in data:
+                move['to_position'] = data['to_position'].strip()
+            if 'to_company' in data:
+                move['to_company'] = data['to_company'].strip()
+            if 'region' in data:
+                move['region'] = data['region'].strip() if data['region'] else ''
+            
+            # Handle move date
+            if 'move_date' in data and data['move_date']:
+                move['move_date'] = data['move_date']
+            elif 'moveMonth' in data and 'moveYear' in data and data['moveMonth'] and data['moveYear']:
+                try:
+                    move_month = int(data['moveMonth'])
+                    move_year = int(data['moveYear'])
+                    move['move_date'] = datetime(move_year, move_month, 1).isoformat()
+                    move['move_month'] = move_month
+                    move['move_year'] = move_year
+                except (ValueError, TypeError):
+                    pass
+            
+            move['updated_at'] = datetime.now().isoformat()
+            industry_moves[move_index] = move
+            
+            print(f"✅ Industry move updated by {email}: {move['name']}")
+            
+            return jsonify({
+                'success': True,
+                'message': 'Move updated successfully',
+                'move': move
+            })
         
-        return jsonify({
-            'success': True,
-            'message': f'Assigned task to {assigned_count} users'
-        })
+        elif request.method == 'DELETE':
+            # Delete the move
+            deleted_move = industry_moves.pop(move_index)
+            
+            # Update user contribution count
+            user_move_counts[email] = max(0, user_move_counts.get(email, 0) - 1)
+            
+            print(f"✅ Industry move deleted by {email}: {deleted_move['name']}")
+            
+            return jsonify({
+                'success': True,
+                'message': 'Move deleted successfully'
+            })
+    
     except Exception as e:
+        print(f"❌ Error in industry move endpoint: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({
             'success': False,
             'error': str(e)
         }), 500
 
-# ============================================================================
-# DEVICE TOKEN REGISTRATION
-# ============================================================================
-
-@app.route('/api/register-device-token', methods=['POST'])
-def register_device_token():
-    """Register device token for push notifications"""
+@app.route('/api/industry-moves/autocomplete', methods=['GET'])
+def industry_moves_autocomplete():
+    """Get autocomplete suggestions for job titles and companies"""
+    global industry_moves
+    
     try:
-        data = request.get_json()
-        device_token = data.get('device_token')
-        email = data.get('email')
-        platform = data.get('platform', 'ios')
+        # Authentication check
+        email, auth_error, auth_status = authenticate_user()
+        if auth_error:
+            return auth_error, auth_status
         
-        if not device_token or not email:
-            return jsonify({
-                'success': False,
-                'error': 'device_token and email required'
-            }), 400
+        query = request.args.get('q', '').lower()
+        type_filter = request.args.get('type', 'all')  # 'job_title', 'company', or 'all'
         
-        device_tokens[email] = {
-            'device_token': device_token,
-            'platform': platform,
-            'updated_at': datetime.now().isoformat()
-        }
+        job_titles = set()
+        companies = set()
+        
+        # Extract unique job titles and companies from existing moves
+        for move in industry_moves:
+            if move.get('from_position'):
+                job_titles.add(move['from_position'])
+            if move.get('to_position'):
+                job_titles.add(move['to_position'])
+            if move.get('from_company'):
+                companies.add(move['from_company'])
+            if move.get('to_company'):
+                companies.add(move['to_company'])
+        
+        # Filter by query if provided
+        if query:
+            job_titles = [jt for jt in job_titles if query in jt.lower()]
+            companies = [c for c in companies if query in c.lower()]
+        else:
+            job_titles = list(job_titles)
+            companies = list(companies)
+        
+        # Sort alphabetically
+        job_titles.sort()
+        companies.sort()
+        
+        result = {}
+        if type_filter in ['all', 'job_title']:
+            result['job_titles'] = job_titles[:20]  # Limit to 20 suggestions
+        if type_filter in ['all', 'company']:
+            result['companies'] = companies[:20]  # Limit to 20 suggestions
         
         return jsonify({
             'success': True,
-            'message': 'Device token registered successfully'
+            'suggestions': result
         })
+    
     except Exception as e:
+        print(f"❌ Error in autocomplete endpoint: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({
             'success': False,
             'error': str(e)
         }), 500
 
-# ============================================================================
-# CALL NOTES SUMMARY ENDPOINT
-# ============================================================================
-
-@app.route('/api/call-notes/summary', methods=['POST'])
-def call_notes_summary():
-    """Generate AI summary from call note transcript"""
+@app.route('/api/industry-moves/company/<path:company_name>', methods=['GET'])
+def industry_moves_by_company(company_name):
+    """Get all moves for a specific company (from or to)"""
+    global industry_moves
+    
     try:
-        data = request.get_json()
-        transcript = data.get('transcript', '')
-        context = data.get('context', {})
+        # Authentication check
+        email, auth_error, auth_status = authenticate_user()
+        if auth_error:
+            return auth_error, auth_status
         
-        if not transcript:
-            return jsonify({
-                'success': False,
-                'error': 'Transcript required'
-            }), 400
+        # URL decode company name
+        from urllib.parse import unquote
+        company_name = unquote(company_name)
         
-        # Use the existing AI processing system
-        summary_prompt = f"""
-        Please analyze this call transcript and provide a structured summary:
-
-        TRANSCRIPT:
-        {transcript}
-
-        Please provide:
-        1. Executive Summary (2-3 sentences)
-        2. Key Points (bullet points)
-        3. Action Items (bullet points)
-        4. Participants (if identifiable)
-        5. Meeting Duration/Type (if mentioned)
-
-        Format as a professional meeting summary.
-        """
-        
-        # Process using AI assistant
-        ai_response = process_ai_query(summary_prompt, context)
-        
-        summary = {
-            'executive_summary': ai_response.get('text', ''),
-            'key_points': [],
-            'action_items': [],
-            'participants': [],
-            'generated_at': datetime.now().isoformat()
-        }
+        # Find moves where company is either from_company or to_company
+        company_moves = [
+            m for m in industry_moves 
+            if m.get('from_company', '').lower() == company_name.lower() or 
+               m.get('to_company', '').lower() == company_name.lower()
+        ]
         
         return jsonify({
             'success': True,
-            'summary': summary
+            'company': company_name,
+            'moves': company_moves,
+            'count': len(company_moves)
         })
+    
     except Exception as e:
+        print(f"❌ Error fetching company moves: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/industry-moves/search/<path:person_name>', methods=['GET'])
+def industry_moves_search(person_name):
+    """Search moves by person name"""
+    global industry_moves
+    
+    try:
+        # Authentication check
+        email, auth_error, auth_status = authenticate_user()
+        if auth_error:
+            return auth_error, auth_status
+        
+        # URL decode person name
+        from urllib.parse import unquote
+        person_name = unquote(person_name).lower()
+        
+        # Find moves matching person name (case-insensitive partial match)
+        matching_moves = [
+            m for m in industry_moves 
+            if person_name in m.get('name', '').lower()
+        ]
+        
+        # Sort by created_at descending (most recent first)
+        matching_moves.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+        
+        return jsonify({
+            'success': True,
+            'query': person_name,
+            'moves': matching_moves,
+            'count': len(matching_moves)
+        })
+    
+    except Exception as e:
+        print(f"❌ Error searching moves: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/industry-moves/leaderboard', methods=['GET'])
+def industry_moves_leaderboard():
+    """Get leaderboard of user contributions"""
+    global user_move_counts, user_profiles
+    
+    try:
+        # Authentication check
+        email, auth_error, auth_status = authenticate_user()
+        if auth_error:
+            return auth_error, auth_status
+        
+        # Build leaderboard with user names
+        leaderboard = []
+        for user_email, count in user_move_counts.items():
+            user_profile = user_profiles.get(user_email, {})
+            leaderboard.append({
+                'email': user_email,
+                'name': user_profile.get('name', user_email),
+                'count': count
+            })
+        
+        # Sort by count descending
+        leaderboard.sort(key=lambda x: x['count'], reverse=True)
+        
+        return jsonify({
+            'success': True,
+            'leaderboard': leaderboard
+        })
+    
+    except Exception as e:
+        print(f"❌ Error fetching leaderboard: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/industry-moves/stats', methods=['GET'])
+def industry_moves_stats():
+    """Get statistics for a specific user"""
+    global user_move_counts
+    
+    try:
+        # Authentication check
+        email, auth_error, auth_status = authenticate_user()
+        if auth_error:
+            return auth_error, auth_status
+        
+        user_count = user_move_counts.get(email, 0)
+        
+        # Get total moves count
+        total_moves = len(industry_moves)
+        
+        # Get user's rank
+        sorted_users = sorted(user_move_counts.items(), key=lambda x: x[1], reverse=True)
+        user_rank = next((i + 1 for i, (e, _) in enumerate(sorted_users) if e == email), None)
+        
+        return jsonify({
+            'success': True,
+            'user_count': user_count,
+            'total_moves': total_moves,
+            'user_rank': user_rank
+        })
+    
+    except Exception as e:
+        print(f"❌ Error fetching user stats: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({
             'success': False,
             'error': str(e)
