@@ -14,6 +14,9 @@ import json
 import os
 import feedparser  # Re-enabled for article monitoring
 from email.utils import parsedate_to_datetime
+from apns2.client import APNsClient
+from apns2.payload import Payload
+from apns2.credentials import TokenCredentials
 
 # Import AI Assistant System
 from custom_ai_assistant import process_ai_query, process_ai_query_with_files
@@ -2841,13 +2844,115 @@ def download_cv(filename):
 # ============================================================================
 
 # Industry Moves storage
-user_industry_moves = {}  # user_email -> list of moves
-
-# Compensation storage
-user_compensations = {}  # user_email -> list of compensations
+# Industry moves are now universal (shared across all users)
+industry_moves = []  # Single shared list of moves for all users
 
 # Device tokens for push notifications
 device_tokens = {}  # email -> {device_token, platform, updated_at}
+
+# APNs client for push notifications (initialized lazily)
+apns_client = None
+
+def get_apns_client():
+    """Initialize and return APNs client"""
+    global apns_client
+    if apns_client is None:
+        # Get APNs credentials from environment
+        apns_key_id = os.getenv('APNS_KEY_ID')
+        apns_team_id = os.getenv('APNS_TEAM_ID')
+        apns_key_path = os.getenv('APNS_KEY_PATH', 'apns_key.p8')
+        apns_topic = os.getenv('APNS_TOPIC', 'com.mawneypartners.app')  # Your app's bundle ID
+        use_sandbox = os.getenv('APNS_USE_SANDBOX', 'False').lower() == 'true'
+        
+        if apns_key_id and apns_team_id and os.path.exists(apns_key_path):
+            try:
+                credentials = TokenCredentials(
+                    auth_key_path=apns_key_path,
+                    auth_key_id_string=apns_key_id,
+                    team_id_string=apns_team_id
+                )
+                apns_client = APNsClient(
+                    credentials=credentials,
+                    use_sandbox=use_sandbox
+                )
+                print("✅ APNs client initialized")
+            except Exception as e:
+                print(f"⚠️ Failed to initialize APNs client: {e}")
+                print("⚠️ Push notifications will be disabled")
+        else:
+            print("⚠️ APNs credentials not configured - push notifications disabled")
+            print(f"   APNS_KEY_ID: {'set' if apns_key_id else 'missing'}")
+            print(f"   APNS_TEAM_ID: {'set' if apns_team_id else 'missing'}")
+            print(f"   APNS_KEY_PATH: {apns_key_path} ({'exists' if os.path.exists(apns_key_path) else 'missing'})")
+    
+    return apns_client
+
+def send_push_notification(device_token, title, body, data=None, badge=1):
+    """Send a push notification to a device"""
+    client = get_apns_client()
+    if not client:
+        print("⚠️ Cannot send push notification - APNs client not initialized")
+        return False
+    
+    try:
+        payload = Payload(
+            alert={"title": title, "body": body},
+            badge=badge,
+            sound="default",
+            custom=data or {}
+        )
+        
+        topic = os.getenv('APNS_TOPIC', 'com.mawneypartners.app')
+        result = client.send_notification(device_token, payload, topic=topic)
+        
+        if result.is_successful:
+            print(f"✅ Push notification sent successfully to {device_token[:20]}...")
+            return True
+        else:
+            print(f"❌ Failed to send push notification: {result}")
+            return False
+    except Exception as e:
+        print(f"❌ Error sending push notification: {e}")
+        return False
+
+def notify_all_users_about_move(move, creator_email):
+    """Send push notifications to all users about a new move (except creator)"""
+    if not device_tokens:
+        print("⚠️ No device tokens registered - skipping push notifications")
+        return
+    
+    title = "🔄 New Market Move"
+    body = f"{move.get('name', 'Someone')}: {move.get('from_position', '')} @ {move.get('from_company', '')} → {move.get('to_position', '')} @ {move.get('to_company', '')}"
+    
+    notification_data = {
+        "type": "move",
+        "moveId": move.get('id', ''),
+        "name": move.get('name', ''),
+        "fromCompany": move.get('from_company', ''),
+        "toCompany": move.get('to_company', '')
+    }
+    
+    notified_count = 0
+    failed_count = 0
+    
+    for email, token_info in device_tokens.items():
+        # Skip the creator
+        if email == creator_email:
+            continue
+        
+        device_token = token_info.get('device_token')
+        if not device_token:
+            continue
+        
+        if send_push_notification(device_token, title, body, notification_data):
+            notified_count += 1
+        else:
+            failed_count += 1
+    
+    print(f"📱 Move notifications: {notified_count} sent, {failed_count} failed")
+
+# Compensation storage
+user_compensations = {}  # user_email -> list of compensations
 
 @app.route('/api/user-todos', methods=['GET'])
 @require_auth
@@ -3225,16 +3330,11 @@ def save_user_messages():
 
 @app.route('/api/industry-moves', methods=['GET'])
 def get_industry_moves():
-    """Get industry moves for a user"""
+    """Get all industry moves (universal - shared across all users)"""
     try:
-        email = request.args.get('email')
-        if not email:
-            return jsonify({
-                'success': False,
-                'error': 'Email parameter required'
-            }), 400
-        
-        moves = user_industry_moves.get(email, [])
+        # Moves are now universal, no email filtering needed
+        # But we can still accept email for backward compatibility
+        moves = industry_moves
         return jsonify({
             'success': True,
             'moves': moves
@@ -3249,12 +3349,48 @@ def get_industry_moves():
 @require_auth
 @require_ownership('email', 'email')
 def create_industry_move():
-    """Create a new industry move (secured)"""
+    """Create a new industry move (secured) - supports both JSON and multipart/form-data"""
     try:
         user = get_current_user()
-        data = request.get_json()
-        user_email = data.get('email') or user.get('email')
-        move = data.get('move', {})
+        move = {}
+        user_email = None
+        image_url = None
+        
+        # Check if this is a multipart request (with image)
+        if request.content_type and request.content_type.startswith('multipart/form-data'):
+            # Handle multipart form data
+            user_email = request.form.get('email') or user.get('email')
+            move = {
+                'name': request.form.get('name', ''),
+                'from_position': request.form.get('from_position', ''),
+                'from_company': request.form.get('from_company', ''),
+                'to_position': request.form.get('to_position', ''),
+                'to_company': request.form.get('to_company', ''),
+                'region': request.form.get('region') or None,
+                'note': request.form.get('note') or None
+            }
+            
+            # Handle move_date
+            if request.form.get('move_date'):
+                move['move_date'] = request.form.get('move_date')
+            
+            # Handle image upload
+            if 'image' in request.files:
+                image_file = request.files['image']
+                if image_file and image_file.filename:
+                    # Save image (in production, upload to S3/cloud storage)
+                    # For now, we'll just store a reference
+                    image_filename = f"move_{int(datetime.now().timestamp() * 1000)}_{image_file.filename}"
+                    # In production, upload to cloud storage and get URL
+                    # For now, just store filename
+                    image_url = f"/uploads/moves/{image_filename}"
+                    move['image_url'] = image_url
+                    print(f"📸 Image uploaded: {image_filename}")
+        else:
+            # Handle JSON request
+            data = request.get_json() or {}
+            user_email = data.get('email') or user.get('email')
+            move = data.get('move', {})
         
         if not user_email:
             return jsonify({
@@ -3269,59 +3405,57 @@ def create_industry_move():
                 'error': 'Access denied'
             }), 403
         
-        if not move:
+        if not move or not move.get('name'):
             return jsonify({
                 'success': False,
                 'error': 'Move data required'
             }), 400
         
-        # Initialize user's moves list if needed
-        if email not in user_industry_moves:
-            user_industry_moves[email] = []
-        
         # Add ID if not present
         if 'id' not in move:
             move['id'] = f"move_{int(datetime.now().timestamp() * 1000)}"
+        
+        # Add created_by field
+        move['created_by'] = user_email
         
         # Add timestamps
         if 'created_at' not in move:
             move['created_at'] = datetime.now().isoformat()
         move['updated_at'] = datetime.now().isoformat()
         
-        user_industry_moves[email].append(move)
+        # Add to universal moves list (shared across all users)
+        industry_moves.append(move)
+        
+        # Send push notifications to all users (except creator)
+        try:
+            notify_all_users_about_move(move, user_email)
+        except Exception as e:
+            print(f"⚠️ Error sending move notifications: {e}")
+            # Don't fail the request if notifications fail
         
         return jsonify({
             'success': True,
             'move': move
         })
     except Exception as e:
+        print(f"❌ Error creating industry move: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({
             'success': False,
             'error': str(e)
         }), 500
 
 @app.route('/api/industry-moves/<move_id>', methods=['DELETE'])
+@require_auth
 def delete_industry_move(move_id):
-    """Delete an industry move"""
+    """Delete an industry move (universal)"""
     try:
-        email = request.args.get('email')
-        if not email:
-            return jsonify({
-                'success': False,
-                'error': 'Email parameter required'
-            }), 400
+        # Remove move with matching ID from universal list
+        original_count = len(industry_moves)
+        industry_moves[:] = [m for m in industry_moves if m.get('id') != move_id]
         
-        if email not in user_industry_moves:
-            return jsonify({
-                'success': False,
-                'error': 'No moves found for user'
-            }), 404
-        
-        # Remove move with matching ID
-        original_count = len(user_industry_moves[email])
-        user_industry_moves[email] = [m for m in user_industry_moves[email] if m.get('id') != move_id]
-        
-        if len(user_industry_moves[email]) == original_count:
+        if len(industry_moves) == original_count:
             return jsonify({
                 'success': False,
                 'error': 'Move not found'
@@ -3351,21 +3485,17 @@ def update_industry_move(move_id):
                 'error': 'Email parameter required'
             }), 400
         
-        if email not in user_industry_moves:
-            return jsonify({
-                'success': False,
-                'error': 'No moves found for user'
-            }), 404
-        
-        # Find and update move
+        # Find and update move in universal list
         move_found = False
-        for i, move in enumerate(user_industry_moves[email]):
+        for i, move in enumerate(industry_moves):
             if move.get('id') == move_id:
                 move_data['id'] = move_id
                 move_data['updated_at'] = datetime.now().isoformat()
+                # Preserve created_by and created_at
+                move_data['created_by'] = move.get('created_by')
                 if 'created_at' not in move_data:
                     move_data['created_at'] = move.get('created_at', datetime.now().isoformat())
-                user_industry_moves[email][i] = move_data
+                industry_moves[i] = move_data
                 move_found = True
                 break
         
@@ -3387,16 +3517,9 @@ def update_industry_move(move_id):
 
 @app.route('/api/industry-moves/search/<name>', methods=['GET'])
 def search_industry_moves(name):
-    """Search industry moves by name"""
+    """Search industry moves by name (universal)"""
     try:
-        email = request.args.get('email')
-        if not email:
-            return jsonify({
-                'success': False,
-                'error': 'Email parameter required'
-            }), 400
-        
-        moves = user_industry_moves.get(email, [])
+        moves = industry_moves
         name_lower = name.lower()
         
         # Search in person name, company, or role
@@ -3419,21 +3542,15 @@ def search_industry_moves(name):
 
 @app.route('/api/industry-moves/company/<company>', methods=['GET'])
 def get_company_moves(company):
-    """Get moves for a specific company"""
+    """Get moves for a specific company (universal)"""
     try:
-        email = request.args.get('email')
-        if not email:
-            return jsonify({
-                'success': False,
-                'error': 'Email parameter required'
-            }), 400
-        
-        moves = user_industry_moves.get(email, [])
+        moves = industry_moves
         company_lower = company.lower()
         
         matching_moves = [
             m for m in moves
-            if company_lower in m.get('company', '').lower()
+            if company_lower in m.get('from_company', '').lower() or
+               company_lower in m.get('to_company', '').lower()
         ]
         
         return jsonify({
@@ -3457,20 +3574,15 @@ def get_leaderboard():
                 'error': 'Email parameter required'
             }), 400
         
-        # Aggregate moves across all users to create leaderboard
-        all_moves = []
-        for user_email, moves in user_industry_moves.items():
-            all_moves.extend(moves)
-        
-        # Count moves by person
-        person_counts = {}
-        for move in all_moves:
-            person_name = move.get('person_name', 'Unknown')
-            person_counts[person_name] = person_counts.get(person_name, 0) + 1
+        # Count moves per user from the universal list
+        user_counts = {}
+        for move in industry_moves:
+            user_email = move.get('created_by', 'unknown')
+            user_counts[user_email] = user_counts.get(user_email, 0) + 1
         
         # Sort by count
         leaderboard = sorted(
-            [{'name': name, 'count': count} for name, count in person_counts.items()],
+            [{'email': email, 'count': count} for email, count in user_counts.items()],
             key=lambda x: x['count'],
             reverse=True
         )[:10]  # Top 10
@@ -3487,21 +3599,18 @@ def get_leaderboard():
 
 @app.route('/api/industry-moves/stats', methods=['GET'])
 def get_industry_moves_stats():
-    """Get statistics about moves"""
+    """Get statistics about moves (universal)"""
     try:
-        email = request.args.get('email')
-        if not email:
-            return jsonify({
-                'success': False,
-                'error': 'Email parameter required'
-            }), 400
-        
-        moves = user_industry_moves.get(email, [])
+        email = request.args.get('email')  # Optional - filter by user if provided
+        if email:
+            moves = [m for m in industry_moves if m.get('created_by') == email]
+        else:
+            moves = industry_moves
         
         stats = {
             'total_moves': len(moves),
-            'unique_companies': len(set(m.get('company', '') for m in moves)),
-            'unique_people': len(set(m.get('person_name', '') for m in moves)),
+            'unique_companies': len(set(m.get('from_company', '') for m in moves) | set(m.get('to_company', '') for m in moves)),
+            'unique_people': len(set(m.get('name', '') for m in moves)),
             'recent_moves': len([m for m in moves if 'created_at' in m])
         }
         
@@ -3517,29 +3626,24 @@ def get_industry_moves_stats():
 
 @app.route('/api/industry-moves/autocomplete', methods=['GET'])
 def get_autocomplete():
-    """Get autocomplete suggestions"""
+    """Get autocomplete suggestions (universal)"""
     try:
         query = request.args.get('query', '').lower()
-        email = request.args.get('email')
-        
-        if not email:
-            return jsonify({
-                'success': False,
-                'error': 'Email parameter required'
-            }), 400
-        
-        moves = user_industry_moves.get(email, [])
+        moves = industry_moves
         suggestions = set()
         
         # Collect unique names and companies that match query
         for move in moves:
-            person_name = move.get('person_name', '')
-            company = move.get('company', '')
+            name = move.get('name', '')
+            from_company = move.get('from_company', '')
+            to_company = move.get('to_company', '')
             
-            if query in person_name.lower():
-                suggestions.add(person_name)
-            if query in company.lower():
-                suggestions.add(company)
+            if query in name.lower():
+                suggestions.add(name)
+            if query in from_company.lower():
+                suggestions.add(from_company)
+            if query in to_company.lower():
+                suggestions.add(to_company)
         
         return jsonify({
             'success': True,
