@@ -48,6 +48,15 @@ from routes.gdpr import gdpr_bp
 app.register_blueprint(auth_bp)
 app.register_blueprint(gdpr_bp)
 
+# Initialize database on app startup (runs when module is imported)
+try:
+    from database.models import init_db
+    init_db()
+    print("✅ Database initialized")
+except Exception as e:
+    print(f"⚠️ Database initialization warning: {e}")
+    # Continue anyway - tables might already exist
+
 # Track sent notifications to prevent duplicates
 sent_article_ids = set()
 notification_queue = []
@@ -3894,15 +3903,6 @@ def call_notes_summary():
             'success': False,
             'error': str(e)
         }), 500
-
-# Initialize database on startup
-try:
-    from database.models import init_db
-    init_db()
-    print("✅ Database initialized")
-except Exception as e:
-    print(f"⚠️ Database initialization warning: {e}")
-    # Continue anyway - tables might already exist
 
 if __name__ == '__main__':
     # Force restart to pick up new template and text parsing fixes
