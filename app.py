@@ -14,9 +14,16 @@ import json
 import os
 import feedparser  # Re-enabled for article monitoring
 from email.utils import parsedate_to_datetime
-from apns2.client import APNsClient
-from apns2.payload import Payload
-from apns2.credentials import TokenCredentials
+
+# Optional APNs imports for push notifications
+try:
+    from apns2.client import APNsClient
+    from apns2.payload import Payload
+    from apns2.credentials import TokenCredentials
+    APNS_AVAILABLE = True
+except ImportError:
+    APNS_AVAILABLE = False
+    print("⚠️ PyAPNs2 not available - push notifications will be disabled")
 
 # Import AI Assistant System
 from custom_ai_assistant import process_ai_query, process_ai_query_with_files
@@ -2856,6 +2863,9 @@ apns_client = None
 def get_apns_client():
     """Initialize and return APNs client"""
     global apns_client
+    if not APNS_AVAILABLE:
+        return None
+    
     if apns_client is None:
         # Get APNs credentials from environment
         apns_key_id = os.getenv('APNS_KEY_ID')
