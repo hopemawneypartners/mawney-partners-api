@@ -57,3 +57,4 @@ temp/
 *.db
 audit_logs/
 __pycache__/
+.env
