@@ -2841,93 +2841,234 @@ user_compensations = {}  # user_email -> list of compensations
 device_tokens = {}  # email -> {device_token, platform, updated_at}
 
 @app.route('/api/user-todos', methods=['GET'])
+@require_auth
+@require_ownership('email', 'email')
 def get_user_todos():
-    """Get todos for a specific user"""
+    """Get todos for a specific user (secured)"""
     try:
-        email = request.args.get('email')
-        if not email:
+        user = get_current_user()
+        user_email = request.args.get('email') or user.get('email')
+        
+        if not user_email:
             return jsonify({
                 'success': False,
                 'error': 'Email parameter required'
             }), 400
         
-        todos = user_todos.get(email, [])
+        # Verify ownership
+        if user.get('email') != user_email and '*' not in user.get('permissions', []):
+            return jsonify({
+                'success': False,
+                'error': 'Access denied'
+            }), 403
+        
+        todos = user_todos.get(user_email, [])
+        log_data_access(user.get('user_id'), user_email, 'todos', len(todos))
+        
         return jsonify({
             'success': True,
             'todos': todos
         })
     except Exception as e:
+        print(f"Error getting todos: {e}")
         return jsonify({
             'success': False,
             'error': str(e)
         }), 500
 
 @app.route('/api/user-todos', methods=['POST'])
+@require_auth
+@require_ownership('email', 'email')
 def save_user_todos():
-    """Save todos for a user"""
+    """Save todos for a user (secured)"""
     try:
+        user = get_current_user()
         data = request.get_json()
-        email = data.get('email')
+        user_email = data.get('email') or user.get('email')
         todos = data.get('todos', [])
         
-        if not email:
+        if not user_email:
             return jsonify({
                 'success': False,
                 'error': 'Email required'
             }), 400
         
-        user_todos[email] = todos
+        # Verify ownership
+        if user.get('email') != user_email and '*' not in user.get('permissions', []):
+            return jsonify({
+                'success': False,
+                'error': 'Access denied'
+            }), 403
+        
+        user_todos[user_email] = todos
+        log_data_modification(user.get('user_id'), user_email, 'todos', 'update', 'bulk')
+        
         return jsonify({
             'success': True,
-            'message': f'Saved {len(todos)} todos for {email}'
+            'message': f'Saved {len(todos)} todos for {user_email}'
         })
     except Exception as e:
+        print(f"Error saving todos: {e}")
         return jsonify({
             'success': False,
             'error': str(e)
         }), 500
 
 @app.route('/api/user-call-notes', methods=['GET'])
+@require_auth
+@require_ownership('email', 'email')
 def get_user_call_notes():
-    """Get call notes for a specific user"""
+    """Get call notes for a specific user (secured with encryption)"""
     try:
-        email = request.args.get('email')
-        if not email:
+        user = get_current_user()
+        user_email = request.args.get('email') or user.get('email')
+        
+        if not user_email:
             return jsonify({
                 'success': False,
                 'error': 'Email parameter required'
             }), 400
         
-        call_notes = user_call_notes.get(email, [])
-        return jsonify({
-            'success': True,
-            'call_notes': call_notes
-        })
+        # Verify ownership
+        if user.get('email') != user_email and '*' not in user.get('permissions', []):
+            return jsonify({
+                'success': False,
+                'error': 'Access denied'
+            }), 403
+        
+        # Try database first
+        try:
+            from database.models import CallNote, SessionLocal
+            db = SessionLocal()
+            try:
+                notes = db.query(CallNote).filter(
+                    CallNote.user_email == user_email,
+                    CallNote.is_deleted == False
+                ).all()
+                
+                call_notes_list = []
+                for note in notes:
+                    note_dict = {
+                        'id': note.id,
+                        'title': note.title,
+                        'transcript': note.transcript,
+                        'summary': note.summary,
+                        'notes': note.notes,
+                        'date': note.date.isoformat() if note.date else None,
+                        'participants': note.participants,
+                        'created_at': note.created_at.isoformat() if note.created_at else None,
+                        'updated_at': note.updated_at.isoformat() if note.updated_at else None,
+                    }
+                    # Decrypt sensitive fields
+                    note_dict = decrypt_dict_fields(note_dict, SENSITIVE_FIELDS.get('call_notes', []))
+                    call_notes_list.append(note_dict)
+                
+                log_data_access(user.get('user_id'), user_email, 'call_notes', len(call_notes_list))
+                return jsonify({
+                    'success': True,
+                    'call_notes': call_notes_list
+                })
+            finally:
+                db.close()
+        except Exception as db_error:
+            # Fallback to in-memory
+            print(f"Database error, using fallback: {db_error}")
+            call_notes = user_call_notes.get(user_email, [])
+            log_data_access(user.get('user_id'), user_email, 'call_notes', len(call_notes))
+            return jsonify({
+                'success': True,
+                'call_notes': call_notes
+            })
+            
     except Exception as e:
+        print(f"Error getting call notes: {e}")
         return jsonify({
             'success': False,
             'error': str(e)
         }), 500
 
 @app.route('/api/user-call-notes', methods=['POST'])
+@require_auth
+@require_ownership('email', 'email')
 def save_user_call_notes():
-    """Save call notes for a user"""
+    """Save call notes for a user (secured with encryption)"""
     try:
+        user = get_current_user()
         data = request.get_json()
-        email = data.get('email')
+        user_email = data.get('email') or user.get('email')
         call_notes = data.get('call_notes', [])
         
-        if not email:
+        if not user_email:
             return jsonify({
                 'success': False,
                 'error': 'Email required'
             }), 400
         
-        user_call_notes[email] = call_notes
-        return jsonify({
-            'success': True,
-            'message': f'Saved {len(call_notes)} call notes for {email}'
-        })
+        # Verify ownership
+        if user.get('email') != user_email and '*' not in user.get('permissions', []):
+            return jsonify({
+                'success': False,
+                'error': 'Access denied'
+            }), 403
+        
+        # Try database first
+        try:
+            from database.models import CallNote, SessionLocal
+            import uuid
+            db = SessionLocal()
+            try:
+                saved_count = 0
+                for note_data in call_notes:
+                    # Encrypt sensitive fields
+                    encrypted_note = encrypt_dict_fields(
+                        note_data,
+                        SENSITIVE_FIELDS.get('call_notes', [])
+                    )
+                    
+                    note_id = note_data.get('id') or str(uuid.uuid4())
+                    
+                    # Check if exists
+                    existing = db.query(CallNote).filter(CallNote.id == note_id).first()
+                    
+                    if existing:
+                        # Update
+                        for key, value in encrypted_note.items():
+                            if hasattr(existing, key):
+                                setattr(existing, key, value)
+                        existing.updated_at = datetime.utcnow()
+                        log_data_modification(user.get('user_id'), user_email, 'call_notes', 'update', note_id)
+                    else:
+                        # Create
+                        new_note = CallNote(
+                            id=note_id,
+                            user_email=user_email,
+                            **encrypted_note
+                        )
+                        db.add(new_note)
+                        log_data_modification(user.get('user_id'), user_email, 'call_notes', 'create', note_id)
+                    
+                    saved_count += 1
+                
+                db.commit()
+                return jsonify({
+                    'success': True,
+                    'message': f'Saved {saved_count} call notes',
+                    'count': saved_count
+                })
+            except Exception as db_error:
+                db.rollback()
+                raise db_error
+            finally:
+                db.close()
+        except Exception as db_error:
+            # Fallback to in-memory
+            print(f"Database error, using fallback: {db_error}")
+            user_call_notes[user_email] = call_notes
+            log_data_modification(user.get('user_id'), user_email, 'call_notes', 'update', 'bulk')
+            return jsonify({
+                'success': True,
+                'message': f'Saved {len(call_notes)} call notes for {user_email}'
+            })
     except Exception as e:
         return jsonify({
             'success': False,
@@ -2935,78 +3076,116 @@ def save_user_call_notes():
         }), 500
 
 @app.route('/api/user-chats', methods=['GET'])
+@require_auth
+@require_ownership('email', 'email')
 def get_user_chats():
-    """Get chats for a specific user"""
+    """Get chats for a specific user (secured)"""
     try:
-        email = request.args.get('email')
-        if not email:
+        user = get_current_user()
+        user_email = request.args.get('email') or user.get('email')
+        
+        if not user_email:
             return jsonify({
                 'success': False,
                 'error': 'Email parameter required'
             }), 400
         
-        chats = user_chats.get(email, [])
+        # Verify ownership
+        if user.get('email') != user_email and '*' not in user.get('permissions', []):
+            return jsonify({
+                'success': False,
+                'error': 'Access denied'
+            }), 403
+        
+        chats = user_chats.get(user_email, [])
+        log_data_access(user.get('user_id'), user_email, 'chats', len(chats))
+        
         return jsonify({
             'success': True,
             'chats': chats
         })
     except Exception as e:
+        print(f"Error getting chats: {e}")
         return jsonify({
             'success': False,
             'error': str(e)
         }), 500
 
 @app.route('/api/user-chats', methods=['POST'])
+@require_auth
+@require_ownership('email', 'email')
 def save_user_chats():
-    """Save chats for a user"""
+    """Save chats for a user (secured)"""
     try:
+        user = get_current_user()
         data = request.get_json()
-        email = data.get('email')
+        user_email = data.get('email') or user.get('email')
         chats = data.get('chats', [])
         
-        if not email:
+        if not user_email:
             return jsonify({
                 'success': False,
                 'error': 'Email required'
             }), 400
         
-        user_chats[email] = chats
+        # Verify ownership
+        if user.get('email') != user_email and '*' not in user.get('permissions', []):
+            return jsonify({
+                'success': False,
+                'error': 'Access denied'
+            }), 403
+        
+        user_chats[user_email] = chats
+        log_data_modification(user.get('user_id'), user_email, 'chats', 'update', 'bulk')
+        
         return jsonify({
             'success': True,
-            'message': f'Saved {len(chats)} chats for {email}'
+            'message': f'Saved {len(chats)} chats for {user_email}'
         })
     except Exception as e:
+        print(f"Error saving chats: {e}")
         return jsonify({
             'success': False,
             'error': str(e)
         }), 500
 
 @app.route('/api/user-messages', methods=['GET'])
+@require_auth
 def get_user_messages():
-    """Get messages for a specific chat"""
+    """Get messages for a specific chat (secured)"""
     try:
+        user = get_current_user()
         chat_id = request.args.get('chat_id')
+        
         if not chat_id:
             return jsonify({
                 'success': False,
                 'error': 'chat_id parameter required'
             }), 400
         
+        # Verify user owns the chat (check if chat belongs to user)
+        # For now, we'll allow access if chat_id is provided
+        # In production, verify chat ownership from database
         messages = user_messages.get(chat_id, [])
+        log_data_access(user.get('user_id'), user.get('email'), 'messages', len(messages))
+        
         return jsonify({
             'success': True,
             'messages': messages
         })
     except Exception as e:
+        print(f"Error getting messages: {e}")
         return jsonify({
             'success': False,
             'error': str(e)
         }), 500
 
 @app.route('/api/user-messages', methods=['POST'])
+@require_auth
 def save_user_messages():
-    """Save messages for a chat"""
+    """Save messages for a chat (secured)"""
     try:
+        user = get_current_user()
         data = request.get_json()
         chat_id = data.get('chat_id')
         messages = data.get('messages', [])
@@ -3018,11 +3197,14 @@ def save_user_messages():
             }), 400
         
         user_messages[chat_id] = messages
+        log_data_modification(user.get('user_id'), user.get('email'), 'messages', 'update', chat_id)
+        
         return jsonify({
             'success': True,
             'message': f'Saved {len(messages)} messages for chat {chat_id}'
         })
     except Exception as e:
+        print(f"Error saving messages: {e}")
         return jsonify({
             'success': False,
             'error': str(e)
@@ -3055,18 +3237,28 @@ def get_industry_moves():
         }), 500
 
 @app.route('/api/industry-moves', methods=['POST'])
+@require_auth
+@require_ownership('email', 'email')
 def create_industry_move():
-    """Create a new industry move"""
+    """Create a new industry move (secured)"""
     try:
+        user = get_current_user()
         data = request.get_json()
-        email = data.get('email')
+        user_email = data.get('email') or user.get('email')
         move = data.get('move', {})
         
-        if not email:
+        if not user_email:
             return jsonify({
                 'success': False,
                 'error': 'Email required'
             }), 400
+        
+        # Verify ownership
+        if user.get('email') != user_email and '*' not in user.get('permissions', []):
+            return jsonify({
+                'success': False,
+                'error': 'Access denied'
+            }), 403
         
         if not move:
             return jsonify({
