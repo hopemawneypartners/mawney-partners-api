@@ -2344,7 +2344,12 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
         import base64
         import os
         
+        logger.info(f"📄 Starting PDF generation for CV formatting...")
+        logger.info(f"HTML content length: {len(html_content)} characters")
+        
         file_result = cv_file_generator.generate_pdf_file(html_content, f"formatted_{filename.replace('.pdf', '')}")
+        
+        logger.info(f"📄 PDF generation result: success={file_result.get('success')}, format={file_result.get('format')}, error={file_result.get('error')}")
         
         # Verify PDF was actually created
         pdf_success = False
@@ -2353,24 +2358,38 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
         
         if file_result.get('success') and file_result.get('format') == 'pdf':
             filepath = file_result.get('filepath')
+            logger.info(f"📄 Checking PDF file at: {filepath}")
             if filepath and os.path.exists(filepath):
                 try:
+                    file_size = os.path.getsize(filepath)
+                    logger.info(f"📄 PDF file exists: {filepath} ({file_size} bytes)")
                     with open(filepath, 'rb') as f:
-                        pdf_base64 = base64.b64encode(f.read()).decode('utf-8')
+                        pdf_content = f.read()
+                        pdf_base64 = base64.b64encode(pdf_content).decode('utf-8')
                     file_base64 = pdf_base64
                     file_format = 'pdf'
                     pdf_success = True
-                    logger.info(f"✅ PDF generated successfully: {filepath} ({len(pdf_base64)} bytes base64)")
+                    logger.info(f"✅ PDF generated successfully: {filepath} ({len(pdf_base64)} bytes base64, {file_size} bytes raw)")
                 except Exception as e:
                     logger.error(f"❌ Failed to read generated PDF: {e}")
+                    import traceback
+                    logger.error(f"Traceback: {traceback.format_exc()}")
+            else:
+                logger.error(f"❌ PDF file does not exist at: {filepath}")
+                logger.error(f"File result keys: {file_result.keys()}")
+        else:
+            error_msg = file_result.get('error', 'Unknown error')
+            error_type = file_result.get('error_type', 'Unknown')
+            logger.error(f"❌ PDF generation failed: {error_type}: {error_msg}")
         
         # If PDF generation failed, return error instead of HTML
         if not pdf_success:
+            error_details = file_result.get('error', 'Unknown error')
             logger.error(f"❌ PDF generation failed. File result: {file_result}")
             return {
-                "text": "I formatted your CV successfully, but encountered an error generating the PDF file. Please try again, or contact support if the issue persists.",
+                "text": f"I formatted your CV successfully, but encountered an error generating the PDF file: {error_details}. Please try again, or contact support if the issue persists.",
                 "has_file": False,
-                "error": "PDF generation failed",
+                "error": f"PDF generation failed: {error_details}",
                 "html_content": None  # Don't send HTML to iOS app
             }
         
