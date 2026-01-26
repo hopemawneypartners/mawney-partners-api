@@ -63,6 +63,21 @@ try:
     from database.models import init_db
     init_db()
     print("✅ Database initialized")
+    
+    # Auto-seed users if database is empty (only in development)
+    if os.getenv('AUTO_SEED_USERS', 'False').lower() == 'true':
+        try:
+            from database.models import SessionLocal, User
+            db = SessionLocal()
+            user_count = db.query(User).count()
+            db.close()
+            
+            if user_count == 0:
+                print("📝 No users found, seeding database...")
+                from seed_users import seed_users
+                seed_users()
+        except Exception as e:
+            print(f"⚠️ Auto-seed warning: {e}")
 except Exception as e:
     print(f"⚠️ Database initialization warning: {e}")
     # Continue anyway - tables might already exist
