@@ -109,8 +109,12 @@ class RefreshToken(Base):
 
 def init_db():
     """Initialize database tables"""
-    Base.metadata.create_all(bind=engine)
-    print("✅ Database tables created")
+    try:
+        Base.metadata.create_all(bind=engine)
+        print("✅ Database tables created/verified")
+    except Exception as e:
+        print(f"⚠️ Database initialization note: {e}")
+        # Tables might already exist, which is fine
 
 def get_db():
     """Get database session"""
