@@ -275,9 +275,13 @@ def register():
         print(f"Error in register: {e}")
         import traceback
         traceback.print_exc()
+        # Return more specific error message for debugging
+        error_msg = str(e)
+        if 'no such table' in error_msg.lower() or 'operationalerror' in error_msg.lower():
+            error_msg = 'Database not initialized. Please contact support.'
         return jsonify({
             'success': False,
-            'error': 'Registration failed'
+            'error': f'Registration failed: {error_msg}'
         }), 500
 
 @auth_bp.route('/mfa/setup', methods=['POST'])
