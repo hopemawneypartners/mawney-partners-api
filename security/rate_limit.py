@@ -61,7 +61,10 @@ def setup_rate_limiting(app: Flask):
                 app=app,
                 key_func=get_remote_address,
                 storage_uri=redis_url,
-                default_limits=[f"{settings.RATE_LIMIT_PER_MINUTE} per minute"],
+                default_limits=[
+                    f"{settings.RATE_LIMIT_PER_MINUTE} per minute",
+                    f"{settings.RATE_LIMIT_PER_HOUR} per hour"
+                ] if settings.RATE_LIMIT_ENABLED else None,
                 strategy="fixed-window"
             )
         else:
@@ -69,7 +72,10 @@ def setup_rate_limiting(app: Flask):
                 app=app,
                 key_func=get_remote_address,
                 storage_uri=f"redis://{redis_config.get('host', 'localhost')}:{redis_config.get('port', 6379)}/{redis_config.get('db', 0)}",
-                default_limits=[f"{settings.RATE_LIMIT_PER_MINUTE} per minute"],
+                default_limits=[
+                    f"{settings.RATE_LIMIT_PER_MINUTE} per minute",
+                    f"{settings.RATE_LIMIT_PER_HOUR} per hour"
+                ] if settings.RATE_LIMIT_ENABLED else None,
                 strategy="fixed-window"
             )
     else:
@@ -77,15 +83,16 @@ def setup_rate_limiting(app: Flask):
         limiter = Limiter(
             app=app,
             key_func=get_remote_address,
-            default_limits=[f"{settings.RATE_LIMIT_PER_MINUTE} per minute"],
+            default_limits=[
+                f"{settings.RATE_LIMIT_PER_MINUTE} per minute",
+                f"{settings.RATE_LIMIT_PER_HOUR} per hour"
+            ] if settings.RATE_LIMIT_ENABLED else None,
             strategy="fixed-window"
         )
     
     # Configure rate limits
     if settings.RATE_LIMIT_ENABLED:
-        # Global limits
-        limiter.limit(f"{settings.RATE_LIMIT_PER_HOUR} per hour")(app)
-        
+        # Default limits are already set in Limiter initialization above
         print(f"✅ Rate limiting enabled: {settings.RATE_LIMIT_PER_MINUTE}/min, {settings.RATE_LIMIT_PER_HOUR}/hour")
     else:
         print("⚠️ Rate limiting disabled")
