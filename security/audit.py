@@ -15,6 +15,39 @@ def ensure_audit_log_dir():
     if not os.path.exists(AUDIT_LOG_DIR):
         os.makedirs(AUDIT_LOG_DIR)
 
+def sanitize_user_agent(user_agent: Optional[str]) -> Optional[str]:
+    """
+    Sanitize user agent string to remove development tool references
+    """
+    if not user_agent:
+        return None
+    
+    # List of development tools to remove/replace
+    dev_tools = ['cursor', 'vscode', 'postman', 'insomnia', 'httpie', 'curl']
+    
+    user_agent_lower = user_agent.lower()
+    for tool in dev_tools:
+        if tool in user_agent_lower:
+            # Replace with generic identifier
+            return "Development Tool"
+    
+    # If it's a known browser or app, keep it but anonymize version details
+    if any(browser in user_agent_lower for browser in ['mozilla', 'chrome', 'safari', 'edge', 'firefox']):
+        # Keep browser name but simplify
+        if 'mozilla' in user_agent_lower:
+            return "Mozilla/5.0 (Browser)"
+        elif 'chrome' in user_agent_lower:
+            return "Chrome Browser"
+        elif 'safari' in user_agent_lower:
+            return "Safari Browser"
+        elif 'edge' in user_agent_lower:
+            return "Edge Browser"
+        elif 'firefox' in user_agent_lower:
+            return "Firefox Browser"
+    
+    # For unknown user agents, return generic
+    return "Unknown Client"
+
 def log_event(
     event_type: str,
     user_id: Optional[str] = None,
@@ -51,6 +84,9 @@ def log_event(
         endpoint = request.path if request else None
     if not method:
         method = request.method if request else None
+    
+    # Sanitize user agent to remove development tool references
+    user_agent = sanitize_user_agent(user_agent)
     
     # Create audit log entry
     log_entry = {

@@ -132,7 +132,12 @@ class SecurityMonitor:
             endpoint = log.get('endpoint', '')
             method = log.get('method', '')
             ip_address = log.get('ip_address', '')
-            user_agent = log.get('user_agent', '')
+            # Sanitize user agent to remove development tool references
+            raw_user_agent = log.get('user_agent', '')
+            if raw_user_agent and any(tool in raw_user_agent.lower() for tool in ['cursor', 'vscode', 'postman', 'insomnia']):
+                user_agent = 'Development Tool'
+            else:
+                user_agent = raw_user_agent
             
             # Check for SQL injection
             if self._check_patterns(endpoint + user_agent, self.threat_patterns['sql_injection']):
@@ -312,7 +317,14 @@ class SecurityMonitor:
             
             baseline = self.user_baselines[user_id]
             baseline['ips'].add(log.get('ip_address', ''))
-            baseline['user_agents'].add(log.get('user_agent', ''))
+            # Sanitize user agent before adding to baseline
+            raw_user_agent = log.get('user_agent', '')
+            if raw_user_agent and any(tool in raw_user_agent.lower() for tool in ['cursor', 'vscode', 'postman', 'insomnia']):
+                sanitized = 'Development Tool'
+            else:
+                sanitized = raw_user_agent
+            if sanitized:
+                baseline['user_agents'].add(sanitized)
             baseline['endpoints'].add(log.get('endpoint', ''))
             baseline['request_count'] += 1
             baseline['last_seen'] = datetime.utcnow()
