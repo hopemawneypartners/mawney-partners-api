@@ -51,10 +51,16 @@ def login():
             # Get user from database
         db = SessionLocal()
         try:
+            # Try to find user - check both with and without is_deleted filter
             user = db.query(User).filter(User.email == email).first()
             
             if not user:
+                # Debug: Check if any users exist
+                all_users = db.query(User).all()
                 print(f"User not found: {email}")
+                print(f"Total users in DB: {len(all_users)}")
+                if all_users:
+                    print(f"Sample user emails: {[u.email for u in all_users[:3]]}")
                 log_authentication(email, False, 'password', 'User not found')
                 return jsonify({
                     'success': False,
@@ -68,6 +74,8 @@ def login():
                     'success': False,
                     'error': 'Invalid email or password'
                 }), 401
+            
+            print(f"User found: {user.email}, hash length: {len(user.password_hash) if user.password_hash else 0}")
             
             # Verify password
             try:
