@@ -3590,33 +3590,58 @@ def get_company_moves(company):
 
 @app.route('/api/industry-moves/leaderboard', methods=['GET'])
 def get_leaderboard():
-    """Get leaderboard of top movers"""
+    """Get leaderboard of top movers (universal)"""
     try:
-        email = request.args.get('email')
-        if not email:
-            return jsonify({
-                'success': False,
-                'error': 'Email parameter required'
-            }), 400
-        
+        # Email is optional now (for backward compatibility)
         # Count moves per user from the universal list
         user_counts = {}
+        user_names = {}  # Store user names if available
+        
+        # Get user names from database if possible
+        try:
+            from database.models import SessionLocal, User
+            db = SessionLocal()
+            try:
+                users = db.query(User).filter(User.is_deleted == False).all()
+                for user in users:
+                    user_names[user.email] = user.email.split('@')[0].replace('.', ' ').title()  # Fallback to email prefix
+            finally:
+                db.close()
+        except Exception as e:
+            print(f"⚠️ Could not fetch user names from DB: {e}")
+        
         for move in industry_moves:
             user_email = move.get('created_by', 'unknown')
-            user_counts[user_email] = user_counts.get(user_email, 0) + 1
+            if user_email and user_email != 'unknown':
+                user_counts[user_email] = user_counts.get(user_email, 0) + 1
+                # Try to get user name from user_profiles if available
+                if user_email in user_profiles:
+                    user_names[user_email] = user_profiles[user_email].get('name', user_email.split('@')[0].replace('.', ' ').title())
         
-        # Sort by count
-        leaderboard = sorted(
-            [{'email': email, 'count': count} for email, count in user_counts.items()],
-            key=lambda x: x['count'],
-            reverse=True
-        )[:10]  # Top 10
+        # Build leaderboard entries matching LeaderboardEntry structure
+        leaderboard = []
+        for email, count in sorted(user_counts.items(), key=lambda x: x[1], reverse=True)[:10]:
+            # Extract name from email if not in user_profiles or database
+            name = user_names.get(email)
+            if not name:
+                # Fallback: format email as name
+                name = email.split('@')[0].replace('.', ' ').replace('_', ' ').title()
+            
+            leaderboard.append({
+                'id': email,  # Use email as ID (app will generate UUID if needed)
+                'name': name,
+                'email': email,
+                'count': count
+            })
         
         return jsonify({
             'success': True,
             'leaderboard': leaderboard
         })
     except Exception as e:
+        print(f"❌ Error in leaderboard: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({
             'success': False,
             'error': str(e)
