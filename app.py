@@ -2751,6 +2751,784 @@ def download_cv(filename):
             'error': f'Download error: {str(e)}'
         }), 500
 
+# ============================================================================
+# USER-SPECIFIC DATA ENDPOINTS
+# ============================================================================
+
+# Industry Moves storage
+user_industry_moves = {}  # user_email -> list of moves
+
+# Compensation storage
+user_compensations = {}  # user_email -> list of compensations
+
+# Device tokens for push notifications
+device_tokens = {}  # email -> {device_token, platform, updated_at}
+
+@app.route('/api/user-todos', methods=['GET'])
+def get_user_todos():
+    """Get todos for a specific user"""
+    try:
+        email = request.args.get('email')
+        if not email:
+            return jsonify({
+                'success': False,
+                'error': 'Email parameter required'
+            }), 400
+        
+        todos = user_todos.get(email, [])
+        return jsonify({
+            'success': True,
+            'todos': todos
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/user-todos', methods=['POST'])
+def save_user_todos():
+    """Save todos for a user"""
+    try:
+        data = request.get_json()
+        email = data.get('email')
+        todos = data.get('todos', [])
+        
+        if not email:
+            return jsonify({
+                'success': False,
+                'error': 'Email required'
+            }), 400
+        
+        user_todos[email] = todos
+        return jsonify({
+            'success': True,
+            'message': f'Saved {len(todos)} todos for {email}'
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/user-call-notes', methods=['GET'])
+def get_user_call_notes():
+    """Get call notes for a specific user"""
+    try:
+        email = request.args.get('email')
+        if not email:
+            return jsonify({
+                'success': False,
+                'error': 'Email parameter required'
+            }), 400
+        
+        call_notes = user_call_notes.get(email, [])
+        return jsonify({
+            'success': True,
+            'call_notes': call_notes
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/user-call-notes', methods=['POST'])
+def save_user_call_notes():
+    """Save call notes for a user"""
+    try:
+        data = request.get_json()
+        email = data.get('email')
+        call_notes = data.get('call_notes', [])
+        
+        if not email:
+            return jsonify({
+                'success': False,
+                'error': 'Email required'
+            }), 400
+        
+        user_call_notes[email] = call_notes
+        return jsonify({
+            'success': True,
+            'message': f'Saved {len(call_notes)} call notes for {email}'
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/user-chats', methods=['GET'])
+def get_user_chats():
+    """Get chats for a specific user"""
+    try:
+        email = request.args.get('email')
+        if not email:
+            return jsonify({
+                'success': False,
+                'error': 'Email parameter required'
+            }), 400
+        
+        chats = user_chats.get(email, [])
+        return jsonify({
+            'success': True,
+            'chats': chats
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/user-chats', methods=['POST'])
+def save_user_chats():
+    """Save chats for a user"""
+    try:
+        data = request.get_json()
+        email = data.get('email')
+        chats = data.get('chats', [])
+        
+        if not email:
+            return jsonify({
+                'success': False,
+                'error': 'Email required'
+            }), 400
+        
+        user_chats[email] = chats
+        return jsonify({
+            'success': True,
+            'message': f'Saved {len(chats)} chats for {email}'
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/user-messages', methods=['GET'])
+def get_user_messages():
+    """Get messages for a specific chat"""
+    try:
+        chat_id = request.args.get('chat_id')
+        if not chat_id:
+            return jsonify({
+                'success': False,
+                'error': 'chat_id parameter required'
+            }), 400
+        
+        messages = user_messages.get(chat_id, [])
+        return jsonify({
+            'success': True,
+            'messages': messages
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/user-messages', methods=['POST'])
+def save_user_messages():
+    """Save messages for a chat"""
+    try:
+        data = request.get_json()
+        chat_id = data.get('chat_id')
+        messages = data.get('messages', [])
+        
+        if not chat_id:
+            return jsonify({
+                'success': False,
+                'error': 'chat_id required'
+            }), 400
+        
+        user_messages[chat_id] = messages
+        return jsonify({
+            'success': True,
+            'message': f'Saved {len(messages)} messages for chat {chat_id}'
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+# ============================================================================
+# INDUSTRY MOVES ENDPOINTS
+# ============================================================================
+
+@app.route('/api/industry-moves', methods=['GET'])
+def get_industry_moves():
+    """Get industry moves for a user"""
+    try:
+        email = request.args.get('email')
+        if not email:
+            return jsonify({
+                'success': False,
+                'error': 'Email parameter required'
+            }), 400
+        
+        moves = user_industry_moves.get(email, [])
+        return jsonify({
+            'success': True,
+            'moves': moves
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/industry-moves', methods=['POST'])
+def create_industry_move():
+    """Create a new industry move"""
+    try:
+        data = request.get_json()
+        email = data.get('email')
+        move = data.get('move', {})
+        
+        if not email:
+            return jsonify({
+                'success': False,
+                'error': 'Email required'
+            }), 400
+        
+        if not move:
+            return jsonify({
+                'success': False,
+                'error': 'Move data required'
+            }), 400
+        
+        # Initialize user's moves list if needed
+        if email not in user_industry_moves:
+            user_industry_moves[email] = []
+        
+        # Add ID if not present
+        if 'id' not in move:
+            move['id'] = f"move_{int(datetime.now().timestamp() * 1000)}"
+        
+        # Add timestamps
+        if 'created_at' not in move:
+            move['created_at'] = datetime.now().isoformat()
+        move['updated_at'] = datetime.now().isoformat()
+        
+        user_industry_moves[email].append(move)
+        
+        return jsonify({
+            'success': True,
+            'move': move
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/industry-moves/<move_id>', methods=['DELETE'])
+def delete_industry_move(move_id):
+    """Delete an industry move"""
+    try:
+        email = request.args.get('email')
+        if not email:
+            return jsonify({
+                'success': False,
+                'error': 'Email parameter required'
+            }), 400
+        
+        if email not in user_industry_moves:
+            return jsonify({
+                'success': False,
+                'error': 'No moves found for user'
+            }), 404
+        
+        # Remove move with matching ID
+        original_count = len(user_industry_moves[email])
+        user_industry_moves[email] = [m for m in user_industry_moves[email] if m.get('id') != move_id]
+        
+        if len(user_industry_moves[email]) == original_count:
+            return jsonify({
+                'success': False,
+                'error': 'Move not found'
+            }), 404
+        
+        return jsonify({
+            'success': True,
+            'message': 'Move deleted successfully'
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/industry-moves/<move_id>', methods=['PUT'])
+def update_industry_move(move_id):
+    """Update an industry move"""
+    try:
+        email = request.args.get('email')
+        data = request.get_json()
+        move_data = data.get('move', {})
+        
+        if not email:
+            return jsonify({
+                'success': False,
+                'error': 'Email parameter required'
+            }), 400
+        
+        if email not in user_industry_moves:
+            return jsonify({
+                'success': False,
+                'error': 'No moves found for user'
+            }), 404
+        
+        # Find and update move
+        move_found = False
+        for i, move in enumerate(user_industry_moves[email]):
+            if move.get('id') == move_id:
+                move_data['id'] = move_id
+                move_data['updated_at'] = datetime.now().isoformat()
+                if 'created_at' not in move_data:
+                    move_data['created_at'] = move.get('created_at', datetime.now().isoformat())
+                user_industry_moves[email][i] = move_data
+                move_found = True
+                break
+        
+        if not move_found:
+            return jsonify({
+                'success': False,
+                'error': 'Move not found'
+            }), 404
+        
+        return jsonify({
+            'success': True,
+            'move': move_data
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/industry-moves/search/<name>', methods=['GET'])
+def search_industry_moves(name):
+    """Search industry moves by name"""
+    try:
+        email = request.args.get('email')
+        if not email:
+            return jsonify({
+                'success': False,
+                'error': 'Email parameter required'
+            }), 400
+        
+        moves = user_industry_moves.get(email, [])
+        name_lower = name.lower()
+        
+        # Search in person name, company, or role
+        matching_moves = [
+            m for m in moves
+            if name_lower in m.get('person_name', '').lower() or
+               name_lower in m.get('company', '').lower() or
+               name_lower in m.get('role', '').lower()
+        ]
+        
+        return jsonify({
+            'success': True,
+            'moves': matching_moves
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/industry-moves/company/<company>', methods=['GET'])
+def get_company_moves(company):
+    """Get moves for a specific company"""
+    try:
+        email = request.args.get('email')
+        if not email:
+            return jsonify({
+                'success': False,
+                'error': 'Email parameter required'
+            }), 400
+        
+        moves = user_industry_moves.get(email, [])
+        company_lower = company.lower()
+        
+        matching_moves = [
+            m for m in moves
+            if company_lower in m.get('company', '').lower()
+        ]
+        
+        return jsonify({
+            'success': True,
+            'moves': matching_moves
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/industry-moves/leaderboard', methods=['GET'])
+def get_leaderboard():
+    """Get leaderboard of top movers"""
+    try:
+        email = request.args.get('email')
+        if not email:
+            return jsonify({
+                'success': False,
+                'error': 'Email parameter required'
+            }), 400
+        
+        # Aggregate moves across all users to create leaderboard
+        all_moves = []
+        for user_email, moves in user_industry_moves.items():
+            all_moves.extend(moves)
+        
+        # Count moves by person
+        person_counts = {}
+        for move in all_moves:
+            person_name = move.get('person_name', 'Unknown')
+            person_counts[person_name] = person_counts.get(person_name, 0) + 1
+        
+        # Sort by count
+        leaderboard = sorted(
+            [{'name': name, 'count': count} for name, count in person_counts.items()],
+            key=lambda x: x['count'],
+            reverse=True
+        )[:10]  # Top 10
+        
+        return jsonify({
+            'success': True,
+            'leaderboard': leaderboard
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/industry-moves/stats', methods=['GET'])
+def get_industry_moves_stats():
+    """Get statistics about moves"""
+    try:
+        email = request.args.get('email')
+        if not email:
+            return jsonify({
+                'success': False,
+                'error': 'Email parameter required'
+            }), 400
+        
+        moves = user_industry_moves.get(email, [])
+        
+        stats = {
+            'total_moves': len(moves),
+            'unique_companies': len(set(m.get('company', '') for m in moves)),
+            'unique_people': len(set(m.get('person_name', '') for m in moves)),
+            'recent_moves': len([m for m in moves if 'created_at' in m])
+        }
+        
+        return jsonify({
+            'success': True,
+            'stats': stats
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/industry-moves/autocomplete', methods=['GET'])
+def get_autocomplete():
+    """Get autocomplete suggestions"""
+    try:
+        query = request.args.get('query', '').lower()
+        email = request.args.get('email')
+        
+        if not email:
+            return jsonify({
+                'success': False,
+                'error': 'Email parameter required'
+            }), 400
+        
+        moves = user_industry_moves.get(email, [])
+        suggestions = set()
+        
+        # Collect unique names and companies that match query
+        for move in moves:
+            person_name = move.get('person_name', '')
+            company = move.get('company', '')
+            
+            if query in person_name.lower():
+                suggestions.add(person_name)
+            if query in company.lower():
+                suggestions.add(company)
+        
+        return jsonify({
+            'success': True,
+            'suggestions': sorted(list(suggestions))[:10]  # Top 10
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+# ============================================================================
+# COMPENSATION ENDPOINTS
+# ============================================================================
+
+@app.route('/api/compensations', methods=['GET'])
+def get_compensations():
+    """Get compensations for a user"""
+    try:
+        email = request.args.get('email')
+        if not email:
+            return jsonify({
+                'success': False,
+                'error': 'Email parameter required'
+            }), 400
+        
+        compensations = user_compensations.get(email, [])
+        return jsonify({
+            'success': True,
+            'compensations': compensations
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/compensations', methods=['POST'])
+def save_compensations():
+    """Save compensations for a user"""
+    try:
+        email = request.args.get('email')
+        data = request.get_json()
+        compensations = data.get('compensations', [])
+        
+        if not email:
+            return jsonify({
+                'success': False,
+                'error': 'Email parameter required'
+            }), 400
+        
+        user_compensations[email] = compensations
+        return jsonify({
+            'success': True,
+            'message': f'Saved {len(compensations)} compensations for {email}'
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+# ============================================================================
+# SHARING & ASSIGNMENT ENDPOINTS
+# ============================================================================
+
+@app.route('/api/share-call-note', methods=['POST'])
+def share_call_note():
+    """Share a call note with other users"""
+    try:
+        data = request.get_json()
+        call_note_id = data.get('call_note_id')
+        recipient_emails = data.get('recipient_emails', [])
+        sender_email = data.get('sender_email')
+        
+        if not call_note_id or not sender_email:
+            return jsonify({
+                'success': False,
+                'error': 'call_note_id and sender_email required'
+            }), 400
+        
+        # Find the call note in sender's notes
+        sender_notes = user_call_notes.get(sender_email, [])
+        call_note = None
+        for note in sender_notes:
+            if note.get('id') == call_note_id:
+                call_note = note
+                break
+        
+        if not call_note:
+            return jsonify({
+                'success': False,
+                'error': 'Call note not found'
+            }), 404
+        
+        # Share with recipients
+        shared_count = 0
+        for recipient_email in recipient_emails:
+            if recipient_email not in user_call_notes:
+                user_call_notes[recipient_email] = []
+            
+            # Check if already shared
+            existing_ids = [n.get('id') for n in user_call_notes[recipient_email]]
+            if call_note_id not in existing_ids:
+                # Create a copy for the recipient
+                shared_note = call_note.copy()
+                shared_note['shared_by'] = sender_email
+                shared_note['shared_at'] = datetime.now().isoformat()
+                user_call_notes[recipient_email].append(shared_note)
+                shared_count += 1
+        
+        return jsonify({
+            'success': True,
+            'message': f'Shared call note with {shared_count} recipients'
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/assign-task', methods=['POST'])
+def assign_task():
+    """Assign a task to other users"""
+    try:
+        data = request.get_json()
+        task_id = data.get('task_id')
+        assignee_emails = data.get('assignee_emails', [])
+        assigner_email = data.get('assigner_email')
+        
+        if not task_id or not assigner_email:
+            return jsonify({
+                'success': False,
+                'error': 'task_id and assigner_email required'
+            }), 400
+        
+        # Find the task in assigner's todos
+        assigner_todos = user_todos.get(assigner_email, [])
+        task = None
+        for todo in assigner_todos:
+            if todo.get('id') == task_id:
+                task = todo
+                break
+        
+        if not task:
+            return jsonify({
+                'success': False,
+                'error': 'Task not found'
+            }), 404
+        
+        # Assign to recipients
+        assigned_count = 0
+        for assignee_email in assignee_emails:
+            if assignee_email not in user_todos:
+                user_todos[assignee_email] = []
+            
+            # Create assigned task copy
+            assigned_task = task.copy()
+            assigned_task['id'] = f"{task_id}_{assignee_email}_{int(datetime.now().timestamp())}"
+            assigned_task['assigned_by'] = assigner_email
+            assigned_task['assigned_at'] = datetime.now().isoformat()
+            assigned_task['assigned_to'] = assignee_email
+            user_todos[assignee_email].append(assigned_task)
+            assigned_count += 1
+        
+        return jsonify({
+            'success': True,
+            'message': f'Assigned task to {assigned_count} users'
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+# ============================================================================
+# DEVICE TOKEN REGISTRATION
+# ============================================================================
+
+@app.route('/api/register-device-token', methods=['POST'])
+def register_device_token():
+    """Register device token for push notifications"""
+    try:
+        data = request.get_json()
+        device_token = data.get('device_token')
+        email = data.get('email')
+        platform = data.get('platform', 'ios')
+        
+        if not device_token or not email:
+            return jsonify({
+                'success': False,
+                'error': 'device_token and email required'
+            }), 400
+        
+        device_tokens[email] = {
+            'device_token': device_token,
+            'platform': platform,
+            'updated_at': datetime.now().isoformat()
+        }
+        
+        return jsonify({
+            'success': True,
+            'message': 'Device token registered successfully'
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+# ============================================================================
+# CALL NOTES SUMMARY ENDPOINT
+# ============================================================================
+
+@app.route('/api/call-notes/summary', methods=['POST'])
+def call_notes_summary():
+    """Generate AI summary from call note transcript"""
+    try:
+        data = request.get_json()
+        transcript = data.get('transcript', '')
+        context = data.get('context', {})
+        
+        if not transcript:
+            return jsonify({
+                'success': False,
+                'error': 'Transcript required'
+            }), 400
+        
+        # Use the existing AI processing system
+        summary_prompt = f"""
+        Please analyze this call transcript and provide a structured summary:
+
+        TRANSCRIPT:
+        {transcript}
+
+        Please provide:
+        1. Executive Summary (2-3 sentences)
+        2. Key Points (bullet points)
+        3. Action Items (bullet points)
+        4. Participants (if identifiable)
+        5. Meeting Duration/Type (if mentioned)
+
+        Format as a professional meeting summary.
+        """
+        
+        # Process using AI assistant
+        ai_response = process_ai_query(summary_prompt, context)
+        
+        summary = {
+            'executive_summary': ai_response.get('text', ''),
+            'key_points': [],
+            'action_items': [],
+            'participants': [],
+            'generated_at': datetime.now().isoformat()
+        }
+        
+        return jsonify({
+            'success': True,
+            'summary': summary
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 if __name__ == '__main__':
     # Force restart to pick up new template and text parsing fixes
     port = int(os.environ.get('PORT', 5001))
