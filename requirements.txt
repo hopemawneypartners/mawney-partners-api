@@ -43,3 +43,30 @@ xhtml2pdf==0.2.15
 
 # Push Notifications
 PyAPNs2==2.0.0
+
+# Security & Authentication
+flask-jwt-extended==4.6.0
+PyJWT==2.8.0
+cryptography==42.0.0
+flask-limiter==3.5.0
+pydantic==2.5.3
+pydantic-settings==2.1.0
+python-dotenv==1.0.0
+
+# Database
+psycopg2-binary==2.9.9
+SQLAlchemy==2.0.23
+alembic==1.13.1
+
+# Redis (for rate limiting and token blacklist)
+redis==5.0.1
+
+# Security Monitoring
+sentry-sdk[flask]==1.40.0
+
+# Password Hashing
+bcrypt==4.1.2
+
+# TOTP for MFA
+pyotp==2.9.0
+qrcode==7.4.2

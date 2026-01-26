@@ -53,3 +53,7 @@ data/
 tmp/
 temp/
 
+.env
+*.db
+audit_logs/
+__pycache__/
