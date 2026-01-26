@@ -1697,14 +1697,38 @@ ai_assistant = CustomAIAssistant()
 
 def process_ai_query(query: str, context: Dict = None) -> Dict:
     """Main function to process AI queries"""
-    response = ai_assistant.process_query(query, context)
-    return {
-        "text": response.text,
-        "type": response.type,
-        "confidence": response.confidence,
-        "sources": response.sources or [],
-        "actions": response.actions or []
-    }
+    try:
+        if not query or not query.strip():
+            return {
+                "text": "Please provide a question or request.",
+                "type": "error",
+                "confidence": 0.0,
+                "sources": [],
+                "actions": []
+            }
+        
+        response = ai_assistant.process_query(query, context)
+        
+        # Ensure consistent response format with all required fields
+        return {
+            "text": response.text or "I couldn't process that request. Please try again.",
+            "type": response.type or "answer",
+            "confidence": response.confidence if response.confidence is not None else 0.5,
+            "sources": response.sources or [],
+            "actions": response.actions or []
+        }
+    except Exception as e:
+        logger.error(f"Error in process_ai_query: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        return {
+            "text": f"I encountered an error processing your request: {str(e)}. Please try again.",
+            "type": "error",
+            "confidence": 0.0,
+            "sources": [],
+            "actions": [],
+            "error": str(e)
+        }
 
 def process_ai_query_with_files(query: str, context: Dict = None, file_analyses: List[Dict] = None) -> Dict:
     """Process AI queries with file attachments"""
@@ -1748,7 +1772,7 @@ def process_ai_query_with_files(query: str, context: Dict = None, file_analyses:
         
         # If we have CV file info, use it directly
         if cv_file_info:
-            return {
+            response_dict = {
                 "text": cv_file_info.get('text', ''),
                 "type": "cv_formatting",
                 "confidence": 0.95,
@@ -1756,10 +1780,16 @@ def process_ai_query_with_files(query: str, context: Dict = None, file_analyses:
                 "actions": [],
                 "cv_file": cv_file_info.get('file_info'),
                 "download_url": cv_file_info.get('download_url'),
+                "download_filename": cv_file_info.get('download_filename') or cv_file_info.get('filename'),
                 "filename": cv_file_info.get('filename'),
-                "html_content": cv_file_info.get('html_content'),
-                "html_base64": cv_file_info.get('html_base64')
+                "file_format": cv_file_info.get('file_format', 'pdf'),
+                "file_base64": cv_file_info.get('file_base64'),
+                "html_base64": cv_file_info.get('html_base64') or cv_file_info.get('file_base64')  # For iOS compatibility
             }
+            # Only include html_content if explicitly provided (shouldn't normally be sent)
+            if cv_file_info.get('html_content'):
+                response_dict["html_content"] = cv_file_info.get('html_content')
+            return response_dict
         
         # Process the enhanced query
         response = ai_assistant.process_query(enhanced_query, enhanced_context)
@@ -1770,22 +1800,26 @@ def process_ai_query_with_files(query: str, context: Dict = None, file_analyses:
             response.type = 'file_analysis' if response.type == 'answer' else response.type
             response.confidence = min(response.confidence + 0.1, 1.0)  # Boost confidence for file analysis
         
+        # Ensure consistent response format
         return {
-            "text": response.text,
-            "type": response.type,
-            "confidence": response.confidence,
+            "text": response.text or "I couldn't process that request. Please try again.",
+            "type": response.type or "answer",
+            "confidence": response.confidence if response.confidence is not None else 0.5,
             "sources": response.sources or [],
             "actions": response.actions or []
         }
         
     except Exception as e:
         logger.error(f"Error processing AI query with files: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return {
             "text": f"I encountered an error while analyzing your files: {str(e)}. Please try again or contact support.",
             "type": "error",
             "confidence": 0.0,
             "sources": [],
-            "actions": []
+            "actions": [],
+            "error": str(e)  # Include error details for debugging
         }
 
 def _format_file_context_for_ai(file_analyses: List[Dict]) -> str:

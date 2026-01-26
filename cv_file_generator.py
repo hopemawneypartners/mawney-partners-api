@@ -79,13 +79,17 @@ class CVFileGenerator:
             # Get file size
             file_size = os.path.getsize(filepath)
             
+            # Use full URL for Render.com deployment
+            base_url = os.environ.get('BASE_URL', 'https://mawney-daily-news-api.onrender.com')
+            download_url = f"{base_url}/api/download-cv/{filename}"
+            
             return {
                 "success": True,
                 "filename": filename,
                 "filepath": filepath,
                 "file_size": file_size,
                 "format": "html",
-                "download_url": f"/api/download-cv/{filename}",
+                "download_url": download_url,
                 "message": "CV file generated successfully"
             }
             
@@ -193,13 +197,16 @@ class CVFileGenerator:
 
             # At this point, a PDF should exist
             file_size = os.path.getsize(filepath)
+            # Use full URL for Render.com deployment
+            base_url = os.environ.get('BASE_URL', 'https://mawney-daily-news-api.onrender.com')
+            download_url = f"{base_url}/api/download-cv/{filename}"
             return {
                 "success": True,
                 "filename": filename,
                 "filepath": filepath,
                 "file_size": file_size,
                 "format": "pdf",
-                "download_url": f"/api/download-cv/{filename}",
+                "download_url": download_url,
                 "message": "CV PDF generated successfully"
             }
             

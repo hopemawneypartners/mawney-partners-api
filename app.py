@@ -2394,21 +2394,49 @@ def handle_ai_assistant_text_only():
         store_interaction(message, ai_response['text'], ai_response['type'], ai_response['confidence'])
         
         # Return response in expected format (support both iOS and other clients)
-        return jsonify({
+        response_data = {
             "success": True,
-            "text": ai_response['text'],  # iOS app expects 'text'
-            "response": ai_response['text'],  # Alternative key for compatibility
-            "type": ai_response['type'],
-            "confidence": ai_response['confidence'],
+            "text": ai_response.get('text', 'I couldn't process that request. Please try again.'),  # iOS app expects 'text'
+            "response": ai_response.get('text', ''),  # Alternative key for compatibility
+            "type": ai_response.get('type', 'answer'),
+            "confidence": ai_response.get('confidence', 0.5),
             "sources": ai_response.get('sources', []),
             "actions": ai_response.get('actions', [])
-        })
+        }
+        
+        # Add any additional fields (like download info for CV formatting)
+        if 'download_url' in ai_response:
+            response_data['download_url'] = ai_response['download_url']
+        if 'download_filename' in ai_response:
+            response_data['download_filename'] = ai_response['download_filename']
+        if 'filename' in ai_response:
+            response_data['filename'] = ai_response['filename']
+        if 'file_format' in ai_response:
+            response_data['file_format'] = ai_response['file_format']
+        if 'file_base64' in ai_response:
+            response_data['file_base64'] = ai_response['file_base64']
+        if 'html_base64' in ai_response:
+            response_data['html_base64'] = ai_response['html_base64']
+        if 'html_content' in ai_response:
+            response_data['html_content'] = ai_response['html_content']
+        if 'error' in ai_response:
+            response_data['error'] = ai_response['error']
+            response_data['success'] = False
+        
+        return jsonify(response_data)
         
     except Exception as e:
         print(f"❌ Error in text-only AI assistant: {e}")
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
         return jsonify({
             "success": False,
-            "error": f"Text processing error: {str(e)}"
+            "text": f"I encountered an error processing your request: {str(e)}. Please try again.",
+            "error": f"Text processing error: {str(e)}",
+            "type": "error",
+            "confidence": 0.0,
+            "sources": [],
+            "actions": []
         }), 500
 
 def handle_ai_assistant_with_attachments():
@@ -2486,10 +2514,10 @@ def handle_ai_assistant_with_attachments():
         # Return response in expected format
         response_data = {
             "success": True,
-            "text": ai_response['text'],  # iOS app expects 'text'
-            "response": ai_response['text'],  # Alternative key for compatibility
-            "type": ai_response['type'],
-            "confidence": ai_response['confidence'],
+            "text": ai_response.get('text', 'I couldn't process that request. Please try again.'),  # iOS app expects 'text'
+            "response": ai_response.get('text', ''),  # Alternative key for compatibility
+            "type": ai_response.get('type', 'answer'),
+            "confidence": ai_response.get('confidence', 0.5),
             "sources": ai_response.get('sources', []),
             "actions": ai_response.get('actions', []),
             "attachments_processed": len(file_analyses),
@@ -2504,18 +2532,40 @@ def handle_ai_assistant_with_attachments():
         # Add CV file download info if available
         if ai_response.get('download_url'):
             response_data['download_url'] = ai_response['download_url']
-            response_data['download_filename'] = ai_response.get('filename')
-            response_data['cv_file'] = ai_response.get('cv_file')
-            response_data['html_content'] = ai_response.get('html_content')
-            response_data['html_base64'] = ai_response.get('html_base64')
+        if ai_response.get('download_filename'):
+            response_data['download_filename'] = ai_response['download_filename']
+        if ai_response.get('filename'):
+            response_data['filename'] = ai_response['filename']
+        if ai_response.get('file_format'):
+            response_data['file_format'] = ai_response['file_format']
+        if ai_response.get('file_base64'):
+            response_data['file_base64'] = ai_response['file_base64']
+        if ai_response.get('cv_file'):
+            response_data['cv_file'] = ai_response['cv_file']
+        if ai_response.get('html_content'):
+            response_data['html_content'] = ai_response['html_content']
+        if ai_response.get('html_base64'):
+            response_data['html_base64'] = ai_response['html_base64']
+        if ai_response.get('error'):
+            response_data['error'] = ai_response['error']
+            response_data['success'] = False
         
         return jsonify(response_data)
         
     except Exception as e:
         print(f"❌ Error in attachment AI assistant: {e}")
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
         return jsonify({
             "success": False,
-            "error": f"Attachment processing error: {str(e)}"
+            "text": f"I encountered an error processing your files: {str(e)}. Please try again.",
+            "error": f"Attachment processing error: {str(e)}",
+            "type": "error",
+            "confidence": 0.0,
+            "sources": [],
+            "actions": [],
+            "attachments_processed": 0,
+            "file_summaries": []
         }), 500
 
 @app.route('/api/ai/chat', methods=['POST'])
