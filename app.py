@@ -28,10 +28,6 @@ from security.auth import get_current_user, require_auth
 from security.permissions import require_ownership, verify_data_ownership
 from security.encryption import encrypt_dict_fields, decrypt_dict_fields, SENSITIVE_FIELDS
 
-# Import Routes
-from routes.auth import auth_bp
-from routes.gdpr import gdpr_bp
-
 app = Flask(__name__)
 CORS(app)
 
@@ -41,8 +37,12 @@ app.config['JWT_SECRET_KEY'] = settings.JWT_SECRET_KEY
 app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(seconds=settings.JWT_ACCESS_TOKEN_EXPIRES)
 app.config['JWT_REFRESH_TOKEN_EXPIRES'] = timedelta(seconds=settings.JWT_REFRESH_TOKEN_EXPIRES)
 
-# Set up rate limiting
+# Set up rate limiting BEFORE importing routes (so limiter is available)
 setup_rate_limiting(app)
+
+# Import routes AFTER rate limiting is set up
+from routes.auth import auth_bp
+from routes.gdpr import gdpr_bp
 
 # Register blueprints
 app.register_blueprint(auth_bp)

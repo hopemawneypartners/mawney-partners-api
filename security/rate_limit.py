@@ -99,12 +99,25 @@ def get_rate_limiter():
 # Rate limit decorators for specific endpoints
 def rate_limit_auth():
     """Rate limit for authentication endpoints"""
+    if limiter is None:
+        # Return a no-op decorator if limiter not initialized yet
+        def noop_decorator(f):
+            return f
+        return noop_decorator
     return limiter.limit(f"{settings.RATE_LIMIT_AUTH_ATTEMPTS} per minute")
 
 def rate_limit_data_export():
     """Rate limit for data export endpoints"""
+    if limiter is None:
+        def noop_decorator(f):
+            return f
+        return noop_decorator
     return limiter.limit("1 per hour")
 
 def rate_limit_file_upload():
     """Rate limit for file upload endpoints"""
+    if limiter is None:
+        def noop_decorator(f):
+            return f
+        return noop_decorator
     return limiter.limit("10 per minute")
