@@ -58,3 +58,12 @@ temp/
 audit_logs/
 __pycache__/
 .env
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+mawney_api.db
+
+# Audit logs
+audit_logs/
