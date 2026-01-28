@@ -715,9 +715,34 @@ class MawneyTemplateFormatter:
             current_experience['responsibilities'] = current_responsibilities
             experience_patterns.append(current_experience)
         
+        # If we didn't find any experience but we're in a CV, try a more aggressive search
+        if not experience_patterns and experience_section:
+            logger.warning("No experience entries found with standard parsing, trying aggressive search")
+            # Look for any line with dates and job-like keywords anywhere in the text
+            for i, line in enumerate(lines):
+                if re.search(r'\b(19|20)\d{2}\s*[-–]', line, re.IGNORECASE) or re.search(r'\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}\s*[-–]', line, re.IGNORECASE):
+                    if any(indicator in line.lower() for indicator in job_title_indicators + company_indicators):
+                        # Try to extract job info
+                        parts = re.split(r'\s*[—–-]\s*|\s*,\s*', line)
+                        date_match = re.search(r'((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}|\d{4})\s*[-–]\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}|\d{4}|Present|Current|Now)', line, re.IGNORECASE)
+                        dates = date_match.group(0).strip() if date_match else ""
+                        line_without_dates = re.sub(r'\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}|\d{4})\s*[-–]\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}|\d{4}|Present|Current|Now)\s*', '', line).strip()
+                        parts = re.split(r'\s*[—–-]\s*|\s*,\s*', line_without_dates)
+                        title = parts[0].strip() if parts else line_without_dates
+                        company = parts[1].strip() if len(parts) > 1 else ""
+                        company = self._reconstruct_company_names(company)
+                        experience_patterns.append({
+                            'title': title if title else 'POSITION',
+                            'company': company if company else 'COMPANY',
+                            'location': parts[2].strip() if len(parts) > 2 else '',
+                            'dates': dates,
+                            'responsibilities': []
+                        })
+        
         # If we found experience patterns, use them
         if experience_patterns:
             parsed['experience'] = experience_patterns
+            logger.info(f"Extracted {len(experience_patterns)} experience entries")
         else:
             # Fallback to original parsing logic
             experience_section = False
