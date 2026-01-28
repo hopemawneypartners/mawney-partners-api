@@ -1275,10 +1275,38 @@ class MawneyTemplateFormatter:
         if current_education:
             education_items.append(current_education)
         
-        parsed['education'] = education_items
-        logger.info(f"✅ Extracted {len(education_items)} education entries")
-        for i, edu in enumerate(education_items):
-            logger.info(f"   Education {i+1}: {edu.get('degree', 'N/A')} at {edu.get('school', 'N/A')}")
+        # Combine top section education with main education section
+        all_education = top_section_education + education_items
+        
+        # Remove duplicates and convert to consistent format
+        seen = set()
+        unique_education = []
+        for edu in all_education:
+            # Convert top_section_education format to main format
+            if 'institution' in edu:
+                # Top section format: {'degree': ..., 'institution': ..., 'year': ...}
+                key = (edu.get('degree', '').lower(), edu.get('institution', '').lower(), edu.get('year', ''))
+                if key not in seen and key != ('degree', 'institution', ''):
+                    seen.add(key)
+                    unique_education.append({
+                        'school': edu.get('institution', ''),
+                        'degree': edu.get('degree', ''),
+                        'dates': edu.get('year', ''),
+                        'details': []
+                    })
+            else:
+                # Main section format: {'school': ..., 'degree': ..., 'dates': ...}
+                key = (edu.get('degree', '').lower(), edu.get('school', '').lower(), edu.get('dates', ''))
+                if key not in seen and key != ('degree', 'school', ''):
+                    seen.add(key)
+                    unique_education.append(edu)
+        
+        parsed['education'] = unique_education
+        logger.info(f"✅ Extracted {len(unique_education)} education entries ({len(top_section_education)} from top section, {len(education_items)} from main section)")
+        for i, edu in enumerate(unique_education):
+            degree = edu.get('degree', 'N/A')
+            institution = edu.get('school', 'N/A')
+            logger.info(f"   Education {i+1}: {degree} at {institution}")
         
         # Extract skills: capture lines under a SKILLS header with better parsing
         try:
