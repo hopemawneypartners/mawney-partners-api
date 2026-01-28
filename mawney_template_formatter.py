@@ -885,16 +885,39 @@ class MawneyTemplateFormatter:
                 
                 if looks_like_job_title:
                     print(f"   Line {i}: Found potential job title ending with ':': '{line_stripped}'")
-                    # Check next line for company/location/dates
-                    if i+1 < len(lines):
-                        next_line = lines[i+1].strip()
+                    # Check next few lines for company/location/dates (skip email/contact lines)
+                    # Look ahead up to 3 lines to find the company/dates line
+                    found_company_line = None
+                    for offset in range(1, min(4, len(lines) - i)):  # Check next 1-3 lines
+                        candidate_line = lines[i+offset].strip()
+                        candidate_lower = candidate_line.lower()
+                        
+                        # Skip email lines, phone lines, very short lines, or lines that are just fragments
+                        if ('@' in candidate_line or 
+                            re.search(r'\+?[\d\s\-\(\)]{10,}', candidate_line) or
+                            len(candidate_line) < 5 or
+                            len(candidate_line.split()) == 1):
+                            continue
+                        
+                        has_date = bool(re.search(r'\b(19|20)\d{2}\s*[-–]', candidate_line, re.IGNORECASE))
+                        has_month_date = bool(re.search(r'\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}\s*[-–]', candidate_line, re.IGNORECASE))
+                        looks_like_company = any(indicator in candidate_lower for indicator in company_indicators)
+                        
+                        print(f"      Line {i+offset}: '{candidate_line[:50]}...'")
+                        print(f"      has_date: {has_date}, has_month_date: {has_month_date}, looks_like_company: {looks_like_company}")
+                        
+                        # If this line has dates OR looks like a company, it's the company/dates line
+                        if has_date or has_month_date or looks_like_company:
+                            found_company_line = candidate_line
+                            break
+                    
+                    # If we found a company/dates line, extract the job entry
+                    if found_company_line:
+                        next_line = found_company_line
                         next_line_lower = next_line.lower()
                         has_date_next = bool(re.search(r'\b(19|20)\d{2}\s*[-–]', next_line, re.IGNORECASE))
                         has_month_date_next = bool(re.search(r'\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}\s*[-–]', next_line, re.IGNORECASE))
                         looks_like_company_next = any(indicator in next_line_lower for indicator in company_indicators)
-                        
-                        print(f"      Next line: '{next_line[:50]}...'")
-                        print(f"      has_date_next: {has_date_next}, has_month_date_next: {has_month_date_next}, looks_like_company_next: {looks_like_company_next}")
                         
                         # Be more lenient - if it has dates OR looks like a company, it's likely a job entry
                         if has_date_next or has_month_date_next or looks_like_company_next:
