@@ -2236,8 +2236,11 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
             template_formatter_primary = MawneyTemplateFormatter()
             # Get font_info from CV file analysis for better name extraction
             font_info = cv_file.get('document_properties', {}).get('font_info', [])
+            logger.info(f"🎯 Calling template formatter with {len(cv_content)} chars of CV content")
             formatted_result = template_formatter_primary.format_cv_with_template(cv_content, filename, font_info=font_info)
-        except Exception:
+            logger.info(f"🎯 Template formatter returned: success={formatted_result.get('success')}, html_length={len(formatted_result.get('html_content', '') or formatted_result.get('html_version', ''))}")
+        except Exception as e:
+            logger.error(f"❌ Template formatter exception: {e}", exc_info=True)
             formatted_result = {}
 
         # If template output is insufficient, fall back to deterministic work-experience and cascade formatters

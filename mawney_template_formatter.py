@@ -23,11 +23,26 @@ class MawneyTemplateFormatter:
     def format_cv_with_template(self, cv_data: str, filename: str = '', font_info: List[Dict] = None) -> Dict[str, Any]:
         """Format CV using the exact Mawney Partners template (compatible with AI assistant)"""
         try:
+            logger.info(f"🎯 format_cv_with_template called with {len(cv_data)} chars of data")
             logger.info(f"Using template path: {self.template_path}")
             logger.info(f"Template exists: {os.path.exists(self.template_path)}")
             
+            if not os.path.exists(self.template_path):
+                logger.error(f"❌ Template file not found at: {self.template_path}")
+                return {
+                    'success': False,
+                    'error': f"Template file not found: {self.template_path}",
+                    'html_version': '',
+                    'html_content': '',
+                    'text_version': '',
+                    'download_url': '',
+                    'download_filename': ''
+                }
+            
             # Parse the CV data (pass font_info for better name extraction)
+            logger.info(f"📝 Starting CV data parsing...")
             parsed_data = self._parse_cv_data(cv_data, font_info=font_info)
+            logger.info(f"📝 CV data parsing completed")
             
             # Log what was extracted for debugging
             logger.info(f"📊 Parsed CV data summary:")
