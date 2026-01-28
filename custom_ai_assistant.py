@@ -2331,6 +2331,15 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
 
         html_content = _sanitize_html_for_ios_print(html_content)
         
+        # Debug: Log a sample of the final HTML to see what's actually in it
+        print(f"📄 Final HTML content sample (first 2000 chars):")
+        print(html_content[:2000])
+        print(f"📄 HTML contains NAME placeholder: {'{NAME}' in html_content}")
+        print(f"📄 HTML contains CONTACT_INFO placeholder: {'{CONTACT_INFO}' in html_content}")
+        print(f"📄 HTML contains SKILLS_LIST placeholder: {'{SKILLS_LIST}' in html_content}")
+        print(f"📄 HTML contains EXPERIENCE_ITEMS placeholder: {'{EXPERIENCE_ITEMS}' in html_content}")
+        print(f"📄 HTML contains EDUCATION_ITEMS placeholder: {'{EDUCATION_ITEMS}' in html_content}")
+        
         # Ensure MP logos present by embedding/replacing base64 logos
         try:
             import os, base64
