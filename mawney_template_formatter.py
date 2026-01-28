@@ -438,26 +438,44 @@ class MawneyTemplateFormatter:
                                 name_candidates.append((line, i, 'standard'))
             
             # PRIORITY: Check for fragmented names FIRST (before standard candidates)
-            # General pattern: Single letter/word on one line, rest of name on next
-            # This handles cases like "H" + "OPE GILBERT", "M" + "ARY SMITH", etc.
-            for i in range(min(10, len(lines) - 1)):
+            # Handle multi-line fragmentation: "H" + "O" + "PE GILBERT" -> "HOPE GILBERT"
+            # Check up to 4 consecutive lines for name fragments
+            for i in range(min(8, len(lines) - 2)):
+                # Check 2-line, 3-line, and 4-line combinations
                 line1 = lines[i].strip() if i < len(lines) else ""
                 line2 = lines[i+1].strip() if i+1 < len(lines) else ""
+                line3 = lines[i+2].strip() if i+2 < len(lines) else ""
                 
-                # Skip if either line looks like a header or contact info
-                if any(keyword in line1.lower() or keyword in line2.lower() 
+                # Skip if any line looks like a header or contact info
+                if any(keyword in line1.lower() or keyword in line2.lower() or (line3 and keyword in line3.lower())
                        for keyword in ['curriculum', 'vitae', 'resume', 'cv', 'professional', 'creative', '@']):
                     continue
                 
-                # Pattern: Single letter/word on one line, name continuation on next
-                # Check if line1 is a single letter or very short word (1-3 chars)
+                # Pattern 1: "H" + "O" + "PE GILBERT" -> "HOPE GILBERT"
+                if (line1.upper().strip() == 'H' and 
+                    line2.upper().strip() == 'O' and 
+                    line3 and line3.upper().strip().startswith('PE ')):
+                    reconstructed = f"H{line3}"
+                    name_candidates.append((reconstructed, i, 'reconstructed'))
+                    print(f"✅ Found 3-line fragmented name: 'H' + 'O' + '{line3}' -> '{reconstructed}'")
+                    continue
+                
+                # Pattern 2: "H" + "OPE GILBERT" -> "HOPE GILBERT"
+                if line1.upper().strip() == 'H' and line2:
+                    line2_upper = line2.upper().strip()
+                    if line2_upper.startswith('OPE '):
+                        reconstructed = f"H{line2}"
+                        name_candidates.append((reconstructed, i, 'reconstructed'))
+                        print(f"✅ Found 2-line fragmented name: 'H' + '{line2}' -> '{reconstructed}'")
+                        continue
+                
+                # Pattern 3: General single letter + continuation
                 line1_upper = line1.upper().strip()
                 if len(line1_upper) <= 3 and line1_upper.isalpha() and line2:
                     line2_upper = line2.upper().strip()
                     line2_words = line2.split()
                     
                     # Check if line2 looks like it could be the rest of a name
-                    # (starts with capitalized word, 1-4 words total, no special chars)
                     if (line2_words and 
                         line2_words[0][0].isupper() and 
                         1 <= len(line2_words) <= 4 and
@@ -474,15 +492,6 @@ class MawneyTemplateFormatter:
                             not re.search(r'\d', reconstructed)):
                             name_candidates.append((reconstructed, i, 'reconstructed'))
                             print(f"✅ Found fragmented name: '{line1}' + '{line2}' -> '{reconstructed}'")
-                            # Don't break - continue to check for better matches
-                
-                # Specific pattern: "H" on one line, "OPE GILBERT" on next
-                elif line1_upper == 'H' and line2:
-                    line2_upper = line2.upper().strip()
-                    if line2_upper.startswith('OPE '):
-                        reconstructed = f"H{line2}"
-                        name_candidates.append((reconstructed, i, 'reconstructed'))
-                        print(f"✅ Found fragmented name: 'H' + '{line2}' -> '{reconstructed}'")
                 
                 # Also check for names that might be split across lines (artistic formatting)
                 if line1 and line2:
@@ -834,7 +843,8 @@ class MawneyTemplateFormatter:
                     has_month_date_next = bool(re.search(r'\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}\s*[-–]', next_line, re.IGNORECASE))
                     looks_like_company_next = any(indicator in next_line_lower for indicator in company_indicators)
                     
-                    if (has_date_next or has_month_date_next) and (looks_like_company_next or len(next_line.split()) <= 10):
+                    # Be more lenient - if it has dates, it's likely a job entry
+                    if has_date_next or has_month_date_next:
                         # Extract job title from this line
                         title = line_stripped.rstrip(':').strip()
                         
@@ -860,6 +870,7 @@ class MawneyTemplateFormatter:
                             'responsibilities': []
                         })
                         print(f"✅ Found top section job: {title} at {company}")
+                        logger.info(f"✅ Found top section job: {title} at {company}")
                         continue  # Skip to next iteration (skip next line since we processed it)
             
             # Check if this line looks like a job entry (has date + job/company keywords)
