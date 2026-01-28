@@ -3901,9 +3901,14 @@ def get_autocomplete():
                 if query in to_company.lower():
                     suggestions.add(to_company)
         
+        # The iOS app expects: { success: true, suggestions: { job_titles: [...], companies: [...] } }
+        # For now, we put all suggestions into the companies list and leave job_titles empty.
         return jsonify({
             'success': True,
-            'suggestions': sorted(list(suggestions))[:10]  # Top 10
+            'suggestions': {
+                'job_titles': [],
+                'companies': sorted(list(suggestions))[:10]  # Top 10
+            }
         })
     except Exception as e:
         return jsonify({
