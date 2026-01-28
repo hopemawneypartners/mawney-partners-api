@@ -696,6 +696,7 @@ class MawneyTemplateFormatter:
             
             # Detect end of experience section - but be careful not to stop too early
             # Only stop if we see a clear section header, not just keywords in content
+            # IMPORTANT: Don't stop on partial matches - only stop on clear section headers
             if experience_section:
                 # Check if this is a section header (short line, all caps or title case, common header words)
                 is_section_header = (len(line) < 50 and 
@@ -1060,8 +1061,14 @@ class MawneyTemplateFormatter:
                     skills_section = True
                     continue
                 
-                # Detect skills section end
-                if skills_section and any(h in ll for h in ['education', 'experience', 'summary', 'profile', 'interests', 'certifications', 'languages']):
+                # Detect skills section end - only if it's a clear section header (all caps or starts with keyword)
+                # Don't stop on partial matches in content
+                is_section_header = (line_clean.isupper() or 
+                                    line_clean.startswith(('EDUCATION', 'Education', 'EXPERIENCE', 'Experience', 
+                                                           'SUMMARY', 'Summary', 'PROFILE', 'Profile',
+                                                           'INTERESTS', 'Interests', 'CERTIFICATIONS', 'Certifications',
+                                                           'LANGUAGES', 'Languages')))
+                if skills_section and is_section_header:
                     # Process any pending skill group
                     if current_skill_group:
                         skills_collected.extend(current_skill_group)
