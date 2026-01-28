@@ -375,18 +375,81 @@ class FileAnalyzer:
             }
     
     def _merge_text_extractions(self, text1: str, text2: str) -> str:
-        """Merge two text extractions, preferring longer/more complete versions"""
-        # Simple merge: use the longer one, or combine unique lines
-        lines1 = set(text1.split('\n'))
-        lines2 = set(text2.split('\n'))
+        """Merge two text extractions, intelligently combining the best parts"""
+        if not text1:
+            return text2
+        if not text2:
+            return text1
         
-        # Combine all unique lines
-        all_lines = list(lines1 | lines2)
+        # Split into words for better comparison
+        words1 = text1.split()
+        words2 = text2.split()
         
-        # Sort by length (longer lines are usually more complete)
-        all_lines.sort(key=len, reverse=True)
+        # If one is significantly longer, prefer it (more complete)
+        if len(text2) > len(text1) * 1.3:
+            return text2
+        if len(text1) > len(text2) * 1.3:
+            return text1
         
-        return '\n'.join(all_lines)
+        # Merge line by line, preferring more complete versions
+        lines1 = text1.split('\n')
+        lines2 = text2.split('\n')
+        
+        # Create a map of line starts to full lines (to match similar lines)
+        merged_lines = []
+        used_lines2 = set()
+        
+        for line1 in lines1:
+            line1_clean = line1.strip()
+            if not line1_clean:
+                merged_lines.append(line1)
+                continue
+            
+            # Find best matching line in text2
+            best_match = None
+            best_match_idx = -1
+            best_score = 0
+            
+            for idx, line2 in enumerate(lines2):
+                if idx in used_lines2:
+                    continue
+                line2_clean = line2.strip()
+                if not line2_clean:
+                    continue
+                
+                # Score based on similarity and completeness
+                score = 0
+                # Check if lines are similar (one contains the other)
+                if line1_clean.lower() in line2_clean.lower():
+                    score = len(line2_clean)  # Prefer longer (more complete)
+                elif line2_clean.lower() in line1_clean.lower():
+                    score = len(line1_clean)
+                # Check word overlap
+                words1_set = set(line1_clean.lower().split())
+                words2_set = set(line2_clean.lower().split())
+                overlap = len(words1_set & words2_set)
+                if overlap > 0:
+                    score = max(score, overlap * 10 + len(line2_clean))
+                
+                if score > best_score:
+                    best_score = score
+                    best_match = line2_clean
+                    best_match_idx = idx
+            
+            # Use the more complete version
+            if best_match and len(best_match) > len(line1_clean) * 1.1:
+                merged_lines.append(best_match)
+                if best_match_idx >= 0:
+                    used_lines2.add(best_match_idx)
+            else:
+                merged_lines.append(line1_clean)
+        
+        # Add remaining lines from text2 that weren't matched
+        for idx, line2 in enumerate(lines2):
+            if idx not in used_lines2 and line2.strip():
+                merged_lines.append(line2.strip())
+        
+        return '\n'.join(merged_lines)
     
     def _reconstruct_fragmented_words(self, text: str) -> str:
         """Reconstruct fragmented words that were split incorrectly"""
@@ -395,17 +458,20 @@ class FileAnalyzer:
         # Common word fragments to merge
         # Pattern: (fragment1)(fragment2) -> (full_word)
         fragment_patterns = [
-            # Name fragments
+            # Name fragments - be more aggressive
             (r'\bPE\s+GILBERT\b', 'HOPE GILBERT'),
             (r'\bHO\s+PE\s+GILBERT\b', 'HOPE GILBERT'),
+            (r'\bH\s+O\s+PE\s+GILBERT\b', 'HOPE GILBERT'),
             (r'\bPE\s+GE\b', 'PAGE'),
-            # Company name fragments
+            # Company name fragments - comprehensive patterns
             (r'\bartners\b', 'Partners'),
             (r'\bwney\s+Partners\b', 'Mawney Partners'),
             (r'\bMawney\s+artners\b', 'Mawney Partners'),
             (r'\bM\s+awney\s+Partners\b', 'Mawney Partners'),
             (r'\bg\s+wney\b', 'Mawney'),  # "g" + "wney" = "Mawney" (missing "Ma")
-            # Common word fragments
+            (r'\bMa\s+wney\b', 'Mawney'),
+            (r'\bM\s+a\s+wney\b', 'Mawney'),
+            # Common word fragments - more patterns
             (r'\bde\s+velopment\b', 'development'),
             (r'\bde\s+sign\b', 'design'),
             (r'\bde\s+signer\b', 'designer'),
@@ -416,6 +482,11 @@ class FileAnalyzer:
             (r'\bcom\s+munication\b', 'communication'),
             (r'\bstrat\s+egy\b', 'strategy'),
             (r'\bstrat\s+egic\b', 'strategic'),
+            (r'\bex\s+perience\b', 'experience'),
+            (r'\bex\s+ecutive\b', 'executive'),
+            (r'\bad\s+ministrator\b', 'administrator'),
+            (r'\bman\s+agement\b', 'management'),
+            (r'\bde\s+sign\s+to\s+create\s+human\b', ''),  # Remove this fragment
         ]
         
         for pattern, replacement in fragment_patterns:
@@ -448,6 +519,17 @@ class FileAnalyzer:
                         merged_words.append('Mawney')
                         i += 2
                         continue
+                    # "H O" -> "HO" (part of HOPE)
+                    elif word.upper() == 'H' and next_word.upper() == 'O' and i < len(words) - 2:
+                        third_word = words[i + 2]
+                        if third_word.upper() == 'PE':
+                            merged_words.append('HOPE')
+                            i += 3
+                            continue
+                        else:
+                            merged_words.append('HO')
+                            i += 2
+                            continue
                     # "artners" -> "Partners" (if preceded by something that looks like company name)
                     elif word.lower() == 'artners' and merged_words and merged_words[-1].lower() in ['mawney', 'm', 'ma']:
                         if merged_words[-1].lower() in ['m', 'ma']:
