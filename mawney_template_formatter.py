@@ -199,6 +199,10 @@ class MawneyTemplateFormatter:
         """Parse CV data to extract structured information with professional formatting"""
         # CRITICAL: First reconstruct fragmented words (before any other processing)
         import re
+        # Fix name duplications first (HOHOPE -> HOPE, HOPE HOPE -> HOPE)
+        cv_data = re.sub(r'\bHO\s*HOPE\b', 'HOPE', cv_data, flags=re.IGNORECASE)
+        cv_data = re.sub(r'\bHOPE\s+HOPE\b', 'HOPE', cv_data, flags=re.IGNORECASE)
+        cv_data = re.sub(r'\bH\s*O\s*HOPE\b', 'HOPE', cv_data, flags=re.IGNORECASE)
         # Quick reconstruction of common fragments in the raw text
         # Try multiple patterns to catch all variations
         # "PE GILBERT" variations
@@ -414,6 +418,12 @@ class MawneyTemplateFormatter:
                 # Final check: if we got "PE GILBERT", try to fix it
                 if 'PE GILBERT' in final_name.upper() and 'HOPE' not in final_name.upper():
                     final_name = re.sub(r'PE\s+GILBERT', 'HOPE GILBERT', final_name, flags=re.IGNORECASE)
+                # Fix duplications (HOHOPE -> HOPE, HOPE HOPE -> HOPE)
+                final_name = re.sub(r'\bHO\s*HOPE\b', 'HOPE', final_name, flags=re.IGNORECASE)
+                final_name = re.sub(r'\bHOPE\s+HOPE\b', 'HOPE', final_name, flags=re.IGNORECASE)
+                final_name = re.sub(r'\bH\s*O\s*HOPE\b', 'HOPE', final_name, flags=re.IGNORECASE)
+                # Clean up extra spaces
+                final_name = ' '.join(final_name.split())
                 parsed['name'] = final_name
                 logger.info(f"Extracted name: {parsed['name']} from position {name_candidates[0][1]} (source: {name_candidates[0][2]})")
             else:
@@ -518,15 +528,22 @@ class MawneyTemplateFormatter:
                 experience_section = True
                 continue
             
-            # Detect end of experience section
-            if experience_section and any(keyword in line_lower for keyword in ['education', 'skills', 'interests', 'languages', 'certification', 'qualifications']):
-                if current_experience:
-                    current_experience['responsibilities'] = current_responsibilities
-                    experience_patterns.append(current_experience)
-                    current_experience = None
-                    current_responsibilities = []
-                experience_section = False
-                break
+            # Detect end of experience section - but be careful not to stop too early
+            # Only stop if we see a clear section header, not just keywords in content
+            if experience_section:
+                # Check if this is a section header (short line, all caps or title case, common header words)
+                is_section_header = (len(line) < 50 and 
+                                    (line.isupper() or (line[0].isupper() and line.count(' ') < 5)) and
+                                    any(keyword in line_lower for keyword in ['education', 'skills', 'interests', 'languages', 'certification', 'qualifications', 'academic']))
+                
+                if is_section_header:
+                    if current_experience:
+                        current_experience['responsibilities'] = current_responsibilities
+                        experience_patterns.append(current_experience)
+                        current_experience = None
+                        current_responsibilities = []
+                    experience_section = False
+                    break
             
             if not experience_section:
                 continue
@@ -536,13 +553,13 @@ class MawneyTemplateFormatter:
             has_date = bool(re.search(r'\b(19|20)\d{2}\s*[-–]\s*((?:19|20)\d{2}|Present|Current|Now)\b', line, re.IGNORECASE))
             has_month_date = bool(re.search(r'\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}\s*[-–]', line, re.IGNORECASE))
             
-            # Check if line contains job title indicators
-            job_title_indicators = ['designer', 'developer', 'administrator', 'analyst', 'manager', 'director', 'officer', 'specialist', 'associate', 'executive', 'consultant', 'engineer', 'freelance', 'recruitment']
+            # Check if line contains job title indicators - EXPANDED list
+            job_title_indicators = ['designer', 'developer', 'administrator', 'analyst', 'manager', 'director', 'officer', 'specialist', 'associate', 'executive', 'consultant', 'engineer', 'freelance', 'recruitment', 'marketing', 'business', 'development', 'coordinator', 'lead', 'senior', 'junior', 'assistant']
             looks_like_job = any(indicator in line_lower for indicator in job_title_indicators)
             
-            # Check if line contains company indicators
-            company_indicators = ['ltd', 'inc', 'llc', 'corp', 'partners', 'capital', 'management', 'group', 'plc', 'bank', 'fund', 'clients', 'mammoet']
-            looks_like_company = any(indicator in line_lower for indicator in company_indicators) or (line_upper.isupper() and len(line.split()) >= 2 and len(line) < 50)
+            # Check if line contains company indicators - EXPANDED list
+            company_indicators = ['ltd', 'inc', 'llc', 'corp', 'partners', 'capital', 'management', 'group', 'plc', 'bank', 'fund', 'clients', 'mammoet', 'recruiter', 'flat fee', 'various', 'remote', 'leeds', 'london']
+            looks_like_company = any(indicator in line_lower for indicator in company_indicators) or (line_upper.isupper() and len(line.split()) >= 2 and len(line) < 60)
             
             # Check if previous line might be part of this job entry (fragmented text)
             prev_line = lines[i-1].strip() if i > 0 else ""
@@ -552,9 +569,13 @@ class MawneyTemplateFormatter:
                               not re.search(r'\b(19|20)\d{2}\b', prev_line) and
                               (prev_line.endswith(',') or prev_line.endswith(':') or not prev_line[0].isupper()))
             
+            # Also check if line has location + date pattern (common in CVs)
+            has_location_date = bool(re.search(r'(London|Leeds|Remote|UK|USA)[^,]*,\s*[^,]*\s*\(?\s*(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|19|20)\d{2}', line, re.IGNORECASE))
+            
             # If line has date or looks like job/company, it's likely a new experience entry
             # But check if it might be continuation of previous line
-            if (has_date or has_month_date) and (looks_like_job or looks_like_company or len(line.split()) <= 6) and not is_continuation:
+            # Be more lenient - if it has a date and looks like it could be a job, treat it as one
+            if (has_date or has_month_date or has_location_date) and (looks_like_job or looks_like_company or len(line.split()) <= 8) and not is_continuation:
                 # Save previous experience
                 if current_experience:
                     current_experience['responsibilities'] = current_responsibilities
@@ -640,8 +661,24 @@ class MawneyTemplateFormatter:
                 }
                 current_responsibilities = []
             
-            # Check if line is a responsibility/bullet point
+            # Check if line is a responsibility/bullet point OR a new job entry we missed
             elif current_experience:
+                # First check if this might actually be a new job entry we missed
+                # (some jobs might not have been caught by the date check)
+                has_date_here = bool(re.search(r'\b(19|20)\d{2}\s*[-–]', line, re.IGNORECASE))
+                has_month_date_here = bool(re.search(r'\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}\s*[-–]', line, re.IGNORECASE))
+                looks_like_new_job = (has_date_here or has_month_date_here) and any(indicator in line_lower for indicator in job_title_indicators + company_indicators)
+                
+                # If this looks like a new job, save current and start new
+                if looks_like_new_job and len(current_responsibilities) > 0:
+                    current_experience['responsibilities'] = current_responsibilities
+                    experience_patterns.append(current_experience)
+                    current_experience = None
+                    current_responsibilities = []
+                    # Process this line as a new job entry (will be caught in next iteration)
+                    continue
+                
+                # Otherwise, treat as responsibility/bullet point
                 # Remove bullet markers
                 clean_line = re.sub(r'^[•\-\*◦·]\s*', '', line).strip()
                 
@@ -666,6 +703,12 @@ class MawneyTemplateFormatter:
                             current_responsibilities.append(clean_line)
                     else:
                         current_responsibilities.append(clean_line)
+            # If we're in experience section but don't have a current_experience, this might be a job entry
+            elif experience_section and not current_experience:
+                # Check if this line could be a job entry (has date or job/company keywords)
+                if (has_date or has_month_date or has_location_date) and (looks_like_job or looks_like_company):
+                    # Process as new job entry (will be caught in next iteration, but let's handle it here)
+                    pass  # Will be caught on next iteration
         
         # Save last experience
         if current_experience:
