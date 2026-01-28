@@ -123,15 +123,24 @@ class MawneyTemplateFormatter:
         
         logger.info(f"✅ Formatted CV using template, length: {len(formatted_html)} characters")
         
-        return {
+        # Always return success if we got this far - even if data is missing, the template structure is there
+        # This prevents fallback formatters from being used
+        result = {
             'success': True,
             'html_version': formatted_html,
             'html_content': formatted_html,  # ensure downstream callers find HTML consistently
             'text_version': self._extract_text_from_html(formatted_html),
-            'analysis': f"CV formatted using Mawney Partners template. Extracted: {len(parsed_data.get('experience', []))} experience items, {len(parsed_data.get('education', []))} education items.",
+            'analysis': f"CV formatted using Mawney Partners template. Extracted: {len(parsed_data.get('experience', []))} experience items, {len(parsed_data.get('education', []))} education items, {len(parsed_data.get('skills', []))} skills.",
             'sections_found': list(parsed_data.keys()),
             'formatted_data': parsed_data
         }
+        
+        # Log final result summary
+        text_length = len(result['text_version'])
+        logger.info(f"📊 Final result: success=True, html_length={len(formatted_html)}, text_length={text_length}")
+        logger.info(f"   Sections found: {', '.join(result['sections_found'])}")
+        
+        return result
 
     def format_cv(self, cv_data: str) -> Dict[str, Any]:
         """Format CV using the exact Mawney Partners template"""
