@@ -149,21 +149,91 @@ class FileAnalyzer:
             }
     
     def _analyze_pdf(self, file_data: bytes, filename: str) -> Dict[str, Any]:
-        """Extract text from PDF files with improved text cleaning"""
+        """Extract text from PDF files with improved text cleaning and color-aware extraction"""
         try:
             extracted_text = ""
             page_count = 0
+            use_ocr = False
             
-            # Try pdfplumber first (better for complex PDFs)
+            # Try pdfplumber first (better for complex PDFs and can handle colored text)
             try:
                 with pdfplumber.open(io.BytesIO(file_data)) as pdf:
                     page_count = len(pdf.pages)
+                    
+                    # First pass: try standard text extraction with layout preservation
                     for page in pdf.pages:
-                        text = page.extract_text()
+                        # Try layout-based extraction first (better for colored/styled text)
+                        text = page.extract_text(layout=True)
+                        if not text or len(text.strip()) < 50:
+                            # Fallback to standard extraction
+                            text = page.extract_text()
+                        
+                        # Also try extracting from words/chars (can capture colored text better)
+                        if not text or len(text.strip()) < 50:
+                            words = page.extract_words()
+                            if words:
+                                # Reconstruct text from words (preserves colored text)
+                                word_text = ' '.join([w.get('text', '') for w in words if w.get('text')])
+                                if word_text and len(word_text) > len(text or ''):
+                                    text = word_text
+                        
                         if text:
                             # Clean the extracted text
                             cleaned_text = self._clean_extracted_text(text)
                             extracted_text += cleaned_text + "\n"
+                    
+                    # Check if extraction seems incomplete (might be missing colored text)
+                    # If text is suspiciously short for a CV, try OCR
+                    if page_count > 0:
+                        avg_chars_per_page = len(extracted_text) / page_count
+                        # CVs typically have 500+ characters per page
+                        if avg_chars_per_page < 300:
+                            logger.warning(f"PDF text extraction seems incomplete ({avg_chars_per_page:.0f} chars/page), trying OCR for colored text")
+                            use_ocr = True
+                    
+                    # If we got some text but it seems fragmented, try OCR as supplement
+                    if not use_ocr and extracted_text:
+                        # Check for suspicious patterns that suggest missing text
+                        # (e.g., very short words, lots of single characters)
+                        words = extracted_text.split()
+                        if len(words) > 0:
+                            avg_word_length = sum(len(w) for w in words) / len(words)
+                            single_char_words = sum(1 for w in words if len(w) == 1)
+                            if avg_word_length < 3 or (single_char_words / len(words)) > 0.1:
+                                logger.warning(f"PDF text seems fragmented, trying OCR for colored text")
+                                use_ocr = True
+                    
+                    # If OCR needed, extract text from images
+                    if use_ocr:
+                        ocr_text = ""
+                        try:
+                            from pdf2image import convert_from_bytes
+                            images = convert_from_bytes(file_data, dpi=300)
+                            for i, image in enumerate(images):
+                                try:
+                                    page_ocr = pytesseract.image_to_string(image, lang='eng')
+                                    if page_ocr:
+                                        ocr_text += page_ocr + "\n"
+                                        logger.info(f"OCR extracted {len(page_ocr)} characters from page {i+1}")
+                                except Exception as ocr_err:
+                                    logger.warning(f"OCR failed for page {i+1}: {str(ocr_err)}")
+                            
+                            # Combine OCR text with extracted text, preferring OCR for missing parts
+                            if ocr_text:
+                                # OCR often gets more complete text, especially for colored backgrounds
+                                # Use OCR if it's significantly longer
+                                if len(ocr_text.strip()) > len(extracted_text.strip()) * 1.2:
+                                    logger.info(f"Using OCR text (OCR: {len(ocr_text)} chars vs extracted: {len(extracted_text)} chars)")
+                                    extracted_text = ocr_text
+                                else:
+                                    # Merge both, removing duplicates
+                                    logger.info(f"Merging OCR text with extracted text")
+                                    extracted_text = self._merge_text_extractions(extracted_text, ocr_text)
+                        except ImportError:
+                            logger.warning("pdf2image not available, cannot use OCR fallback")
+                        except Exception as ocr_err:
+                            logger.warning(f"OCR fallback failed: {str(ocr_err)}")
+                            
             except Exception as e:
                 logger.warning(f"pdfplumber failed for {filename}, trying PyPDF2: {str(e)}")
                 
@@ -177,6 +247,26 @@ class FileAnalyzer:
                         # Clean the extracted text
                         cleaned_text = self._clean_extracted_text(text)
                         extracted_text += cleaned_text + "\n"
+                
+                # If PyPDF2 also gives little text, try OCR
+                if page_count > 0 and len(extracted_text) / page_count < 300:
+                    logger.warning("PyPDF2 extraction seems incomplete, trying OCR")
+                    use_ocr = True
+                    try:
+                        from pdf2image import convert_from_bytes
+                        images = convert_from_bytes(file_data, dpi=300)
+                        ocr_text = ""
+                        for image in images:
+                            try:
+                                page_ocr = pytesseract.image_to_string(image, lang='eng')
+                                if page_ocr:
+                                    ocr_text += page_ocr + "\n"
+                            except Exception:
+                                pass
+                        if ocr_text and len(ocr_text) > len(extracted_text):
+                            extracted_text = ocr_text
+                    except Exception:
+                        pass
             
             extracted_text = extracted_text.strip()
             
@@ -184,6 +274,7 @@ class FileAnalyzer:
             logger.info(f"PDF extraction for {filename}:")
             logger.info(f"Page count: {page_count}")
             logger.info(f"Text length: {len(extracted_text)} characters")
+            logger.info(f"Used OCR: {use_ocr}")
             logger.info(f"First 500 characters: {extracted_text[:500]}")
             
             # Analyze document content
@@ -197,7 +288,8 @@ class FileAnalyzer:
                 'document_properties': {
                     'page_count': page_count,
                     'word_count': len(extracted_text.split()) if extracted_text else 0,
-                    'char_count': len(extracted_text)
+                    'char_count': len(extracted_text),
+                    'used_ocr': use_ocr
                 },
                 'analysis': analysis,
                 'has_text': bool(extracted_text)
@@ -213,6 +305,20 @@ class FileAnalyzer:
                 'extracted_text': '',
                 'analysis': f'Error processing PDF: {str(e)}'
             }
+    
+    def _merge_text_extractions(self, text1: str, text2: str) -> str:
+        """Merge two text extractions, preferring longer/more complete versions"""
+        # Simple merge: use the longer one, or combine unique lines
+        lines1 = set(text1.split('\n'))
+        lines2 = set(text2.split('\n'))
+        
+        # Combine all unique lines
+        all_lines = list(lines1 | lines2)
+        
+        # Sort by length (longer lines are usually more complete)
+        all_lines.sort(key=len, reverse=True)
+        
+        return '\n'.join(all_lines)
     
     def _clean_extracted_text(self, text: str) -> str:
         """Clean and normalize extracted PDF text with aggressive word separation"""
