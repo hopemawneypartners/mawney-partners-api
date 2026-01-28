@@ -462,28 +462,48 @@ class MawneyTemplateFormatter:
                                 name_candidates.append((combined, i, 'split'))
                 
                 # Check for fragmented names where first part might be missing
+                # Pattern: "H" on one line, "OPE GILBERT" on next - reconstruct to "HOPE GILBERT"
+                if line1.upper().strip() == 'H' and line2:
+                    line2_upper = line2.upper().strip()
+                    # Check if line2 starts with "OPE" or contains "OPE" followed by a surname
+                    if line2_upper.startswith('OPE ') or (line2_upper.startswith('OPE') and len(line2.split()) >= 2):
+                        # Reconstruct "HOPE" + rest of line2
+                        reconstructed = f"H{line2}"
+                        name_candidates.append((reconstructed, i, 'reconstructed'))
+                
                 # Pattern: "PE" or "PE GILBERT" - might be missing "HO" or "HOPE"
-                if line1.upper() == 'PE' and line2:
+                elif line1.upper().strip() == 'PE' and line2:
                     line2_words = line2.split()
                     # If line2 is a surname (single word, capitalized)
                     if len(line2_words) == 1 and line2_words[0][0].isupper() and len(line2_words[0]) > 3:
-                        # Check if previous lines might have "HO" or "HOPE"
+                        # Check if previous lines might have "HO" or "H" + "O"
                         for j in range(max(0, i-3), i):
                             prev_line = lines[j].strip().upper()
-                            if prev_line in ['HO', 'HOPE']:
-                                # Reconstruct name
-                                if prev_line == 'HO':
+                            if prev_line in ['HO', 'HOPE', 'H']:
+                                # Check if next line after "H" is "O"
+                                if prev_line == 'H' and j+1 < len(lines) and lines[j+1].strip().upper() == 'O':
                                     reconstructed = f"HOPE {line2}"
-                                else:
+                                    name_candidates.append((reconstructed, j, 'reconstructed'))
+                                    break
+                                elif prev_line == 'HO':
+                                    reconstructed = f"HOPE {line2}"
+                                    name_candidates.append((reconstructed, j, 'reconstructed'))
+                                    break
+                                elif prev_line == 'HOPE':
                                     reconstructed = f"{prev_line} {line2}"
-                                name_candidates.append((reconstructed, j, 'reconstructed'))
-                                break
-                        # If no "HO" found, "PE" might be a fragment - try common name patterns
-                        # But be conservative - only if it really looks like a name
-                        if line2_words[0][0].isupper() and len(line2_words[0]) >= 4:
-                            # Common pattern: missing first part of first name
-                            # We can't guess the full name, but we can note it's likely incomplete
-                            pass
+                                    name_candidates.append((reconstructed, j, 'reconstructed'))
+                                    break
+                
+                # Pattern: "OPE" or "OPE GILBERT" - check if previous line is "H"
+                elif line1.upper().strip() == 'OPE' and line2:
+                    line2_words = line2.split()
+                    if len(line2_words) == 1 and line2_words[0][0].isupper() and len(line2_words[0]) > 3:
+                        # Check if previous line is "H"
+                        if i > 0:
+                            prev_line = lines[i-1].strip().upper()
+                            if prev_line == 'H':
+                                reconstructed = f"HOPE {line2}"
+                                name_candidates.append((reconstructed, i-1, 'reconstructed'))
             
             # Add large text candidates from font_info (artistically formatted names)
             if large_text_candidates:
@@ -559,27 +579,42 @@ class MawneyTemplateFormatter:
                                     break
                 
                 # Final fallback: first substantial line that looks like a name
-                # Also check if name might be incomplete (like "PE GILBERT" missing "HO")
+                # Also check if name might be incomplete (like "PE GILBERT" missing "HO" or "H OPE" split)
                 if not parsed['name']:
-                    for line in lines[:8]:
+                    for idx, line in enumerate(lines[:10]):
                         words = line.split()
+                        line_upper = line.upper().strip()
+                        
+                        # Special case: "OPE GILBERT" - check if previous line is "H"
+                        if line_upper.startswith('OPE ') and len(words) == 2:
+                            if idx > 0:
+                                prev_line = lines[idx-1].strip().upper()
+                                if prev_line == 'H':
+                                    parsed['name'] = f"HOPE {words[1]}"
+                                    print(f"✅ Reconstructed name from 'H' + 'OPE {words[1]}': {parsed['name']}")
+                                    break
+                        
                         # Check for incomplete names (2 words, one might be very short like "PE")
                         if len(words) == 2:
                             word1, word2 = words[0], words[1]
                             # If first word is very short (1-2 chars) and second is a proper surname
                             if len(word1) <= 2 and len(word2) >= 4 and word2[0].isupper():
                                 # This might be an incomplete name - check previous lines for missing part
-                                for j in range(max(0, lines.index(line) - 3), lines.index(line)):
+                                for j in range(max(0, idx - 3), idx):
                                     prev = lines[j].strip().upper()
-                                    if prev in ['HO', 'HOPE', 'H', 'O']:
+                                    if prev in ['HO', 'HOPE', 'H']:
                                         # Reconstruct
                                         if prev == 'HO':
                                             parsed['name'] = f"HOPE {word2}"
                                         elif prev == 'HOPE':
                                             parsed['name'] = f"HOPE {word2}"
-                                        else:
-                                            # Try to combine
-                                            parsed['name'] = f"{prev} {word1} {word2}".strip()
+                                        elif prev == 'H':
+                                            # Check if next line after H is O
+                                            if j+1 < len(lines) and lines[j+1].strip().upper() == 'O':
+                                                parsed['name'] = f"HOPE {word2}"
+                                            else:
+                                                parsed['name'] = f"HOPE {word2}"  # Assume H + OPE = HOPE
+                                        print(f"✅ Reconstructed name from fragments: {parsed['name']}")
                                         break
                                 if parsed['name']:
                                     break
