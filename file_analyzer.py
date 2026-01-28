@@ -469,28 +469,39 @@ class FileAnalyzer:
         """Reconstruct fragmented words that were split incorrectly"""
         import re
         
-        # Common word fragments to merge
+        # Common word fragments to merge - GENERAL patterns, not specific to one CV
         # Pattern: (fragment1)(fragment2) -> (full_word)
         # Apply multiple times to catch nested fragments
         fragment_patterns = [
-            # Name fragments - be more aggressive (case insensitive, flexible spacing)
-            # Handle "PE GILBERT" even when "HO" is missing (common OCR/extraction issue)
-            (r'\bPE\s+GILBERT\b', 'HOPE GILBERT', re.IGNORECASE),
-            (r'^PE\s+GILBERT\b', 'HOPE GILBERT', re.IGNORECASE | re.MULTILINE),  # At start of line
-            (r'\bHO\s+PE\s+GILBERT\b', 'HOPE GILBERT', re.IGNORECASE),
-            (r'\bH\s+O\s+PE\s+GILBERT\b', 'HOPE GILBERT', re.IGNORECASE),
-            (r'\bH\s+O\s+PE\b', 'HOPE', re.IGNORECASE),
-            (r'^PE\s+GE\b', 'PAGE', re.IGNORECASE | re.MULTILINE),
-            (r'\bPE\s+GE\b', 'PAGE', re.IGNORECASE),
-            # Company name fragments - comprehensive patterns
+            # Common word fragments that appear in many CVs
+            # These are general patterns, not specific names
+            (r'\bde\s+velopment\b', 'development', re.IGNORECASE),
+            (r'\bde\s+sign\b', 'design', re.IGNORECASE),
+            (r'\bde\s+signer\b', 'designer', re.IGNORECASE),
+            (r'\bde\s+veloper\b', 'developer', re.IGNORECASE),
+            (r'\bcre\s+ative\b', 'creative', re.IGNORECASE),
+            (r'\bpro\s+fessional\b', 'professional', re.IGNORECASE),
+            (r'\bmar\s+keting\b', 'marketing', re.IGNORECASE),
+            (r'\bcom\s+munication\b', 'communication', re.IGNORECASE),
+            (r'\bstrat\s+egy\b', 'strategy', re.IGNORECASE),
+            (r'\bstrat\s+egic\b', 'strategic', re.IGNORECASE),
+            (r'\bex\s+perience\b', 'experience', re.IGNORECASE),
+            (r'\bex\s+ecutive\b', 'executive', re.IGNORECASE),
+            (r'\bad\s+ministrator\b', 'administrator', re.IGNORECASE),
+            (r'\bman\s+agement\b', 'management', re.IGNORECASE),
+            # Financial industry common terms
+            (r'\bfin\s+ancial\b', 'financial', re.IGNORECASE),
+            (r'\ban\s+alyst\b', 'analyst', re.IGNORECASE),
+            (r'\ban\s+alysis\b', 'analysis', re.IGNORECASE),
+            (r'\bin\s+vestment\b', 'investment', re.IGNORECASE),
+            (r'\bport\s+folio\b', 'portfolio', re.IGNORECASE),
+            (r'\bderiv\s+ative\b', 'derivative', re.IGNORECASE),
+            (r'\bquant\s+itative\b', 'quantitative', re.IGNORECASE),
+            # Company name fragments - general patterns
             (r'\bartners\b', 'Partners', re.IGNORECASE),
-            (r'\bwney\s+Partners\b', 'Mawney Partners', re.IGNORECASE),
-            (r'\bMawney\s+artners\b', 'Mawney Partners', re.IGNORECASE),
-            (r'\bM\s+awney\s+Partners\b', 'Mawney Partners', re.IGNORECASE),
-            (r'\bg\s+wney\b', 'Mawney', re.IGNORECASE),  # "g" + "wney" = "Mawney" (missing "Ma")
-            (r'\bMa\s+wney\b', 'Mawney', re.IGNORECASE),
-            (r'\bM\s+a\s+wney\b', 'Mawney', re.IGNORECASE),
-            (r'\bM\s+awney\b', 'Mawney', re.IGNORECASE),
+            (r'\bcap\s+ital\b', 'Capital', re.IGNORECASE),
+            (r'\bman\s+agement\s+group\b', 'Management Group', re.IGNORECASE),
+            (r'\bin\s+vestment\s+bank\b', 'Investment Bank', re.IGNORECASE),
             # Common word fragments - more patterns
             (r'\bde\s+velopment\b', 'development', re.IGNORECASE),
             (r'\bde\s+sign\b', 'design', re.IGNORECASE),
@@ -535,63 +546,57 @@ class FileAnalyzer:
                 if len(word) == 1 and word.isalpha() and i < len(words) - 1:
                     next_word = words[i + 1]
                     
-                    # Try to reconstruct common patterns
-                    # "g wney" -> "Mawney" (if "wney" follows)
-                    if word.lower() == 'g' and next_word.lower().startswith('wney'):
-                        merged_words.append('Mawney')
-                        i += 2
-                        continue
-                    # "H O" -> "HO" (part of HOPE)
-                    elif word.upper() == 'H' and next_word.upper() == 'O' and i < len(words) - 2:
-                        third_word = words[i + 2]
-                        if third_word.upper() == 'PE':
-                            merged_words.append('HOPE')
-                            i += 3
-                            continue
-                        else:
-                            merged_words.append('HO')
-                            i += 2
-                            continue
-                    # "artners" -> "Partners" (if preceded by something that looks like company name)
-                    elif word.lower() == 'artners' and merged_words and merged_words[-1].lower() in ['mawney', 'm', 'ma']:
-                        if merged_words[-1].lower() in ['m', 'ma']:
-                            merged_words[-1] = 'Mawney'
-                        merged_words.append('Partners')
+                    # General pattern: single char + word that could form a complete word
+                    # Check if single char + next word forms a known word pattern
+                    potential_merge = word.lower() + next_word.lower()
+                    # Common word patterns that start with single letters
+                    common_starts = {
+                        'd': ['development', 'design', 'designer', 'developer'],
+                        'p': ['professional', 'portfolio', 'partners'],
+                        'm': ['marketing', 'management'],
+                        'c': ['communication', 'creative'],
+                        's': ['strategy', 'strategic'],
+                        'e': ['experience', 'executive'],
+                        'a': ['analyst', 'analysis', 'administrator'],
+                        'f': ['financial'],
+                        'i': ['investment'],
+                    }
+                    # Check if this could be a valid word start
+                    merged = False
+                    if word.lower() in common_starts:
+                        for full_word in common_starts[word.lower()]:
+                            if full_word.startswith(potential_merge) or potential_merge in full_word:
+                                # This might be a fragment - but be conservative
+                                # Only merge if the next word is clearly a continuation
+                                if len(next_word) > 3 and potential_merge in full_word:
+                                    merged_words.append(full_word.capitalize() if word[0].isupper() else full_word)
+                                    i += 2
+                                    merged = True
+                                    break
+                    if not merged:
+                        merged_words.append(word)
                         i += 1
-                        continue
-                    # "PE" -> might be part of "HOPE" if followed by "GILBERT"
-                    elif word.upper() == 'PE' and i < len(words) - 1 and words[i + 1].upper() == 'GILBERT':
-                        # Check if previous word might be "HO"
-                        if merged_words and merged_words[-1].upper() == 'HO':
-                            merged_words[-1] = 'HOPE'
-                            i += 1  # Skip "PE"
-                            continue
-                        # Or if "PE" is standalone before "GILBERT", try to find "HO" earlier
-                        elif i > 0:
-                            # Look back for "HO" or "H O"
-                            for j in range(max(0, i-3), i):
-                                prev_word = merged_words[j] if j < len(merged_words) else words[j]
-                                if prev_word.upper() in ['HO', 'H', 'O']:
-                                    # Try to reconstruct
-                                    if prev_word.upper() == 'HO':
-                                        merged_words[j] = 'HOPE'
-                                        i += 1  # Skip "PE"
-                                        break
-                                    elif prev_word.upper() == 'H' and j < len(merged_words) - 1:
-                                        next_prev = merged_words[j+1] if j+1 < len(merged_words) else words[j+1]
-                                        if next_prev.upper() == 'O':
-                                            merged_words[j] = 'HOPE'
-                                            merged_words.pop(j+1)  # Remove the "O"
-                                            i += 1  # Skip "PE"
-                                            break
-                            else:
-                                # No "HO" found, but "PE GILBERT" might still be a fragment
-                                # Check if there's a single char before "PE"
-                                if i > 0 and len(words[i-1]) == 1:
-                                    # Might be "H PE" or similar
-                                    pass
-                                merged_words.append(word)
-                                i += 1
+                    continue
+                    # General pattern: single char + word that looks like a fragment
+                    # This is a general reconstruction, not specific to one name
+                    # If we have a single char followed by a word that could be a continuation
+                    # and the previous word ends with that char, try to merge
+                    if i > 0 and len(merged_words) > 0:
+                        prev_word = merged_words[-1]
+                        # Check if previous word + single char + next word might form a complete word
+                        # This is a heuristic - be conservative
+                        if (len(prev_word) > 2 and 
+                            prev_word[-1].lower() == word.lower() and
+                            len(next_word) > 2):
+                            # Might be a split word like "de" + "velopment"
+                            # But be careful - only merge if it makes sense
+                            potential_word = prev_word + next_word
+                            # Check if it looks like a real word (has vowels, reasonable length)
+                            if (len(potential_word) >= 4 and 
+                                any(vowel in potential_word.lower() for vowel in 'aeiou') and
+                                len(potential_word) <= 20):
+                                merged_words[-1] = potential_word
+                                i += 2
                                 continue
                 
                 merged_words.append(word)

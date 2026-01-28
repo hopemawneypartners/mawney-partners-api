@@ -199,58 +199,76 @@ class MawneyTemplateFormatter:
         """Parse CV data to extract structured information with professional formatting"""
         # CRITICAL: First reconstruct fragmented words (before any other processing)
         import re
-        # Fix name duplications first (HOHOPE -> HOPE, HOPE HOPE -> HOPE)
-        cv_data = re.sub(r'\bHO\s*HOPE\b', 'HOPE', cv_data, flags=re.IGNORECASE)
-        cv_data = re.sub(r'\bHOPE\s+HOPE\b', 'HOPE', cv_data, flags=re.IGNORECASE)
-        cv_data = re.sub(r'\bH\s*O\s*HOPE\b', 'HOPE', cv_data, flags=re.IGNORECASE)
-        # Quick reconstruction of common fragments in the raw text
-        # Try multiple patterns to catch all variations
-        # "PE GILBERT" variations
-        cv_data = re.sub(r'PE\s+GILBERT', 'HOPE GILBERT', cv_data, flags=re.IGNORECASE)
-        cv_data = re.sub(r'\bPE\s+GILBERT\b', 'HOPE GILBERT', cv_data, flags=re.IGNORECASE)
-        cv_data = re.sub(r'^PE\s+GILBERT', 'HOPE GILBERT', cv_data, flags=re.IGNORECASE | re.MULTILINE)
-        # If "PE" and "GILBERT" are on separate lines
-        cv_data = re.sub(r'PE\s*\n\s*GILBERT', 'HOPE GILBERT', cv_data, flags=re.IGNORECASE)
-        # Company name fragments - very aggressive
-        cv_data = re.sub(r'\bartners\b', 'Partners', cv_data, flags=re.IGNORECASE)
-        cv_data = re.sub(r'wney\s+Partners', 'Mawney Partners', cv_data, flags=re.IGNORECASE)
-        cv_data = re.sub(r'\bwney\s+Partners\b', 'Mawney Partners', cv_data, flags=re.IGNORECASE)
-        cv_data = re.sub(r'Mawney\s+artners', 'Mawney Partners', cv_data, flags=re.IGNORECASE)
-        cv_data = re.sub(r'\bMawney\s+artners\b', 'Mawney Partners', cv_data, flags=re.IGNORECASE)
-        cv_data = re.sub(r'g\s+wney', 'Mawney', cv_data, flags=re.IGNORECASE)
-        cv_data = re.sub(r'\bg\s+wney\b', 'Mawney', cv_data, flags=re.IGNORECASE)
-        # Handle "artners" at start of line (common in work experience)
-        cv_data = re.sub(r'^artners\b', 'Partners', cv_data, flags=re.IGNORECASE | re.MULTILINE)
+        # Fix common word duplications (general pattern, not specific names)
+        # Pattern: repeated words like "WORD WORD" -> "WORD"
+        cv_data = re.sub(r'\b(\w+)\s+\1\b', r'\1', cv_data, flags=re.IGNORECASE)
+        # Fix common word fragments - GENERAL patterns for all CVs
+        # Common splits in PDF extraction
+        common_fragments = [
+            (r'\bde\s+velopment\b', 'development'),
+            (r'\bde\s+sign\b', 'design'),
+            (r'\bpro\s+fessional\b', 'professional'),
+            (r'\bmar\s+keting\b', 'marketing'),
+            (r'\bcom\s+munication\b', 'communication'),
+            (r'\bstrat\s+egy\b', 'strategy'),
+            (r'\bfin\s+ancial\b', 'financial'),
+            (r'\ban\s+alyst\b', 'analyst'),
+            (r'\bin\s+vestment\b', 'investment'),
+            (r'\bport\s+folio\b', 'portfolio'),
+            # Company name fragments - general
+            (r'\bartners\b', 'Partners'),
+            (r'\bcap\s+ital\b', 'Capital'),
+        ]
+        for pattern, replacement in common_fragments:
+            cv_data = re.sub(pattern, replacement, cv_data, flags=re.IGNORECASE)
         
         # CRITICAL: Clean the text first to fix concatenated words
         cleaned_cv_data = self._clean_cv_text(cv_data)
         lines = [line.strip() for line in cleaned_cv_data.split('\n') if line.strip()]
         
-        # Apply reconstruction to each line as well - check adjacent lines for fragments
+        # Apply reconstruction to each line as well - GENERAL patterns
         reconstructed_lines = []
         for i, line in enumerate(lines):
-            # Fix common fragments in each line
-            line = re.sub(r'PE\s+GILBERT', 'HOPE GILBERT', line, flags=re.IGNORECASE)
-            line = re.sub(r'\bPE\s+GILBERT\b', 'HOPE GILBERT', line, flags=re.IGNORECASE)
-            # Check if this line is "PE" and next is "GILBERT"
-            if line.upper().strip() == 'PE' and i < len(lines) - 1 and lines[i+1].upper().strip() == 'GILBERT':
-                line = 'HOPE'
-                if i+1 < len(lines):
-                    lines[i+1] = 'GILBERT'
-            # Company fragments
-            line = re.sub(r'\bartners\b', 'Partners', line, flags=re.IGNORECASE)
-            line = re.sub(r'^artners\b', 'Partners', line, flags=re.IGNORECASE)
-            line = re.sub(r'wney\s+Partners', 'Mawney Partners', line, flags=re.IGNORECASE)
-            line = re.sub(r'\bwney\s+Partners\b', 'Mawney Partners', line, flags=re.IGNORECASE)
-            line = re.sub(r'Mawney\s+artners', 'Mawney Partners', line, flags=re.IGNORECASE)
-            line = re.sub(r'\bMawney\s+artners\b', 'Mawney Partners', line, flags=re.IGNORECASE)
-            line = re.sub(r'g\s+wney', 'Mawney', line, flags=re.IGNORECASE)
-            line = re.sub(r'\bg\s+wney\b', 'Mawney', line, flags=re.IGNORECASE)
-            # Check if this line is just "g" and next starts with "wney"
-            if line.lower().strip() == 'g' and i < len(lines) - 1 and lines[i+1].lower().strip().startswith('wney'):
-                line = 'Mawney'
-                if i+1 < len(lines):
-                    lines[i+1] = lines[i+1].replace('wney', '', 1).strip()
+            # Fix common word fragments in each line (general patterns)
+            common_fragments = [
+                (r'\bde\s+velopment\b', 'development'),
+                (r'\bde\s+sign\b', 'design'),
+                (r'\bpro\s+fessional\b', 'professional'),
+                (r'\bmar\s+keting\b', 'marketing'),
+                (r'\bcom\s+munication\b', 'communication'),
+                (r'\bstrat\s+egy\b', 'strategy'),
+                (r'\bfin\s+ancial\b', 'financial'),
+                (r'\ban\s+alyst\b', 'analyst'),
+                (r'\bin\s+vestment\b', 'investment'),
+                (r'\bartners\b', 'Partners'),
+            ]
+            for pattern, replacement in common_fragments:
+                line = re.sub(pattern, replacement, line, flags=re.IGNORECASE)
+            
+            # Check for single-character words that might be fragments
+            # Merge with adjacent words if they form common patterns
+            words = line.split()
+            if len(words) >= 2:
+                merged_words = []
+                j = 0
+                while j < len(words):
+                    word = words[j]
+                    # If single char and next word exists, check if they should merge
+                    if len(word) == 1 and word.isalpha() and j < len(words) - 1:
+                        next_word = words[j + 1]
+                        # Common patterns: "de" + "velopment", "pro" + "fessional", etc.
+                        potential = word.lower() + next_word.lower()
+                        if potential in ['development', 'design', 'professional', 'marketing', 'communication', 'strategy', 'financial', 'analyst', 'investment']:
+                            # Find the full word
+                            full_word = next((w for w in ['development', 'design', 'professional', 'marketing', 'communication', 'strategy', 'financial', 'analyst', 'investment'] if w.startswith(potential)), None)
+                            if full_word:
+                                merged_words.append(full_word.capitalize() if word[0].isupper() else full_word)
+                                j += 2
+                                continue
+                    merged_words.append(word)
+                    j += 1
+                line = ' '.join(merged_words)
+            
             reconstructed_lines.append(line)
         lines = reconstructed_lines
         
@@ -408,22 +426,31 @@ class MawneyTemplateFormatter:
                     word_count = len(name.split())
                     if 2 <= word_count <= 3:
                         score += 30
-                    # Penalize "PE GILBERT" - prefer "HOPE GILBERT"
-                    if 'PE GILBERT' in name.upper() and 'HOPE' not in name.upper():
-                        score -= 100
+                    # Penalize names with single-character words that look like fragments
+                    name_words = name.split()
+                    if any(len(w) == 1 and w.isalpha() and i < len(name_words) - 1 for i, w in enumerate(name_words)):
+                        # Might be a fragment, slightly penalize
+                        score -= 20
                     return score
                 
                 name_candidates.sort(key=score_candidate, reverse=True)
                 final_name = name_candidates[0][0]
-                # Final check: if we got "PE GILBERT", try to fix it
-                if 'PE GILBERT' in final_name.upper() and 'HOPE' not in final_name.upper():
-                    final_name = re.sub(r'PE\s+GILBERT', 'HOPE GILBERT', final_name, flags=re.IGNORECASE)
-                # Fix duplications (HOHOPE -> HOPE, HOPE HOPE -> HOPE)
-                final_name = re.sub(r'\bHO\s*HOPE\b', 'HOPE', final_name, flags=re.IGNORECASE)
-                final_name = re.sub(r'\bHOPE\s+HOPE\b', 'HOPE', final_name, flags=re.IGNORECASE)
-                final_name = re.sub(r'\bH\s*O\s*HOPE\b', 'HOPE', final_name, flags=re.IGNORECASE)
-                # Clean up extra spaces
+                # Fix any word duplications (general pattern, not specific names)
+                # Pattern: repeated words like "WORD WORD" -> "WORD"
+                final_name = re.sub(r'\b(\w+)\s+\1\b', r'\1', final_name, flags=re.IGNORECASE)
+                # Clean up extra spaces and fix common fragments
                 final_name = ' '.join(final_name.split())
+                # Remove any single-character words that might be fragments (but keep if it's a valid initial)
+                words = final_name.split()
+                cleaned_words = []
+                for word in words:
+                    # Keep single letters if they're likely initials (A, B, C, etc. followed by another word)
+                    if len(word) == 1 and word.isalpha() and cleaned_words:
+                        # Might be an initial, keep it
+                        cleaned_words.append(word)
+                    elif len(word) > 1:
+                        cleaned_words.append(word)
+                final_name = ' '.join(cleaned_words)
                 parsed['name'] = final_name
                 logger.info(f"Extracted name: {parsed['name']} from position {name_candidates[0][1]} (source: {name_candidates[0][2]})")
             else:
@@ -553,12 +580,28 @@ class MawneyTemplateFormatter:
             has_date = bool(re.search(r'\b(19|20)\d{2}\s*[-–]\s*((?:19|20)\d{2}|Present|Current|Now)\b', line, re.IGNORECASE))
             has_month_date = bool(re.search(r'\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}\s*[-–]', line, re.IGNORECASE))
             
-            # Check if line contains job title indicators - EXPANDED list
-            job_title_indicators = ['designer', 'developer', 'administrator', 'analyst', 'manager', 'director', 'officer', 'specialist', 'associate', 'executive', 'consultant', 'engineer', 'freelance', 'recruitment', 'marketing', 'business', 'development', 'coordinator', 'lead', 'senior', 'junior', 'assistant']
+            # Check if line contains job title indicators - FINANCIAL INDUSTRY FOCUSED
+            job_title_indicators = [
+                # Financial industry roles
+                'analyst', 'associate', 'director', 'manager', 'vice president', 'vp', 'executive', 'officer', 'specialist',
+                'trader', 'portfolio', 'risk', 'quantitative', 'quant', 'researcher', 'researcher', 'strategist',
+                'consultant', 'advisor', 'adviser', 'investment', 'banker', 'broker', 'dealer',
+                # General professional roles
+                'designer', 'developer', 'administrator', 'engineer', 'coordinator', 'lead', 'senior', 'junior', 'assistant',
+                'marketing', 'business', 'development', 'freelance', 'recruitment'
+            ]
             looks_like_job = any(indicator in line_lower for indicator in job_title_indicators)
             
-            # Check if line contains company indicators - EXPANDED list
-            company_indicators = ['ltd', 'inc', 'llc', 'corp', 'partners', 'capital', 'management', 'group', 'plc', 'bank', 'fund', 'clients', 'mammoet', 'recruiter', 'flat fee', 'various', 'remote', 'leeds', 'london']
+            # Check if line contains company indicators - FINANCIAL INDUSTRY FOCUSED
+            company_indicators = [
+                # Financial institutions
+                'bank', 'capital', 'partners', 'group', 'fund', 'management', 'investment', 'advisory', 'holdings',
+                'securities', 'trading', 'asset', 'wealth', 'private equity', 'hedge fund',
+                # Company suffixes
+                'ltd', 'inc', 'llc', 'corp', 'plc',
+                # Common company words
+                'clients', 'various', 'remote', 'london', 'new york', 'leeds', 'manchester'
+            ]
             looks_like_company = any(indicator in line_lower for indicator in company_indicators) or (line_upper.isupper() and len(line.split()) >= 2 and len(line) < 60)
             
             # Check if previous line might be part of this job entry (fragmented text)
@@ -602,15 +645,17 @@ class MawneyTemplateFormatter:
                 company = re.sub(r'^\s*[—–-]\s*', '', company).strip()
                 # Aggressive company name reconstruction
                 company = self._reconstruct_company_names(company)
-                # Also fix common fragments directly
+                # Also fix common fragments directly - GENERAL patterns
                 company = re.sub(r'\bartners\b', 'Partners', company, flags=re.IGNORECASE)
-                company = re.sub(r'\bwney\s+Partners\b', 'Mawney Partners', company, flags=re.IGNORECASE)
-                company = re.sub(r'\bMawney\s+artners\b', 'Mawney Partners', company, flags=re.IGNORECASE)
-                company = re.sub(r'\bg\s+wney\b', 'Mawney', company, flags=re.IGNORECASE)
+                company = re.sub(r'\bcap\s+ital\b', 'Capital', company, flags=re.IGNORECASE)
+                company = re.sub(r'\bman\s+agement\b', 'Management', company, flags=re.IGNORECASE)
+                # If it's just a common fragment, it's likely the full word
                 if company.lower() == 'artners':
-                    company = 'Partners'  # If it's just "artners", it's likely "Partners"
-                if company.lower() in ['g', 'wney']:
-                    company = 'Mawney'  # Single fragment
+                    company = 'Partners'
+                if company.lower() in ['cap', 'ital']:
+                    company = 'Capital'
+                if company.lower() in ['man', 'agement']:
+                    company = 'Management'
                 
                 current_experience = {
                     'title': title if title else 'POSITION',
@@ -642,15 +687,17 @@ class MawneyTemplateFormatter:
                 company = re.sub(r'^\s*[—–-]\s*', '', company).strip()
                 # Aggressive company name reconstruction
                 company = self._reconstruct_company_names(company)
-                # Also fix common fragments directly
+                # Also fix common fragments directly - GENERAL patterns
                 company = re.sub(r'\bartners\b', 'Partners', company, flags=re.IGNORECASE)
-                company = re.sub(r'\bwney\s+Partners\b', 'Mawney Partners', company, flags=re.IGNORECASE)
-                company = re.sub(r'\bMawney\s+artners\b', 'Mawney Partners', company, flags=re.IGNORECASE)
-                company = re.sub(r'\bg\s+wney\b', 'Mawney', company, flags=re.IGNORECASE)
+                company = re.sub(r'\bcap\s+ital\b', 'Capital', company, flags=re.IGNORECASE)
+                company = re.sub(r'\bman\s+agement\b', 'Management', company, flags=re.IGNORECASE)
+                # If it's just a common fragment, it's likely the full word
                 if company.lower() == 'artners':
-                    company = 'Partners'  # If it's just "artners", it's likely "Partners"
-                if company.lower() in ['g', 'wney']:
-                    company = 'Mawney'  # Single fragment
+                    company = 'Partners'
+                if company.lower() in ['cap', 'ital']:
+                    company = 'Capital'
+                if company.lower() in ['man', 'agement']:
+                    company = 'Management'
                 
                 current_experience = {
                     'title': title if title else 'POSITION',
@@ -1075,19 +1122,21 @@ class MawneyTemplateFormatter:
         return False
     
     def _reconstruct_company_names(self, text: str) -> str:
-        """Reconstruct fragmented company names"""
+        """Reconstruct fragmented company names - GENERAL patterns"""
         import re
         
-        # Common company name fragments
+        # Common company name fragments - GENERAL patterns for financial industry
         patterns = [
+            # Common company suffixes
             (r'\bartners\b', 'Partners', re.IGNORECASE),
-            (r'\bwney\s+Partners\b', 'Mawney Partners', re.IGNORECASE),
-            (r'\bMawney\s+artners\b', 'Mawney Partners', re.IGNORECASE),
-            (r'\bM\s+awney\s+Partners\b', 'Mawney Partners', re.IGNORECASE),
-            (r'\bg\s+wney\s+Partners\b', 'Mawney Partners', re.IGNORECASE),
-            (r'\bPartners\s*,\s*London\b', 'Partners, London', re.IGNORECASE),
-            # Handle cases where "artners" appears alone (should be "Partners")
+            (r'\bcap\s+ital\b', 'Capital', re.IGNORECASE),
+            (r'\bman\s+agement\b', 'Management', re.IGNORECASE),
+            (r'\bgroup\b', 'Group', re.IGNORECASE),
+            (r'\bin\s+vestment\b', 'Investment', re.IGNORECASE),
+            (r'\bsecur\s+ities\b', 'Securities', re.IGNORECASE),
+            # Handle cases where fragments appear alone
             (r'^artners\b', 'Partners', re.IGNORECASE),
+            (r'^cap\s+ital\b', 'Capital', re.IGNORECASE),
         ]
         
         for pattern, replacement, flags in patterns:
