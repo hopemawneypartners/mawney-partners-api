@@ -673,6 +673,7 @@ class MawneyTemplateFormatter:
         full_text = ' '.join(lines)
         
         # Email extraction - more comprehensive patterns (handle spaces in emails)
+        # Check both full text and individual lines (emails can be split across lines)
         email_patterns = [
             r'\b[A-Za-z0-9._%+-]+\s*@\s*[A-Za-z0-9.-]+\s*\.\s*[A-Z|a-z]{2,}\b',  # Email with spaces anywhere
             r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',  # Standard email
@@ -681,18 +682,59 @@ class MawneyTemplateFormatter:
             r'[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.(com|co\.uk|org|net|edu|gov)',  # Common domains
         ]
         
+        # Try full text first
         for pattern in email_patterns:
             email_match = re.search(pattern, full_text, re.IGNORECASE)
             if email_match:
                 email = email_match.group(0).strip()
-                # Clean up email (remove ALL spaces, trailing dots)
-                email = re.sub(r'\s+', '', email)
-                email = email.rstrip('.')
-                if '@' in email and '.' in email.split('@')[1]:
+                # Clean up email (remove ALL spaces, trailing dots, fix common issues)
+                email = re.sub(r'\s+', '', email)  # Remove all spaces
+                email = email.rstrip('.')  # Remove trailing dot
+                # Fix common pattern: "email@domain. com" -> "email@domain.com"
+                email = re.sub(r'@([^.]+)\s*\.\s*', r'@\1.', email)
+                # Fix pattern: "email. @domain.com" -> "email@domain.com"
+                email = re.sub(r'\.\s*@', '@', email)
+                if '@' in email and '.' in email.split('@')[1] and len(email.split('@')[0]) > 2:
                     parsed['email'] = email
                     logger.info(f"Extracted email: {parsed['email']}")
                     print(f"✅ Extracted email: {parsed['email']}")
                     break
+        
+        # If not found, try reconstructing from fragmented lines
+        # Pattern: "opegilbert@live" on one line, ". com" on next
+        if not parsed['email']:
+            for i in range(len(lines) - 1):
+                line1 = lines[i].strip()
+                line2 = lines[i+1].strip() if i+1 < len(lines) else ""
+                
+                # Check if line1 has email prefix and line2 has domain
+                if '@' in line1:
+                    email_part = line1.split('@')[0] if '@' in line1 else ""
+                    domain_part = line1.split('@')[1] if '@' in line1 and len(line1.split('@')) > 1 else ""
+                    
+                    # If line1 has full email, extract it
+                    if domain_part and '.' in domain_part:
+                        email_match = re.search(r'[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}', line1, re.IGNORECASE)
+                        if email_match:
+                            email = email_match.group(0).strip()
+                            email = re.sub(r'\s+', '', email)
+                            if '@' in email and '.' in email.split('@')[1] and len(email.split('@')[0]) > 2:
+                                parsed['email'] = email
+                                print(f"✅ Extracted email from line: {parsed['email']}")
+                                break
+                    
+                    # If line1 has "email@" but no domain, check line2
+                    elif email_part and not domain_part and line2:
+                        # Check if line2 starts with domain pattern
+                        if re.match(r'^[a-z0-9.-]+\.[a-z]{2,}', line2, re.IGNORECASE):
+                            # Reconstruct: line1 + line2
+                            email = (line1 + line2).strip()
+                            email = re.sub(r'\s+', '', email)
+                            email = email.rstrip('.')
+                            if '@' in email and '.' in email.split('@')[1] and len(email.split('@')[0]) > 2:
+                                parsed['email'] = email
+                                print(f"✅ Reconstructed email from two lines: {parsed['email']}")
+                                break
         
         # Also check individual lines for emails (sometimes they're on their own line)
         if not parsed['email']:
