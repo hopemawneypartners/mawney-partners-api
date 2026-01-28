@@ -767,6 +767,7 @@ class MawneyTemplateFormatter:
                     break
         
         # Extract professional summary - look for actual CV content, not auto-populated
+        # IMPORTANT: Stop before job entries (lines ending with ":" that look like job titles)
         summary_started = False
         current_summary = []
         
@@ -785,10 +786,25 @@ class MawneyTemplateFormatter:
                 if len(line_stripped) < 50 and (line_stripped.isupper() or (line_stripped[0].isupper() and line_stripped.count(' ') < 5)):
                     break
             
+            # Stop if we hit a job entry (line ending with ":" that looks like a job title)
+            # This prevents summary from consuming job entries
+            if summary_started and line_stripped.endswith(':'):
+                # Check if next line has dates (indicates it's a job entry, not summary)
+                if i+1 < len(lines):
+                    next_line = lines[i+1].strip()
+                    has_date = bool(re.search(r'\b(19|20)\d{2}\s*[-–]', next_line, re.IGNORECASE))
+                    has_month_date = bool(re.search(r'\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}\s*[-–]', next_line, re.IGNORECASE))
+                    if has_date or has_month_date:
+                        # This is a job entry, stop summary collection
+                        break
+            
             # Collect summary content
             if summary_started and line_stripped and len(line_stripped) > 10:
-                # Skip bullet points and very short lines
-                if not line_stripped.startswith(('•', '-', '*')) and len(line_stripped) > 15:
+                # Skip bullet points, very short lines, and lines that look like job titles
+                if (not line_stripped.startswith(('•', '-', '*')) and 
+                    len(line_stripped) > 15 and
+                    not line_stripped.endswith(':') and  # Don't include job title lines
+                    not re.search(r'\b(19|20)\d{2}\s*[-–]', line_stripped, re.IGNORECASE)):  # Don't include date lines
                     current_summary.append(line_stripped)
         
         # Only use actual CV summary, not auto-populated content
@@ -859,17 +875,50 @@ class MawneyTemplateFormatter:
                 break
             
             # Check if this line is a job title ending with ":"
-            if line_stripped.endswith(':') and any(indicator in line_lower for indicator in job_title_indicators):
-                # Check next line for company/location/dates
-                if i+1 < len(lines):
-                    next_line = lines[i+1].strip()
-                    next_line_lower = next_line.lower()
-                    has_date_next = bool(re.search(r'\b(19|20)\d{2}\s*[-–]', next_line, re.IGNORECASE))
-                    has_month_date_next = bool(re.search(r'\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}\s*[-–]', next_line, re.IGNORECASE))
-                    looks_like_company_next = any(indicator in next_line_lower for indicator in company_indicators)
-                    
-                    # Be more lenient - if it has dates, it's likely a job entry
-                    if has_date_next or has_month_date_next:
+            # Be more general - any line ending with ":" that's not too short and not a section header
+            if line_stripped.endswith(':') and len(line_stripped) > 5:
+                # Check if it looks like a job title (has job indicators OR is reasonably long)
+                looks_like_job_title = (any(indicator in line_lower for indicator in job_title_indicators) or
+                                       (len(line_stripped.split()) >= 2 and len(line_stripped.split()) <= 8))
+                
+                if looks_like_job_title:
+                    # Check next line for company/location/dates
+                    if i+1 < len(lines):
+                        next_line = lines[i+1].strip()
+                        next_line_lower = next_line.lower()
+                        has_date_next = bool(re.search(r'\b(19|20)\d{2}\s*[-–]', next_line, re.IGNORECASE))
+                        has_month_date_next = bool(re.search(r'\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}\s*[-–]', next_line, re.IGNORECASE))
+                        looks_like_company_next = any(indicator in next_line_lower for indicator in company_indicators)
+                        
+                        # Be more lenient - if it has dates OR looks like a company, it's likely a job entry
+                        if has_date_next or has_month_date_next or looks_like_company_next:
+                            # Extract job title from this line
+                            title = line_stripped.rstrip(':').strip()
+                            
+                            # Extract company, location, dates from next line
+                            date_match = re.search(r'((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}|\d{4})\s*[-–]\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}|\d{4}|Present|Current|Now)', next_line, re.IGNORECASE)
+                            dates = date_match.group(0).strip() if date_match else ""
+                            
+                            # Remove dates from next line for company/location extraction
+                            next_line_without_dates = re.sub(r'\s*\(?\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}|\d{4})\s*[-–]\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}|\d{4}|Present|Current|Now)\s*\)?', '', next_line).strip()
+                            parts = re.split(r'\s*,\s*', next_line_without_dates)
+                            
+                            company = parts[0].strip() if parts else ""
+                            location = parts[1].strip() if len(parts) > 1 else ""
+                            
+                            # Clean up and reconstruct
+                            company = self._reconstruct_company_names(company)
+                            
+                            top_section_jobs.append({
+                                'title': title if title else 'POSITION',
+                                'company': company if company else 'COMPANY',
+                                'location': location if location else '',
+                                'dates': dates,
+                                'responsibilities': []
+                            })
+                            print(f"✅ Found top section job: {title} at {company}")
+                            logger.info(f"✅ Found top section job: {title} at {company}")
+                            continue  # Skip to next iteration (skip next line since we processed it)
                         # Extract job title from this line
                         title = line_stripped.rstrip(':').strip()
                         
