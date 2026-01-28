@@ -1750,6 +1750,9 @@ def process_ai_query_with_files(query: str, context: Dict = None, file_analyses:
             
             # Check if this is a CV formatting request
             cv_files = [f for f in file_analyses if f.get('type') in ['pdf', 'text'] and _is_cv_file(f)]
+            print(f"🔍 CV Detection: Found {len(cv_files)} CV files")
+            print(f"🔍 Query: {enhanced_query}")
+            print(f"🔍 CV formatting request: {_is_cv_formatting_request(enhanced_query, file_analyses)}")
             logger.info(f"🔍 CV Detection: Found {len(cv_files)} CV files")
             logger.info(f"🔍 Query: {enhanced_query}")
             logger.info(f"🔍 CV formatting request: {_is_cv_formatting_request(enhanced_query, file_analyses)}")
@@ -2236,9 +2239,12 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
             template_formatter_primary = MawneyTemplateFormatter()
             # Get font_info from CV file analysis for better name extraction
             font_info = cv_file.get('document_properties', {}).get('font_info', [])
+            print(f"🎯 Calling template formatter with {len(cv_content)} chars of CV content")
             logger.info(f"🎯 Calling template formatter with {len(cv_content)} chars of CV content")
             formatted_result = template_formatter_primary.format_cv_with_template(cv_content, filename, font_info=font_info)
-            logger.info(f"🎯 Template formatter returned: success={formatted_result.get('success')}, html_length={len(formatted_result.get('html_content', '') or formatted_result.get('html_version', ''))}")
+            html_len = len(formatted_result.get('html_content', '') or formatted_result.get('html_version', ''))
+            print(f"🎯 Template formatter returned: success={formatted_result.get('success')}, html_length={html_len}")
+            logger.info(f"🎯 Template formatter returned: success={formatted_result.get('success')}, html_length={html_len}")
         except Exception as e:
             logger.error(f"❌ Template formatter exception: {e}", exc_info=True)
             formatted_result = {}
@@ -2247,24 +2253,30 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
         html_candidate = (formatted_result.get('html_content') or formatted_result.get('html_version') or '') if isinstance(formatted_result, dict) else ''
         html_length = len(html_candidate)
         has_visible = _has_visible_text(html_candidate)
+        print(f"🎯 Template formatter HTML check: length={html_length}, has_visible_text={has_visible}, min_chars=200")
         logger.info(f"🎯 Template formatter HTML check: length={html_length}, has_visible_text={has_visible}, min_chars=200")
         
         if not has_visible and html_length > 0:
+            print(f"⚠️ Template formatter produced HTML ({html_length} chars) but _has_visible_text returned False. Checking content...")
+            print(f"   First 500 chars: {html_candidate[:500]}")
             logger.warning(f"⚠️ Template formatter produced HTML ({html_length} chars) but _has_visible_text returned False. Checking content...")
-            # Log first 500 chars to see what we got
             logger.info(f"   First 500 chars: {html_candidate[:500]}")
         
         if not has_visible:
+            print("⚠️ Template formatter didn't produce sufficient visible text, trying fallback formatters...")
             logger.warning("⚠️ Template formatter didn't produce sufficient visible text, trying fallback formatters...")
             det = _deterministic_parse_to_html(cv_content)
             if det.get('success') and _has_visible_text(det.get('html_content', '')):
+                print("✅ Deterministic parser produced visible content")
                 logger.info("✅ Deterministic parser produced visible content")
                 formatted_result = det
             else:
+                print("⚠️ Deterministic parser failed, trying cascading templates...")
                 logger.warning("⚠️ Deterministic parser failed, trying cascading templates...")
                 # Try cascading enhanced formatters
                 formatted_result = _format_with_cascading_templates(cv_content, filename)
         else:
+            print("✅ Template formatter produced sufficient visible text, using it")
             logger.info("✅ Template formatter produced sufficient visible text, using it")
 
         # Normalize key names from different formatters
