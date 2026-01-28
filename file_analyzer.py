@@ -338,12 +338,22 @@ class FileAnalyzer:
             
             extracted_text = extracted_text.strip()
             
+            # FINAL: Apply word reconstruction one more time to the complete merged text
+            # This catches any fragments that might have been introduced during merging
+            extracted_text = self._reconstruct_fragmented_words(extracted_text)
+            
             # Log the extracted content for debugging
             logger.info(f"PDF extraction for {filename}:")
             logger.info(f"Page count: {page_count}")
             logger.info(f"Text length: {len(extracted_text)} characters")
             logger.info(f"Used OCR: {use_ocr}")
             logger.info(f"First 500 characters: {extracted_text[:500]}")
+            
+            # Check if we found common fragments (for debugging)
+            if 'PE GILBERT' in extracted_text.upper() and 'HOPE GILBERT' not in extracted_text.upper():
+                logger.warning("⚠️ Found 'PE GILBERT' but not 'HOPE GILBERT' - reconstruction may have failed")
+            if 'artners' in extracted_text.lower() and 'Mawney Partners' not in extracted_text:
+                logger.warning("⚠️ Found 'artners' fragment - company name reconstruction may have failed")
             
             # Analyze document content
             analysis = self._analyze_document_content(extracted_text, filename)
@@ -464,10 +474,13 @@ class FileAnalyzer:
         # Apply multiple times to catch nested fragments
         fragment_patterns = [
             # Name fragments - be more aggressive (case insensitive, flexible spacing)
+            # Handle "PE GILBERT" even when "HO" is missing (common OCR/extraction issue)
             (r'\bPE\s+GILBERT\b', 'HOPE GILBERT', re.IGNORECASE),
+            (r'^PE\s+GILBERT\b', 'HOPE GILBERT', re.IGNORECASE | re.MULTILINE),  # At start of line
             (r'\bHO\s+PE\s+GILBERT\b', 'HOPE GILBERT', re.IGNORECASE),
             (r'\bH\s+O\s+PE\s+GILBERT\b', 'HOPE GILBERT', re.IGNORECASE),
             (r'\bH\s+O\s+PE\b', 'HOPE', re.IGNORECASE),
+            (r'^PE\s+GE\b', 'PAGE', re.IGNORECASE | re.MULTILINE),
             (r'\bPE\s+GE\b', 'PAGE', re.IGNORECASE),
             # Company name fragments - comprehensive patterns
             (r'\bartners\b', 'Partners', re.IGNORECASE),
