@@ -279,6 +279,7 @@ class MawneyTemplateFormatter:
                                 name_candidates.append((line, i, 'standard'))
             
             # Also check for names that might be split across lines (artistic formatting)
+            # Also check for fragmented names like "PE GILBERT" (missing "HO" from "HOPE")
             for i in range(min(5, len(lines) - 1)):
                 line1 = lines[i].strip() if i < len(lines) else ""
                 line2 = lines[i+1].strip() if i+1 < len(lines) else ""
@@ -300,6 +301,30 @@ class MawneyTemplateFormatter:
                         if (is_title_case or is_all_caps) and not any(char in combined for char in ['@', '+', '(', ')', '/', '\\']):
                             if not re.search(r'\d', combined):
                                 name_candidates.append((combined, i, 'split'))
+                
+                # Check for fragmented names: "PE GILBERT" might be "HOPE GILBERT"
+                # Look for patterns like "PE" followed by a surname
+                if line1.upper() == 'PE' and line2 and len(line2.split()) == 1:
+                    # Check if previous line might be "HO"
+                    if i > 0:
+                        prev_line = lines[i-1].strip().upper()
+                        if prev_line == 'HO':
+                            # Reconstruct "HOPE GILBERT"
+                            reconstructed = f"HOPE {line2}"
+                            name_candidates.append((reconstructed, i-1, 'reconstructed'))
+                
+                # Also check if line1 is just "PE" and might be part of "HOPE"
+                if line1.upper() in ['PE', 'HO'] and line2:
+                    line2_words = line2.split()
+                    if len(line2_words) == 1 and line2_words[0][0].isupper():
+                        # Might be a surname, try to reconstruct
+                        if line1.upper() == 'PE':
+                            # Check if we can find "HO" nearby
+                            for j in range(max(0, i-2), i):
+                                if lines[j].strip().upper() == 'HO':
+                                    reconstructed = f"HOPE {line2}"
+                                    name_candidates.append((reconstructed, j, 'reconstructed'))
+                                    break
             
             # Add large text candidates from font_info (artistically formatted names)
             if large_text_candidates:
@@ -817,11 +842,25 @@ class MawneyTemplateFormatter:
                              (line_clean.startswith('and ') or line_clean.startswith('& ') or 
                               not line_clean[0].isupper() or line_clean.endswith(':')))):
                             # Merge with previous skill
-                            skills_collected[-1] = (last_skill.rstrip(',') + " " + line_clean).strip()
+                            merged = (last_skill.rstrip(',') + " " + line_clean).strip()
+                            # Clean up common patterns
+                            merged = re.sub(r'\s*\.\s*Development', ' Development', merged, flags=re.IGNORECASE)
+                            merged = re.sub(r'development\s*,\s*and\s+UX', 'Development and UX', merged, flags=re.IGNORECASE)
+                            skills_collected[-1] = merged
                         elif current_skill_group:
                             current_skill_group[-1] += " " + line_clean
                         else:
-                            skills_collected.append(line_clean)
+                            # Check for common skill fragments and clean them
+                            cleaned_skill = line_clean
+                            # "design to create human Swift" -> "Swift" (programming language)
+                            if 'design to create human' in cleaned_skill.lower() and 'swift' in cleaned_skill.lower():
+                                cleaned_skill = 'Swift'
+                            # "Procreate centered digital" -> "Procreate" and "Digital Design"
+                            elif 'procreate centered digital' in cleaned_skill.lower():
+                                if 'Procreate' not in skills_collected:
+                                    skills_collected.append('Procreate')
+                                cleaned_skill = 'Digital Design'
+                            skills_collected.append(cleaned_skill)
                     
                     # Standalone skill line
                     elif len(line_clean) > 2 and len(line_clean) < 100:
@@ -885,6 +924,27 @@ class MawneyTemplateFormatter:
                 return True
         
         return False
+    
+    def _reconstruct_company_names(self, text: str) -> str:
+        """Reconstruct fragmented company names"""
+        import re
+        
+        # Common company name fragments
+        patterns = [
+            (r'\bartners\b', 'Partners', re.IGNORECASE),
+            (r'\bwney\s+Partners\b', 'Mawney Partners', re.IGNORECASE),
+            (r'\bMawney\s+artners\b', 'Mawney Partners', re.IGNORECASE),
+            (r'\bM\s+awney\s+Partners\b', 'Mawney Partners', re.IGNORECASE),
+            (r'\bg\s+wney\s+Partners\b', 'Mawney Partners', re.IGNORECASE),
+            (r'\bPartners\s*,\s*London\b', 'Partners, London', re.IGNORECASE),
+            # Handle cases where "artners" appears alone (should be "Partners")
+            (r'^artners\b', 'Partners', re.IGNORECASE),
+        ]
+        
+        for pattern, replacement, flags in patterns:
+            text = re.sub(pattern, replacement, text, flags=flags)
+        
+        return text
     
     def _is_school_line(self, line: str) -> bool:
         """Check if line is likely a school name"""

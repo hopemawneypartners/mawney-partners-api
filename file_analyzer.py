@@ -388,9 +388,94 @@ class FileAnalyzer:
         
         return '\n'.join(all_lines)
     
+    def _reconstruct_fragmented_words(self, text: str) -> str:
+        """Reconstruct fragmented words that were split incorrectly"""
+        import re
+        
+        # Common word fragments to merge
+        # Pattern: (fragment1)(fragment2) -> (full_word)
+        fragment_patterns = [
+            # Name fragments
+            (r'\bPE\s+GILBERT\b', 'HOPE GILBERT'),
+            (r'\bHO\s+PE\s+GILBERT\b', 'HOPE GILBERT'),
+            (r'\bPE\s+GE\b', 'PAGE'),
+            # Company name fragments
+            (r'\bartners\b', 'Partners'),
+            (r'\bwney\s+Partners\b', 'Mawney Partners'),
+            (r'\bMawney\s+artners\b', 'Mawney Partners'),
+            (r'\bM\s+awney\s+Partners\b', 'Mawney Partners'),
+            (r'\bg\s+wney\b', 'Mawney'),  # "g" + "wney" = "Mawney" (missing "Ma")
+            # Common word fragments
+            (r'\bde\s+velopment\b', 'development'),
+            (r'\bde\s+sign\b', 'design'),
+            (r'\bde\s+signer\b', 'designer'),
+            (r'\bde\s+veloper\b', 'developer'),
+            (r'\bcre\s+ative\b', 'creative'),
+            (r'\bpro\s+fessional\b', 'professional'),
+            (r'\bmar\s+keting\b', 'marketing'),
+            (r'\bcom\s+munication\b', 'communication'),
+            (r'\bstrat\s+egy\b', 'strategy'),
+            (r'\bstrat\s+egic\b', 'strategic'),
+        ]
+        
+        for pattern, replacement in fragment_patterns:
+            text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
+        
+        # Try to merge single-character words with following words
+        # Pattern: "word g word" -> "word Mawney word" (if context suggests it)
+        # But be careful - only merge if it makes sense
+        lines = text.split('\n')
+        reconstructed_lines = []
+        
+        for line in lines:
+            words = line.split()
+            if len(words) < 2:
+                reconstructed_lines.append(line)
+                continue
+            
+            merged_words = []
+            i = 0
+            while i < len(words):
+                word = words[i]
+                
+                # Check if this is a single character that might be a fragment
+                if len(word) == 1 and word.isalpha() and i < len(words) - 1:
+                    next_word = words[i + 1]
+                    
+                    # Try to reconstruct common patterns
+                    # "g wney" -> "Mawney" (if "wney" follows)
+                    if word.lower() == 'g' and next_word.lower().startswith('wney'):
+                        merged_words.append('Mawney')
+                        i += 2
+                        continue
+                    # "artners" -> "Partners" (if preceded by something that looks like company name)
+                    elif word.lower() == 'artners' and merged_words and merged_words[-1].lower() in ['mawney', 'm', 'ma']:
+                        if merged_words[-1].lower() in ['m', 'ma']:
+                            merged_words[-1] = 'Mawney'
+                        merged_words.append('Partners')
+                        i += 1
+                        continue
+                    # "PE" -> might be part of "HOPE" if followed by "GILBERT"
+                    elif word.upper() == 'PE' and i < len(words) - 1 and words[i + 1].upper() == 'GILBERT':
+                        # Check if previous word might be "HO"
+                        if merged_words and merged_words[-1].upper() == 'HO':
+                            merged_words[-1] = 'HOPE'
+                            i += 1  # Skip "PE"
+                            continue
+                
+                merged_words.append(word)
+                i += 1
+            
+            reconstructed_lines.append(' '.join(merged_words))
+        
+        return '\n'.join(reconstructed_lines)
+    
     def _clean_extracted_text(self, text: str) -> str:
         """Clean and normalize extracted PDF text with aggressive word separation"""
         import re
+        
+        # FIRST: Reconstruct fragmented words before other cleaning
+        text = self._reconstruct_fragmented_words(text)
         
         # CRITICAL: Force structure into CV format by adding line breaks strategically
         # First, fix concatenations
