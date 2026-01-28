@@ -866,12 +866,14 @@ class MawneyTemplateFormatter:
         # These are often the most recent/important positions
         # Handle pattern: "Job Title:" on one line, "Company, Location (Dates)" on next
         top_section_jobs = []
+        print(f"🔍 Checking first 30 lines for top section jobs...")
         for i, line in enumerate(lines[:30]):  # Check first 30 lines
             line_lower = line.lower().strip()
             line_stripped = line.strip()
             
             # Skip if we hit a section header
             if any(keyword in line_lower for keyword in ['work experience', 'professional experience', 'education', 'skills', 'profile', 'summary']):
+                print(f"   Line {i}: Hit section header '{line_stripped}', stopping top section search")
                 break
             
             # Check if this line is a job title ending with ":"
@@ -882,6 +884,7 @@ class MawneyTemplateFormatter:
                                        (len(line_stripped.split()) >= 2 and len(line_stripped.split()) <= 8))
                 
                 if looks_like_job_title:
+                    print(f"   Line {i}: Found potential job title ending with ':': '{line_stripped}'")
                     # Check next line for company/location/dates
                     if i+1 < len(lines):
                         next_line = lines[i+1].strip()
@@ -889,6 +892,9 @@ class MawneyTemplateFormatter:
                         has_date_next = bool(re.search(r'\b(19|20)\d{2}\s*[-–]', next_line, re.IGNORECASE))
                         has_month_date_next = bool(re.search(r'\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}\s*[-–]', next_line, re.IGNORECASE))
                         looks_like_company_next = any(indicator in next_line_lower for indicator in company_indicators)
+                        
+                        print(f"      Next line: '{next_line[:50]}...'")
+                        print(f"      has_date_next: {has_date_next}, has_month_date_next: {has_month_date_next}, looks_like_company_next: {looks_like_company_next}")
                         
                         # Be more lenient - if it has dates OR looks like a company, it's likely a job entry
                         if has_date_next or has_month_date_next or looks_like_company_next:
@@ -919,33 +925,6 @@ class MawneyTemplateFormatter:
                             print(f"✅ Found top section job: {title} at {company}")
                             logger.info(f"✅ Found top section job: {title} at {company}")
                             continue  # Skip to next iteration (skip next line since we processed it)
-                        # Extract job title from this line
-                        title = line_stripped.rstrip(':').strip()
-                        
-                        # Extract company, location, dates from next line
-                        date_match = re.search(r'((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}|\d{4})\s*[-–]\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}|\d{4}|Present|Current|Now)', next_line, re.IGNORECASE)
-                        dates = date_match.group(0).strip() if date_match else ""
-                        
-                        # Remove dates from next line for company/location extraction
-                        next_line_without_dates = re.sub(r'\s*\(?\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}|\d{4})\s*[-–]\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}|\d{4}|Present|Current|Now)\s*\)?', '', next_line).strip()
-                        parts = re.split(r'\s*,\s*', next_line_without_dates)
-                        
-                        company = parts[0].strip() if parts else ""
-                        location = parts[1].strip() if len(parts) > 1 else ""
-                        
-                        # Clean up and reconstruct
-                        company = self._reconstruct_company_names(company)
-                        
-                        top_section_jobs.append({
-                            'title': title if title else 'POSITION',
-                            'company': company if company else 'COMPANY',
-                            'location': location if location else '',
-                            'dates': dates,
-                            'responsibilities': []
-                        })
-                        print(f"✅ Found top section job: {title} at {company}")
-                        logger.info(f"✅ Found top section job: {title} at {company}")
-                        continue  # Skip to next iteration (skip next line since we processed it)
             
             # Check if this line looks like a job entry (has date + job/company keywords)
             has_date = bool(re.search(r'\b(19|20)\d{2}\s*[-–]', line, re.IGNORECASE))
