@@ -350,8 +350,8 @@ class MawneyTemplateFormatter:
                                 name_candidates.append((line, i, 'standard'))
             
             # Also check for names that might be split across lines (artistic formatting)
-            # Also check for fragmented names like "PE GILBERT" (missing "HO" from "HOPE")
-            for i in range(min(5, len(lines) - 1)):
+            # Also check for fragmented names - look for patterns where first part is missing
+            for i in range(min(8, len(lines) - 1)):
                 line1 = lines[i].strip() if i < len(lines) else ""
                 line2 = lines[i+1].strip() if i+1 < len(lines) else ""
                 
@@ -373,29 +373,29 @@ class MawneyTemplateFormatter:
                             if not re.search(r'\d', combined):
                                 name_candidates.append((combined, i, 'split'))
                 
-                # Check for fragmented names: "PE GILBERT" might be "HOPE GILBERT"
-                # Look for patterns like "PE" followed by a surname
-                if line1.upper() == 'PE' and line2 and len(line2.split()) == 1:
-                    # Check if previous line might be "HO"
-                    if i > 0:
-                        prev_line = lines[i-1].strip().upper()
-                        if prev_line == 'HO':
-                            # Reconstruct "HOPE GILBERT"
-                            reconstructed = f"HOPE {line2}"
-                            name_candidates.append((reconstructed, i-1, 'reconstructed'))
-                
-                # Also check if line1 is just "PE" and might be part of "HOPE"
-                if line1.upper() in ['PE', 'HO'] and line2:
+                # Check for fragmented names where first part might be missing
+                # Pattern: "PE" or "PE GILBERT" - might be missing "HO" or "HOPE"
+                if line1.upper() == 'PE' and line2:
                     line2_words = line2.split()
-                    if len(line2_words) == 1 and line2_words[0][0].isupper():
-                        # Might be a surname, try to reconstruct
-                        if line1.upper() == 'PE':
-                            # Check if we can find "HO" nearby
-                            for j in range(max(0, i-2), i):
-                                if lines[j].strip().upper() == 'HO':
+                    # If line2 is a surname (single word, capitalized)
+                    if len(line2_words) == 1 and line2_words[0][0].isupper() and len(line2_words[0]) > 3:
+                        # Check if previous lines might have "HO" or "HOPE"
+                        for j in range(max(0, i-3), i):
+                            prev_line = lines[j].strip().upper()
+                            if prev_line in ['HO', 'HOPE']:
+                                # Reconstruct name
+                                if prev_line == 'HO':
                                     reconstructed = f"HOPE {line2}"
-                                    name_candidates.append((reconstructed, j, 'reconstructed'))
-                                    break
+                                else:
+                                    reconstructed = f"{prev_line} {line2}"
+                                name_candidates.append((reconstructed, j, 'reconstructed'))
+                                break
+                        # If no "HO" found, "PE" might be a fragment - try common name patterns
+                        # But be conservative - only if it really looks like a name
+                        if line2_words[0][0].isupper() and len(line2_words[0]) >= 4:
+                            # Common pattern: missing first part of first name
+                            # We can't guess the full name, but we can note it's likely incomplete
+                            pass
             
             # Add large text candidates from font_info (artistically formatted names)
             if large_text_candidates:
@@ -471,9 +471,31 @@ class MawneyTemplateFormatter:
                                     break
                 
                 # Final fallback: first substantial line that looks like a name
+                # Also check if name might be incomplete (like "PE GILBERT" missing "HO")
                 if not parsed['name']:
-                    for line in lines[:5]:
+                    for line in lines[:8]:
                         words = line.split()
+                        # Check for incomplete names (2 words, one might be very short like "PE")
+                        if len(words) == 2:
+                            word1, word2 = words[0], words[1]
+                            # If first word is very short (1-2 chars) and second is a proper surname
+                            if len(word1) <= 2 and len(word2) >= 4 and word2[0].isupper():
+                                # This might be an incomplete name - check previous lines for missing part
+                                for j in range(max(0, lines.index(line) - 3), lines.index(line)):
+                                    prev = lines[j].strip().upper()
+                                    if prev in ['HO', 'HOPE', 'H', 'O']:
+                                        # Reconstruct
+                                        if prev == 'HO':
+                                            parsed['name'] = f"HOPE {word2}"
+                                        elif prev == 'HOPE':
+                                            parsed['name'] = f"HOPE {word2}"
+                                        else:
+                                            # Try to combine
+                                            parsed['name'] = f"{prev} {word1} {word2}".strip()
+                                        break
+                                if parsed['name']:
+                                    break
+                        # Standard name check
                         if len(words) >= 2 and len(words) <= 4:
                             if all(word[0].isupper() for word in words if word and word[0].isalpha()):
                                 if not any(char in line for char in ['@', '+', '(', ')', '/', '\\']):
@@ -483,10 +505,41 @@ class MawneyTemplateFormatter:
         # Extract contact info with improved patterns
         full_text = ' '.join(lines)
         
-        # Email extraction
-        email_match = re.search(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', full_text)
-        if email_match:
-            parsed['email'] = email_match.group(0)
+        # Email extraction - more comprehensive patterns
+        email_patterns = [
+            r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',  # Standard email
+            r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\.?',  # Email with optional trailing dot
+            r'[A-Za-z0-9._%+-]+\s*@\s*[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}',  # Email with spaces around @
+            r'[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.(com|co\.uk|org|net|edu|gov)',  # Common domains
+        ]
+        
+        for pattern in email_patterns:
+            email_match = re.search(pattern, full_text, re.IGNORECASE)
+            if email_match:
+                email = email_match.group(0).strip()
+                # Clean up email (remove spaces, trailing dots)
+                email = re.sub(r'\s+', '', email)
+                email = email.rstrip('.')
+                if '@' in email and '.' in email.split('@')[1]:
+                    parsed['email'] = email
+                    logger.info(f"Extracted email: {parsed['email']}")
+                    break
+        
+        # Also check individual lines for emails (sometimes they're on their own line)
+        if not parsed['email']:
+            for line in lines[:20]:  # Check first 20 lines
+                for pattern in email_patterns:
+                    email_match = re.search(pattern, line, re.IGNORECASE)
+                    if email_match:
+                        email = email_match.group(0).strip()
+                        email = re.sub(r'\s+', '', email)
+                        email = email.rstrip('.')
+                        if '@' in email and '.' in email.split('@')[1]:
+                            parsed['email'] = email
+                            logger.info(f"Extracted email from line: {parsed['email']}")
+                            break
+                if parsed['email']:
+                    break
         
         # Phone extraction with better patterns
         phone_patterns = [
@@ -541,11 +594,47 @@ class MawneyTemplateFormatter:
         
         # Extract experience with improved structure detection
         # Use line-by-line parsing which works better with fragmented PDF text
+        # IMPORTANT: Also check for jobs BEFORE the "WORK EXPERIENCE" header
+        # Many CVs list recent jobs near the top before the formal section header
         experience_patterns = []
         experience_section = False
         current_experience = None
         current_responsibilities = []
         
+        # First pass: Look for jobs near the top (before formal section headers)
+        # These are often the most recent/important positions
+        top_section_jobs = []
+        for i, line in enumerate(lines[:30]):  # Check first 30 lines
+            line_lower = line.lower().strip()
+            # Skip if we hit a section header
+            if any(keyword in line_lower for keyword in ['work experience', 'professional experience', 'education', 'skills', 'profile', 'summary']):
+                break
+            
+            # Check if this line looks like a job entry (has date + job/company keywords)
+            has_date = bool(re.search(r'\b(19|20)\d{2}\s*[-–]', line, re.IGNORECASE))
+            has_month_date = bool(re.search(r'\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}\s*[-–]', line, re.IGNORECASE))
+            looks_like_job = any(indicator in line_lower for indicator in job_title_indicators + company_indicators)
+            
+            if (has_date or has_month_date) and looks_like_job and len(line.split()) <= 10:
+                # This might be a job entry near the top
+                # Extract it
+                parts = re.split(r'\s*[—–-]\s*|\s*,\s*', line)
+                date_match = re.search(r'((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}|\d{4})\s*[-–]\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}|\d{4}|Present|Current|Now)', line, re.IGNORECASE)
+                dates = date_match.group(0).strip() if date_match else ""
+                line_without_dates = re.sub(r'\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}|\d{4})\s*[-–]\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}|\d{4}|Present|Current|Now)\s*', '', line).strip()
+                parts = re.split(r'\s*[—–-]\s*|\s*,\s*', line_without_dates)
+                title = parts[0].strip() if parts else line_without_dates
+                company = parts[1].strip() if len(parts) > 1 else ""
+                company = self._reconstruct_company_names(company)
+                top_section_jobs.append({
+                    'title': title if title else 'POSITION',
+                    'company': company if company else 'COMPANY',
+                    'location': parts[2].strip() if len(parts) > 2 else '',
+                    'dates': dates,
+                    'responsibilities': []
+                })
+        
+        # Now do the main parsing starting from experience section
         for i, line in enumerate(lines):
             line_lower = line.lower().strip()
             line_upper = line.upper().strip()
@@ -786,75 +875,25 @@ class MawneyTemplateFormatter:
                             'responsibilities': []
                         })
         
-        # If we found experience patterns, use them
-        if experience_patterns:
-            parsed['experience'] = experience_patterns
-            logger.info(f"Extracted {len(experience_patterns)} experience entries")
+        # Combine top section jobs with main experience section
+        # Top section jobs are usually most recent, so put them first
+        all_experience = top_section_jobs + experience_patterns
+        
+        # Remove duplicates (same title + company + dates)
+        seen = set()
+        unique_experience = []
+        for exp in all_experience:
+            key = (exp.get('title', '').lower(), exp.get('company', '').lower(), exp.get('dates', ''))
+            if key not in seen and key != ('position', 'company', ''):
+                seen.add(key)
+                unique_experience.append(exp)
+        
+        if unique_experience:
+            parsed['experience'] = unique_experience
+            logger.info(f"Extracted {len(unique_experience)} experience entries ({len(top_section_jobs)} from top section, {len(experience_patterns)} from main section)")
         else:
-            # Fallback to original parsing logic
-            experience_section = False
-            current_experience = {}
-            
-            for i, line in enumerate(lines):
-                line_lower = line.lower()
-                
-                # Start experience section
-                if any(keyword in line_lower for keyword in ['professional experience', 'work experience', 'employment', 'experience']):
-                    experience_section = True
-                    continue
-                
-                # End experience section
-                elif experience_section and any(keyword in line_lower for keyword in ['education', 'skills', 'interests', 'languages', 'certification']):
-                    if current_experience:
-                        parsed['experience'].append(current_experience)
-                    break
-                
-                # Process experience content
-                elif experience_section and line:
-                    # Check if this is a company name (uppercase, financial keywords, etc.)
-                    if self._is_company_line(line):
-                        # Save previous experience if exists
-                        if current_experience:
-                            parsed['experience'].append(current_experience)
-                        
-                        # Start new experience
-                        current_experience = {
-                            'company': line,
-                            'title': '',
-                            'dates': '',
-                            'responsibilities': []
-                        }
-                    
-                    # Check if this is a job title (usually after company name)
-                    elif current_experience and not current_experience['title'] and len(line) > 5:
-                        # Skip if it looks like a date or location
-                        if not re.search(r'\b(19|20)\d{2}\b', line) and not any(loc in line_lower for loc in ['london', 'uk', 'england']):
-                            current_experience['title'] = line
-                    
-                    # Check if this is a date line
-                    elif current_experience and re.search(r'\b(19|20)\d{2}\b', line):
-                        current_experience['dates'] = line
-                    
-                    # Check if this is a responsibility/bullet point
-                    elif current_experience and (line.startswith(('•', '-', '*', '◦', '·')) or 
-                                               line.strip().startswith(' ') or 
-                                               len(line) > 30):
-                        # Clean up bullet points and indented content
-                        clean_line = line.strip('•-*◦· ')
-                        if clean_line and len(clean_line) > 10:  # Substantial content
-                            # Split very long lines into multiple responsibilities
-                            if len(clean_line) > 200:
-                                # Try to split on common patterns
-                                parts = re.split(r'[.!?]\s+', clean_line)
-                                for part in parts:
-                                    if part.strip() and len(part.strip()) > 10:
-                                        current_experience['responsibilities'].append(part.strip())
-                            else:
-                                current_experience['responsibilities'].append(clean_line)
-            
-            # Add final experience
-            if current_experience:
-                parsed['experience'].append(current_experience)
+            parsed['experience'] = []
+            logger.warning("No experience entries found")
         
         # Extract education with improved parsing
         education_section = False
