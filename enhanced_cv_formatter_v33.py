@@ -115,10 +115,27 @@ class EnhancedCVFormatterV33:
         
         lines = text.split('\n')
         
-        # Extract name (usually first line or first non-empty line)
-        for line in lines[:5]:
+        # Extract name (usually first line or first non-empty line that looks like a name)
+        for line in lines[:10]:
             line = line.strip()
-            if line and len(line) > 2 and not re.search(r'@|phone|tel|email', line, re.I):
+            if not line:
+                continue
+            
+            # Skip if it looks like contact info, headers, or too long
+            if re.search(r'@|phone|tel|email|curriculum|vitae|resume|cv|address', line, re.I):
+                continue
+            if len(line) > 50:  # Names are usually shorter
+                continue
+            if line.isupper() and len(line) > 30:  # Skip all-caps headers
+                continue
+            
+            # Check if it looks like a name (has capital letters, might have spaces)
+            if re.match(r'^[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+$', line) or \
+               re.match(r'^[A-Z][A-Z\s]+$', line) and len(line.split()) <= 4:
+                cv_data['name'] = line.upper()
+                break
+            elif len(line.split()) <= 4 and not re.search(r'[0-9]', line):
+                # Might be a name even if format is slightly off
                 cv_data['name'] = line.upper()
                 break
         
@@ -172,91 +189,235 @@ class EnhancedCVFormatterV33:
         return cv_data
     
     def _extract_section(self, text, section_names):
-        """Extract text for a specific section"""
-        for section_name in section_names:
-            pattern = re.compile(rf'{re.escape(section_name)}.*?(?=\n\n[A-Z]|\n[A-Z][A-Z\s]+:|\n[A-Z][A-Z\s]+\n|$)', re.IGNORECASE | re.DOTALL)
-            match = pattern.search(text)
-            if match:
-                return match.group().strip()
-        return ""
+        """Extract text for a specific section - improved to capture actual content"""
+        lines = text.split('\n')
+        section_start = None
+        section_content = []
+        
+        # Find section header
+        for i, line in enumerate(lines):
+            line_upper = line.strip().upper()
+            for section_name in section_names:
+                if section_name.upper() in line_upper and len(line_upper) < 50:  # Header should be short
+                    section_start = i
+                    break
+            if section_start is not None:
+                break
+        
+        if section_start is None:
+            return ""
+        
+        # Extract content until next major section
+        section_headers = [
+            'WORK EXPERIENCE', 'WORK HISTORY', 'EMPLOYMENT', 'PROFESSIONAL EXPERIENCE',
+            'EDUCATION', 'ACADEMIC', 'QUALIFICATIONS', 'ACADEMIC BACKGROUND',
+            'LANGUAGES', 'LANGUAGE SKILLS',
+            'COMPUTER SKILLS', 'TECHNICAL SKILLS', 'IT SKILLS', 'SOFTWARE SKILLS', 'SKILLS',
+            'EXTRA CURRICULAR', 'ACTIVITIES', 'INTERESTS', 'HOBBIES',
+            'PROFILE', 'SUMMARY', 'PROFESSIONAL SUMMARY', 'OBJECTIVE'
+        ]
+        
+        for i in range(section_start + 1, len(lines)):
+            line = lines[i].strip()
+            if not line:
+                continue
+            
+            # Check if we hit another major section
+            line_upper = line.upper()
+            is_next_section = False
+            for header in section_headers:
+                if header in line_upper and len(line_upper) < 50:
+                    is_next_section = True
+                    break
+            
+            if is_next_section:
+                break
+            
+            section_content.append(line)
+        
+        return '\n'.join(section_content).strip()
     
     def _parse_work_experience_v33(self, section):
-        """Improved work experience parsing - same as previous versions"""
+        """Intelligently parse work experience from actual CV content"""
         entries = []
+        if not section or len(section.strip()) < 10:
+            return entries
         
-        # Look for job patterns with dates
-        job_pattern = re.compile(r'([A-Z][A-Z\s]+)\s*,\s*([A-Z][A-Z\s]+)\s*,\s*([A-Z\s]+)\s*,\s*([A-Z]{2,3})\s*([0-9]{4})\s*[-–]\s*([0-9]{4}|Present)', re.MULTILINE)
-        matches = job_pattern.findall(section)
+        lines = section.split('\n')
+        current_entry = None
+        current_description = []
         
-        for match in matches:
-            entries.append({
-                'title': match[0].strip(),
-                'company': match[1].strip(),
-                'location': f"{match[2].strip()}, {match[3].strip()}",
-                'start_date': match[4].strip(),
-                'end_date': match[5].strip(),
-                'description': ['Key responsibilities and achievements']
-            })
-        
-        # If no structured data found, create realistic entries
-        if not entries:
-            entries = [
-                {
-                    'title': 'SENIOR RISK ANALYST',
-                    'company': 'MORGAN STANLEY',
-                    'location': 'LONDON, UK',
-                    'start_date': '2022',
-                    'end_date': 'Present',
-                    'description': [
-                        'Conducted comprehensive risk analysis for investment portfolios',
-                        'Developed and maintained risk models for derivatives trading',
-                        'Collaborated with trading desks to implement risk controls'
-                    ]
-                },
-                {
-                    'title': 'RISK ANALYST',
-                    'company': 'GOLDMAN SACHS',
-                    'location': 'NEW YORK, NY',
-                    'start_date': '2020',
-                    'end_date': '2022',
-                    'description': [
-                        'Analyzed market risk exposure across multiple asset classes',
-                        'Prepared daily risk reports for senior management',
-                        'Assisted in stress testing and scenario analysis'
-                    ]
-                }
+        for line in lines:
+            line = line.strip()
+            if not line:
+                if current_entry:
+                    if current_description:
+                        current_entry['description'] = current_description
+                    entries.append(current_entry)
+                    current_entry = None
+                    current_description = []
+                continue
+            
+            # Check if line looks like a job title/company line
+            # Patterns: "Job Title at Company", "Job Title - Company", "Job Title, Company"
+            # Or: "Company — Job Title", "Company | Job Title"
+            job_patterns = [
+                r'^(.+?)\s+(?:at|@|—|–|-|,|,)\s+(.+?)(?:\s*[—–-]\s*(.+))?$',  # Title at Company — Location
+                r'^(.+?)\s*[—–-]\s*(.+?)(?:\s*[—–-]\s*(.+))?$',  # Title — Company — Location
             ]
+            
+            # Check for date patterns (years, months, etc.)
+            date_pattern = r'\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}|\b\d{4}\s*[-–]\s*(?:\d{4}|Present|Current|Now)\b|\b\d{1,2}[/-]\d{4}\s*[-–]\s*(?:\d{1,2}[/-]\d{4}|Present|Current)'
+            has_date = bool(re.search(date_pattern, line, re.IGNORECASE))
+            
+            # If line has a date and looks like a job entry
+            if has_date or (current_entry is None and len(line) > 10 and len(line) < 100):
+                # Save previous entry if exists
+                if current_entry:
+                    if current_description:
+                        current_entry['description'] = current_description
+                    entries.append(current_entry)
+                
+                # Extract job info
+                parts = re.split(r'\s*[—–-]\s*|\s*,\s*|\s+at\s+|\s+@\s+', line, maxsplit=2)
+                
+                # Try to extract dates
+                date_match = re.search(r'(\d{4}|\w+\s+\d{4})\s*[-–]\s*(\d{4}|Present|Current|Now)', line, re.IGNORECASE)
+                start_date = ""
+                end_date = ""
+                if date_match:
+                    start_date = date_match.group(1).strip()
+                    end_date = date_match.group(2).strip()
+                    # Remove date from line for title/company extraction
+                    line = re.sub(r'\s*(\d{4}|\w+\s+\d{4})\s*[-–]\s*(\d{4}|Present|Current|Now)\s*', '', line).strip()
+                    parts = re.split(r'\s*[—–-]\s*|\s*,\s*|\s+at\s+', line, maxsplit=1)
+                
+                title = parts[0].strip() if parts else line
+                company = parts[1].strip() if len(parts) > 1 else ""
+                location = parts[2].strip() if len(parts) > 2 else ""
+                
+                # Clean up title/company
+                title = re.sub(r'\s*[—–-]\s*$', '', title).strip()
+                company = re.sub(r'^\s*[—–-]\s*', '', company).strip()
+                
+                current_entry = {
+                    'title': title.upper() if title else 'POSITION',
+                    'company': company.upper() if company else 'COMPANY',
+                    'location': location.upper() if location else 'LOCATION',
+                    'start_date': start_date or '2020',
+                    'end_date': end_date or 'Present',
+                    'description': []
+                }
+                current_description = []
+            
+            # Check if line is a bullet point or description
+            elif current_entry:
+                # Remove bullet markers
+                desc_line = re.sub(r'^[•\-\*]\s*', '', line).strip()
+                if desc_line and len(desc_line) > 5:
+                    current_description.append(desc_line)
+            elif not current_entry and len(line) > 20:
+                # Might be a job title without clear structure
+                current_entry = {
+                    'title': line.upper(),
+                    'company': 'COMPANY',
+                    'location': 'LOCATION',
+                    'start_date': '2020',
+                    'end_date': 'Present',
+                    'description': []
+                }
         
-        return entries
+        # Save last entry
+        if current_entry:
+            if current_description:
+                current_entry['description'] = current_description
+            entries.append(current_entry)
+        
+        return entries if entries else []
     
     def _parse_education_v33(self, section):
-        """Improved education parsing - same as previous versions"""
+        """Intelligently parse education from actual CV content"""
         entries = []
+        if not section or len(section.strip()) < 10:
+            return entries
         
-        # Look for degree patterns
-        degree_pattern = re.compile(r'([A-Z][A-Z\s]+)\s*,\s*([A-Z][A-Z\s]+)\s*([0-9]{4})', re.MULTILINE)
-        matches = degree_pattern.findall(section)
+        lines = section.split('\n')
+        current_entry = None
         
-        for match in matches:
-            entries.append({
-                'degree': match[0].strip(),
-                'institution': match[1].strip(),
-                'year': match[2].strip(),
-                'description': ['Relevant coursework and academic achievements']
-            })
-        
-        # If no structured data found, create realistic entry
-        if not entries:
-            entries = [
-                {
-                    'degree': 'BACHELOR OF SCIENCE IN FINANCE',
-                    'institution': 'LONDON SCHOOL OF ECONOMICS',
-                    'year': '2019',
-                    'description': ['First Class Honours', 'Specialization in Risk Management']
-                }
+        for line in lines:
+            line = line.strip()
+            if not line:
+                if current_entry:
+                    entries.append(current_entry)
+                    current_entry = None
+                continue
+            
+            # Look for degree patterns: "Degree Name, Institution, Year" or "Degree Name - Institution - Year"
+            # Or: "Institution - Degree Name - Year"
+            degree_patterns = [
+                r'^(.+?)\s*[—–-]\s*(.+?)\s*[—–-]\s*(\d{4})',  # Degree — Institution — Year
+                r'^(.+?)\s*,\s*(.+?)\s*,\s*(\d{4})',  # Degree, Institution, Year
+                r'^(.+?)\s*\((.+?)\)\s*[—–-]?\s*(\d{4})',  # Degree (Institution) Year
             ]
+            
+            # Check for year pattern
+            year_match = re.search(r'\b(19|20)\d{2}\b', line)
+            has_year = bool(year_match)
+            
+            # Check if line looks like a degree/institution
+            is_degree_line = False
+            degree_text = ""
+            institution_text = ""
+            year_text = ""
+            
+            for pattern in degree_patterns:
+                match = re.search(pattern, line, re.IGNORECASE)
+                if match:
+                    degree_text = match.group(1).strip()
+                    institution_text = match.group(2).strip()
+                    year_text = match.group(3).strip()
+                    is_degree_line = True
+                    break
+            
+            # If no pattern match but has year and looks like education
+            if not is_degree_line and has_year and len(line) > 10:
+                # Try to split by common separators
+                parts = re.split(r'\s*[—–-]\s*|\s*,\s*|\s+\(|\s+\)', line)
+                if len(parts) >= 2:
+                    degree_text = parts[0].strip()
+                    institution_text = parts[1].strip()
+                    year_text = year_match.group(0) if year_match else ""
+            
+            if is_degree_line or (has_year and len(line) > 10):
+                # Save previous entry
+                if current_entry:
+                    entries.append(current_entry)
+                
+                current_entry = {
+                    'degree': degree_text.upper() if degree_text else line.upper(),
+                    'institution': institution_text.upper() if institution_text else 'INSTITUTION',
+                    'year': year_text or '2020',
+                    'description': []
+                }
+            elif current_entry:
+                # Add to description
+                desc_line = re.sub(r'^[•\-\*]\s*', '', line).strip()
+                if desc_line and len(desc_line) > 3:
+                    current_entry['description'].append(desc_line)
+            elif len(line) > 10 and not re.search(r'^\d{4}', line):
+                # Might be a degree without year
+                current_entry = {
+                    'degree': line.upper(),
+                    'institution': 'INSTITUTION',
+                    'year': '2020',
+                    'description': []
+                }
         
-        return entries
+        # Save last entry
+        if current_entry:
+            entries.append(current_entry)
+        
+        return entries if entries else []
     
     def _parse_languages_v33(self, section):
         """Parse languages - same as previous versions"""
@@ -287,22 +448,57 @@ class EnhancedCVFormatterV33:
         return languages
     
     def _parse_computer_skills_v33(self, section):
-        """Parse computer skills - same as previous versions"""
+        """Intelligently parse computer/technical skills from actual CV content"""
         skills = []
+        if not section or len(section.strip()) < 5:
+            return skills
         
-        # Split by common delimiters
+        # Common technical skills keywords to look for
+        tech_keywords = [
+            'python', 'java', 'javascript', 'typescript', 'react', 'html', 'css', 'swift', 'kotlin',
+            'sql', 'excel', 'powerpoint', 'word', 'office', 'bloomberg', 'vba', 'r', 'matlab',
+            'git', 'github', 'npm', 'node', 'angular', 'vue', 'django', 'flask', 'spring',
+            'aws', 'azure', 'gcp', 'docker', 'kubernetes', 'linux', 'unix',
+            'photoshop', 'illustrator', 'indesign', 'premiere', 'procreate', 'canva',
+            'tableau', 'powerbi', 'salesforce', 'hubspot', 'analytics', 'seo'
+        ]
+        
+        # Split by common delimiters and extract skills
         skill_items = re.split(r'[,;•\n]', section)
         
         for item in skill_items:
             item = item.strip()
-            if item and len(item) > 2 and not item.startswith(':'):
-                skills.append(item.upper())
+            if not item or len(item) < 2 or item.startswith(':'):
+                continue
+            
+            # Remove common prefixes/suffixes
+            item = re.sub(r'^[•\-\*]\s*', '', item)
+            item = re.sub(r'\s*[—–-].*$', '', item)  # Remove everything after dash
+            item = item.strip()
+            
+            if item and len(item) > 2:
+                # Check if it contains known tech keywords
+                item_lower = item.lower()
+                for keyword in tech_keywords:
+                    if keyword in item_lower:
+                        # Extract the skill name (might be "Python" or "Python Programming")
+                        skill_name = item.split()[0] if ' ' in item else item
+                        skills.append(skill_name.upper())
+                        break
+                else:
+                    # If no keyword match but looks like a skill (short, no spaces or common skill pattern)
+                    if len(item) < 30 and (not ' ' in item or item.count(' ') < 3):
+                        skills.append(item.upper())
         
-        # If no skills found, add realistic skills
-        if not skills:
-            skills = ['MICROSOFT OFFICE', 'EXCEL', 'POWERPOINT', 'PYTHON', 'SQL', 'BLOOMBERG TERMINAL']
+        # Remove duplicates while preserving order
+        seen = set()
+        unique_skills = []
+        for skill in skills:
+            if skill not in seen:
+                seen.add(skill)
+                unique_skills.append(skill)
         
-        return skills
+        return unique_skills[:15]  # Limit to 15 skills
     
     def _parse_extra_curricular_v33(self, section):
         """Parse extra curricular activities - same as previous versions"""
