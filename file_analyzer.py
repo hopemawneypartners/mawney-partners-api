@@ -469,7 +469,23 @@ class FileAnalyzer:
         """Reconstruct fragmented words that were split incorrectly"""
         import re
         
-        # Common word fragments to merge - GENERAL patterns, not specific to one CV
+        # FIRST: Reconstruct fragmented phone numbers
+        # Pattern: "079 2946 0839" or "079 29460839" -> "07929460839" (but keep spaces for readability)
+        # Also handle cases where phone numbers are split across lines or words
+        phone_patterns = [
+            (r'\b0(\d{2})\s+(\d{4,5})\s+(\d{3,4})\b', r'0\1 \2 \3'),  # UK format: 079 2946 0839
+            (r'\b0(\d{2})\s+(\d{6,7})\b', r'0\1 \2'),  # UK format: 079 29460839
+            (r'\b(\d{2,3})\s+(\d{3,4})\s+(\d{3,4})\b', r'\1 \2 \3'),  # General format
+        ]
+        for pattern, replacement in phone_patterns:
+            text = re.sub(pattern, replacement, text)
+        
+        # SECOND: Reconstruct fragmented email addresses
+        # Pattern: "opegilbert@live. com" -> "opegilbert@live.com"
+        text = re.sub(r'([a-z0-9._%+-]+@[a-z0-9.-]+)\s*\.\s*([a-z]{2,})', r'\1.\2', text, flags=re.IGNORECASE)
+        text = re.sub(r'([a-z0-9._%+-]+)\s+@\s+([a-z0-9.-]+\.[a-z]{2,})', r'\1@\2', text, flags=re.IGNORECASE)
+        
+        # THIRD: Common word fragments to merge - GENERAL patterns, not specific to one CV
         # Pattern: (fragment1)(fragment2) -> (full_word)
         # Apply multiple times to catch nested fragments
         fragment_patterns = [

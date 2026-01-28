@@ -1321,14 +1321,18 @@ class MawneyTemplateFormatter:
                 continue
             
             # UNIVERSAL education detection - look for education entries ANYWHERE
-            # Check if this line looks like a degree/institution entry (has year + degree keywords)
+            # BUT be strict - don't pick up job entries
             if not education_section:
                 has_year = bool(re.search(r'\b(19|20)\d{2}\b', line))
                 is_degree_line = any(word in line_lower for word in ['bsc', 'ba', 'ma', 'ms', 'mba', 'phd', 'degree', 'honours', 'honors', 'diploma', 'certificate'])
                 is_school_line = any(word in line_lower for word in ['university', 'college', 'school', 'institute', 'academy'])
                 
-                # If line has year and looks like education, start education section
-                if has_year and (is_degree_line or is_school_line):
+                # EXCLUDE job entries - check if it looks like a job (has job indicators)
+                looks_like_job = any(indicator in line_lower for indicator in ['executive', 'associate', 'manager', 'director', 'administrator', 'developer', 'designer', 'marketing', 'recruiter', 'freelance'])
+                has_job_dates = bool(re.search(r'\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}\s*[-–]', line, re.IGNORECASE))
+                
+                # Only start education section if it looks like education AND NOT like a job
+                if has_year and (is_degree_line or is_school_line) and not looks_like_job and not has_job_dates:
                     education_section = True
                     # Process this line as education (will be handled below)
             
@@ -1355,8 +1359,13 @@ class MawneyTemplateFormatter:
             is_degree_line = any(word in line_lower for word in ['bsc', 'ba', 'ma', 'ms', 'mba', 'phd', 'degree', 'honours', 'diploma', 'certificate'])
             is_school_line = any(word in line_lower for word in ['university', 'college', 'school', 'institute', 'academy'])
             
+            # EXCLUDE job entries - check if it looks like a job
+            looks_like_job = any(indicator in line_lower for indicator in ['executive', 'associate', 'manager', 'director', 'administrator', 'developer', 'designer', 'marketing', 'recruiter', 'freelance', 'company', 'clients'])
+            has_job_dates = bool(re.search(r'\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}\s*[-–]', line, re.IGNORECASE))
+            
             # If line has year and looks like education, or is clearly a school/degree
-            if (has_year and (is_degree_line or is_school_line)) or (is_school_line and len(line.split()) <= 5):
+            # BUT NOT if it looks like a job entry
+            if ((has_year and (is_degree_line or is_school_line)) or (is_school_line and len(line.split()) <= 5)) and not looks_like_job and not has_job_dates:
                 # Save previous education
                 if current_education:
                     education_items.append(current_education)
