@@ -438,8 +438,9 @@ class MawneyTemplateFormatter:
                                 name_candidates.append((line, i, 'standard'))
             
             # PRIORITY: Check for fragmented names FIRST (before standard candidates)
-            # Pattern: "H" on one line, "OPE GILBERT" on next - reconstruct to "HOPE GILBERT"
-            for i in range(min(8, len(lines) - 1)):
+            # General pattern: Single letter/word on one line, rest of name on next
+            # This handles cases like "H" + "OPE GILBERT", "M" + "ARY SMITH", etc.
+            for i in range(min(10, len(lines) - 1)):
                 line1 = lines[i].strip() if i < len(lines) else ""
                 line2 = lines[i+1].strip() if i+1 < len(lines) else ""
                 
@@ -448,16 +449,40 @@ class MawneyTemplateFormatter:
                        for keyword in ['curriculum', 'vitae', 'resume', 'cv', 'professional', 'creative', '@']):
                     continue
                 
-                # Pattern: "H" on one line, "OPE GILBERT" on next - reconstruct to "HOPE GILBERT"
-                if line1.upper().strip() == 'H' and line2:
+                # Pattern: Single letter/word on one line, name continuation on next
+                # Check if line1 is a single letter or very short word (1-3 chars)
+                line1_upper = line1.upper().strip()
+                if len(line1_upper) <= 3 and line1_upper.isalpha() and line2:
                     line2_upper = line2.upper().strip()
-                    # Check if line2 starts with "OPE" followed by a surname
+                    line2_words = line2.split()
+                    
+                    # Check if line2 looks like it could be the rest of a name
+                    # (starts with capitalized word, 1-4 words total, no special chars)
+                    if (line2_words and 
+                        line2_words[0][0].isupper() and 
+                        1 <= len(line2_words) <= 4 and
+                        not any(char in line2 for char in ['@', '+', '(', ')', '/', '\\', ':']) and
+                        not re.search(r'\d', line2)):
+                        
+                        # Try to reconstruct: line1 + line2
+                        reconstructed = f"{line1} {line2}".strip()
+                        words = reconstructed.split()
+                        
+                        # Validate it looks like a name (2-5 words, all capitalized, no numbers)
+                        if (2 <= len(words) <= 5 and
+                            all(word[0].isupper() for word in words if word and word[0].isalpha()) and
+                            not re.search(r'\d', reconstructed)):
+                            name_candidates.append((reconstructed, i, 'reconstructed'))
+                            print(f"✅ Found fragmented name: '{line1}' + '{line2}' -> '{reconstructed}'")
+                            # Don't break - continue to check for better matches
+                
+                # Specific pattern: "H" on one line, "OPE GILBERT" on next
+                elif line1_upper == 'H' and line2:
+                    line2_upper = line2.upper().strip()
                     if line2_upper.startswith('OPE '):
-                        # Reconstruct "HOPE" + rest of line2
                         reconstructed = f"H{line2}"
                         name_candidates.append((reconstructed, i, 'reconstructed'))
                         print(f"✅ Found fragmented name: 'H' + '{line2}' -> '{reconstructed}'")
-                        break  # Found it, stop looking
                 
                 # Also check for names that might be split across lines (artistic formatting)
                 if line1 and line2:
@@ -518,25 +543,31 @@ class MawneyTemplateFormatter:
                 def score_candidate(candidate):
                     name, pos, source = candidate
                     score = 0
-                    # Large text (artistically formatted) gets highest priority
-                    if source == 'large_text':
-                        score += 200
-                    # Reconstructed names get high priority (we fixed fragments)
+                    # Reconstructed names get HIGHEST priority (we fixed fragments, so they're more complete)
                     if source == 'reconstructed':
-                        score += 150
+                        score += 300  # Highest priority - we fixed the fragmentation
+                    # Large text (artistically formatted) gets high priority
+                    elif source == 'large_text':
+                        score += 200
+                    # Standard format preferred over split
+                    elif source == 'standard':
+                        score += 50
                     # Earlier is better (names are usually at top)
                     score += (15 - pos) * 10
-                    # Longer names are better (more complete)
-                    score += len(name) * 2
-                    # Standard format preferred over split
-                    if source == 'standard':
-                        score += 50
+                    # Longer names are better (more complete) - but only if not too long
+                    if 8 <= len(name) <= 40:
+                        score += len(name) * 2
                     # Prefer 2-3 word names (most common)
                     word_count = len(name.split())
                     if 2 <= word_count <= 3:
                         score += 30
-                    # Penalize names with single-character words that look like fragments
+                    # Penalize very short names (likely fragments) - but reconstructed names are exempt
+                    if source != 'reconstructed' and len(name) < 8:
+                        score -= 50
+                    # Penalize names with single-character words (likely incomplete) - but reconstructed names are exempt
                     name_words = name.split()
+                    if source != 'reconstructed' and any(len(word) == 1 for word in name_words):
+                        score -= 30
                     if any(len(w) == 1 and w.isalpha() and i < len(name_words) - 1 for i, w in enumerate(name_words)):
                         # Might be a fragment, slightly penalize
                         score -= 20
@@ -1012,48 +1043,6 @@ class MawneyTemplateFormatter:
                     'responsibilities': []
                 }
                 current_responsibilities = []
-                
-                # Parse the new experience line
-                # Try to extract: Title, Company, Location, Dates
-                parts = re.split(r'\s*[—–-]\s*|\s*,\s*', line)
-                
-                # Extract dates
-                date_match = re.search(r'((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}|\d{4})\s*[-–]\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}|\d{4}|Present|Current|Now)', line, re.IGNORECASE)
-                dates = date_match.group(0).strip() if date_match else ""
-                
-                # Remove dates from line for title/company extraction
-                line_without_dates = re.sub(r'\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}|\d{4})\s*[-–]\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}|\d{4}|Present|Current|Now)\s*', '', line).strip()
-                parts = re.split(r'\s*[—–-]\s*|\s*,\s*', line_without_dates)
-                
-                title = parts[0].strip() if parts else line_without_dates
-                company = parts[1].strip() if len(parts) > 1 else ""
-                location = parts[2].strip() if len(parts) > 2 else ""
-                
-                # Clean up and reconstruct fragmented company names
-                title = re.sub(r'\s*[—–-]\s*$', '', title).strip()
-                company = re.sub(r'^\s*[—–-]\s*', '', company).strip()
-                # Aggressive company name reconstruction
-                company = self._reconstruct_company_names(company)
-                # Also fix common fragments directly - GENERAL patterns
-                company = re.sub(r'\bartners\b', 'Partners', company, flags=re.IGNORECASE)
-                company = re.sub(r'\bcap\s+ital\b', 'Capital', company, flags=re.IGNORECASE)
-                company = re.sub(r'\bman\s+agement\b', 'Management', company, flags=re.IGNORECASE)
-                # If it's just a common fragment, it's likely the full word
-                if company.lower() == 'artners':
-                    company = 'Partners'
-                if company.lower() in ['cap', 'ital']:
-                    company = 'Capital'
-                if company.lower() in ['man', 'agement']:
-                    company = 'Management'
-                
-                current_experience = {
-                    'title': title if title else 'POSITION',
-                    'company': company if company else 'COMPANY',
-                    'location': location if location else '',
-                    'dates': dates if dates else '',
-                    'responsibilities': []
-                }
-                current_responsibilities = []
             
             # Check if line is a responsibility/bullet point OR a new job entry we missed
             elif current_experience:
@@ -1156,12 +1145,43 @@ class MawneyTemplateFormatter:
             logger.warning("⚠️ No experience entries found")
         
         # Extract education with improved parsing
+        # Also check for education entries BEFORE formal section headers (like experience)
         education_section = False
         current_education = None
         education_items = []
         
+        # First pass: Look for education entries near the top (before formal section headers)
+        top_section_education = []
+        for i, line in enumerate(lines[:40]):  # Check first 40 lines
+            line_lower = line.lower().strip()
+            # Skip if we hit a section header (but allow education section)
+            if any(keyword in line_lower for keyword in ['work experience', 'professional experience', 'skills', 'profile', 'summary']) and 'education' not in line_lower:
+                break
+            
+            # Check if this line looks like an education entry (has year + degree keywords)
+            has_year = bool(re.search(r'\b(19|20)\d{2}\b', line))
+            is_degree_line = any(word in line_lower for word in ['bsc', 'ba', 'ma', 'ms', 'mba', 'phd', 'degree', 'honours', 'diploma', 'certificate', 'university', 'college', 'school'])
+            
+            if has_year and is_degree_line:
+                # Try to extract degree info
+                parts = re.split(r'\s*,\s*|\s*[-–]\s*', line)
+                degree = parts[0].strip() if parts else ""
+                institution = parts[1].strip() if len(parts) > 1 else ""
+                year_match = re.search(r'\b(19|20)\d{2}\b', line)
+                year = year_match.group(0) if year_match else ""
+                
+                top_section_education.append({
+                    'degree': degree if degree else 'DEGREE',
+                    'institution': institution if institution else 'INSTITUTION',
+                    'year': year,
+                    'details': ''
+                })
+                print(f"✅ Found top section education: {degree} at {institution}")
+        
+        # Now do the main parsing starting from education section
         for i, line in enumerate(lines):
             line_lower = line.lower().strip()
+            line_clean = line.strip()  # Define line_clean here
             line_upper = line.upper().strip()
             
             # Detect start of education section
