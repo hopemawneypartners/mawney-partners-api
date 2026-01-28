@@ -213,29 +213,64 @@ class MawneyTemplateFormatter:
             'interests': []
         }
         
-        # Extract name with better pattern matching
+        # Extract name with better pattern matching and fragmentation handling
         if lines:
             name_candidates = []
-            for i, line in enumerate(lines[:8]):  # Check first 8 lines
+            
+            # First, try to find name in first few lines (most common location)
+            for i, line in enumerate(lines[:10]):
                 # Skip obvious headers
                 if any(keyword in line.lower() for keyword in ['curriculum', 'vitae', 'resume', 'cv', 'page', 'document']):
                     continue
                 
+                # Skip contact info lines
+                if '@' in line or re.search(r'\+?[\d\s\-\(\)]{10,}', line):
+                    continue
+                
                 words = line.split()
-                # Look for proper name patterns (2-3 words, title case, no special chars)
+                
+                # Look for proper name patterns (2-4 words, title case or all caps)
                 if 2 <= len(words) <= 4:
-                    if all(word[0].isupper() for word in words if word and word[0].isalpha()):
-                        if not any(char in line for char in ['@', '+', '(', ')', '-', '/', '\\']):
-                            name_candidates.append(line)
+                    # Check if all words start with capital (title case) or all uppercase
+                    is_title_case = all(word[0].isupper() for word in words if word and word[0].isalpha())
+                    is_all_caps = line.isupper() and len(line) < 50
+                    
+                    if (is_title_case or is_all_caps) and not any(char in line for char in ['@', '+', '(', ')', '/', '\\']):
+                        # Additional check: names usually don't have numbers or special punctuation
+                        if not re.search(r'\d', line) and not re.search(r'[^\w\s]', line):
+                            name_candidates.append((line, i))
             
+            # If we found candidates, pick the best one (usually first, but check for completeness)
             if name_candidates:
-                parsed['name'] = name_candidates[0]
+                # Prefer longer names (more likely to be complete)
+                name_candidates.sort(key=lambda x: (len(x[0]), -x[1]))  # Longer first, then earlier in doc
+                parsed['name'] = name_candidates[-1][0]  # Get the longest, earliest name
             else:
-                # Fallback to first substantial line
-                for line in lines[:5]:
-                    if len(line) > 5 and len(line.split()) >= 2:
-                        parsed['name'] = line
-                        break
+                # Fallback: try to reconstruct name from fragmented text
+                # Look for patterns like "HO PE" or "PE GILBERT" that might be fragments
+                for i in range(min(3, len(lines))):
+                    line1 = lines[i].strip() if i < len(lines) else ""
+                    line2 = lines[i+1].strip() if i+1 < len(lines) else ""
+                    
+                    # Check if two consecutive lines might form a name
+                    if line1 and line2:
+                        combined = f"{line1} {line2}"
+                        words = combined.split()
+                        if 2 <= len(words) <= 4:
+                            if all(word[0].isupper() for word in words if word and word[0].isalpha()):
+                                if not any(char in combined for char in ['@', '+', '(', ')', '/', '\\', '-']):
+                                    parsed['name'] = combined
+                                    break
+                
+                # Final fallback: first substantial line that looks like a name
+                if not parsed['name']:
+                    for line in lines[:5]:
+                        words = line.split()
+                        if len(words) >= 2 and len(words) <= 4:
+                            if all(word[0].isupper() for word in words if word and word[0].isalpha()):
+                                if not any(char in line for char in ['@', '+', '(', ')', '/', '\\']):
+                                    parsed['name'] = line
+                                    break
         
         # Extract contact info with improved patterns
         full_text = ' '.join(lines)
@@ -331,19 +366,57 @@ class MawneyTemplateFormatter:
             has_month_date = bool(re.search(r'\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}\s*[-–]', line, re.IGNORECASE))
             
             # Check if line contains job title indicators
-            job_title_indicators = ['designer', 'developer', 'administrator', 'analyst', 'manager', 'director', 'officer', 'specialist', 'associate', 'executive', 'consultant', 'engineer']
+            job_title_indicators = ['designer', 'developer', 'administrator', 'analyst', 'manager', 'director', 'officer', 'specialist', 'associate', 'executive', 'consultant', 'engineer', 'freelance', 'recruitment']
             looks_like_job = any(indicator in line_lower for indicator in job_title_indicators)
             
             # Check if line contains company indicators
-            company_indicators = ['ltd', 'inc', 'llc', 'corp', 'partners', 'capital', 'management', 'group', 'plc', 'bank', 'fund']
-            looks_like_company = any(indicator in line_lower for indicator in company_indicators) or (line_upper.isupper() and len(line.split()) >= 2)
+            company_indicators = ['ltd', 'inc', 'llc', 'corp', 'partners', 'capital', 'management', 'group', 'plc', 'bank', 'fund', 'clients', 'mammoet']
+            looks_like_company = any(indicator in line_lower for indicator in company_indicators) or (line_upper.isupper() and len(line.split()) >= 2 and len(line) < 50)
+            
+            # Check if previous line might be part of this job entry (fragmented text)
+            prev_line = lines[i-1].strip() if i > 0 else ""
+            is_continuation = (prev_line and 
+                              not prev_line.endswith('.') and 
+                              len(prev_line) < 30 and 
+                              not re.search(r'\b(19|20)\d{2}\b', prev_line) and
+                              (prev_line.endswith(',') or prev_line.endswith(':') or not prev_line[0].isupper()))
             
             # If line has date or looks like job/company, it's likely a new experience entry
-            if (has_date or has_month_date) and (looks_like_job or looks_like_company or len(line.split()) <= 6):
+            # But check if it might be continuation of previous line
+            if (has_date or has_month_date) and (looks_like_job or looks_like_company or len(line.split()) <= 6) and not is_continuation:
                 # Save previous experience
                 if current_experience:
                     current_experience['responsibilities'] = current_responsibilities
                     experience_patterns.append(current_experience)
+                
+                # Parse the new experience line
+                # Try to extract: Title, Company, Location, Dates
+                parts = re.split(r'\s*[—–-]\s*|\s*,\s*', line)
+                
+                # Extract dates
+                date_match = re.search(r'((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}|\d{4})\s*[-–]\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}|\d{4}|Present|Current|Now)', line, re.IGNORECASE)
+                dates = date_match.group(0).strip() if date_match else ""
+                
+                # Remove dates from line for title/company extraction
+                line_without_dates = re.sub(r'\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}|\d{4})\s*[-–]\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}|\d{4}|Present|Current|Now)\s*', '', line).strip()
+                parts = re.split(r'\s*[—–-]\s*|\s*,\s*', line_without_dates)
+                
+                title = parts[0].strip() if parts else line_without_dates
+                company = parts[1].strip() if len(parts) > 1 else ""
+                location = parts[2].strip() if len(parts) > 2 else ""
+                
+                # Clean up
+                title = re.sub(r'\s*[—–-]\s*$', '', title).strip()
+                company = re.sub(r'^\s*[—–-]\s*', '', company).strip()
+                
+                current_experience = {
+                    'title': title if title else 'POSITION',
+                    'company': company if company else 'COMPANY',
+                    'location': location if location else '',
+                    'dates': dates if dates else '',
+                    'responsibilities': []
+                }
+                current_responsibilities = []
                 
                 # Parse the new experience line
                 # Try to extract: Title, Company, Location, Dates
@@ -384,11 +457,20 @@ class MawneyTemplateFormatter:
                     # This might be a date line for current job, add as responsibility
                     if len(clean_line) > 5:
                         current_responsibilities.append(clean_line)
-                elif clean_line and len(clean_line) > 10:
+                elif clean_line and len(clean_line) > 5:
                     # Check if it's a sentence fragment that should be combined with previous
-                    if current_responsibilities and not clean_line[0].isupper() and len(clean_line) < 50:
-                        # Might be continuation of previous bullet
-                        current_responsibilities[-1] += " " + clean_line
+                    if current_responsibilities:
+                        last_resp = current_responsibilities[-1]
+                        # If previous doesn't end with period and this doesn't start with capital, likely continuation
+                        if (not last_resp.endswith('.') and 
+                            (not clean_line[0].isupper() or 
+                             clean_line.startswith(',') or 
+                             clean_line.startswith('and ') or
+                             len(clean_line) < 40)):
+                            # Merge with previous
+                            current_responsibilities[-1] += " " + clean_line
+                        else:
+                            current_responsibilities.append(clean_line)
                     else:
                         current_responsibilities.append(clean_line)
         
@@ -639,18 +721,20 @@ class MawneyTemplateFormatter:
                         # This is a category header, next lines will be skills
                         skills_collected.append(line_clean.rstrip(':'))
                     
-                    # Handle continuation lines (might be part of previous skill)
-                    elif current_skill_group or (skills_collected and len(line_clean) < 50 and not line_clean[0].isupper()):
-                        # Might be continuation
-                        if current_skill_group:
+                    # Handle fragmented skill lines (like "development," followed by "and UX Development:")
+                    elif skills_collected and len(line_clean) < 60:
+                        last_skill = skills_collected[-1]
+                        # Check if this looks like a continuation of previous skill
+                        if (last_skill.endswith(',') or 
+                            (not last_skill.endswith(':') and len(last_skill) < 25 and 
+                             (line_clean.startswith('and ') or line_clean.startswith('& ') or 
+                              not line_clean[0].isupper() or line_clean.endswith(':')))):
+                            # Merge with previous skill
+                            skills_collected[-1] = (last_skill.rstrip(',') + " " + line_clean).strip()
+                        elif current_skill_group:
                             current_skill_group[-1] += " " + line_clean
-                        elif skills_collected:
-                            # Try to append to last skill if it makes sense
-                            last_skill = skills_collected[-1]
-                            if len(last_skill) < 30 and not last_skill.endswith(':'):
-                                skills_collected[-1] += " " + line_clean
-                            else:
-                                skills_collected.append(line_clean)
+                        else:
+                            skills_collected.append(line_clean)
                     
                     # Standalone skill line
                     elif len(line_clean) > 2 and len(line_clean) < 100:
