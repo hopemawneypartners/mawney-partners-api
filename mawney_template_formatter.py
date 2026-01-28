@@ -29,6 +29,17 @@ class MawneyTemplateFormatter:
             # Parse the CV data (pass font_info for better name extraction)
             parsed_data = self._parse_cv_data(cv_data, font_info=font_info)
             
+            # Log what was extracted for debugging
+            logger.info(f"📊 Parsed CV data summary:")
+            logger.info(f"   Name: {parsed_data.get('name', 'NOT FOUND')}")
+            logger.info(f"   Email: {parsed_data.get('email', 'NOT FOUND')}")
+            logger.info(f"   Phone: {parsed_data.get('phone', 'NOT FOUND')}")
+            logger.info(f"   Location: {parsed_data.get('location', 'NOT FOUND')}")
+            logger.info(f"   Experience entries: {len(parsed_data.get('experience', []))}")
+            logger.info(f"   Education entries: {len(parsed_data.get('education', []))}")
+            logger.info(f"   Skills count: {len(parsed_data.get('skills', []))}")
+            logger.info(f"   Summary length: {len(parsed_data.get('summary', ''))}")
+            
             # Load the template
             with open(self.template_path, 'r', encoding='utf-8') as f:
                 template = f.read()
@@ -52,16 +63,33 @@ class MawneyTemplateFormatter:
         
         # Fill in the template using safe string replacement to avoid Python format conflicts
         formatted_html = template
+        
+        # Log what we're putting into the template
+        name = parsed_data.get('name', '')
+        contact_info = self._format_contact_info(parsed_data)
+        summary = self._format_professional_summary(parsed_data)
+        skills = self._format_skills_list(parsed_data)
+        experience = self._format_experience_items(parsed_data)
+        education = self._format_education_items(parsed_data)
+        
+        logger.info(f"📝 Template replacement:")
+        logger.info(f"   NAME length: {len(name)} chars - '{name[:50]}...'")
+        logger.info(f"   CONTACT_INFO length: {len(contact_info)} chars - '{contact_info[:50]}...'")
+        logger.info(f"   SUMMARY length: {len(summary)} chars")
+        logger.info(f"   SKILLS length: {len(skills)} chars")
+        logger.info(f"   EXPERIENCE length: {len(experience)} chars")
+        logger.info(f"   EDUCATION length: {len(education)} chars")
+        
         formatted_html = formatted_html.replace('{TOP_LOGO_BASE64}', top_logo_base64)
         formatted_html = formatted_html.replace('{BOTTOM_LOGO_BASE64}', bottom_logo_base64)
-        formatted_html = formatted_html.replace('{NAME}', parsed_data.get('name', ''))
-        formatted_html = formatted_html.replace('{CONTACT_INFO}', self._format_contact_info(parsed_data))
-        formatted_html = formatted_html.replace('{PROFESSIONAL_SUMMARY}', self._format_professional_summary(parsed_data))
-        formatted_html = formatted_html.replace('{SKILLS_LIST}', self._format_skills_list(parsed_data))
-        formatted_html = formatted_html.replace('{EXPERIENCE_ITEMS}', self._format_experience_items(parsed_data))
-        formatted_html = formatted_html.replace('{EDUCATION_ITEMS}', self._format_education_items(parsed_data))
+        formatted_html = formatted_html.replace('{NAME}', name)
+        formatted_html = formatted_html.replace('{CONTACT_INFO}', contact_info)
+        formatted_html = formatted_html.replace('{PROFESSIONAL_SUMMARY}', summary)
+        formatted_html = formatted_html.replace('{SKILLS_LIST}', skills)
+        formatted_html = formatted_html.replace('{EXPERIENCE_ITEMS}', experience)
+        formatted_html = formatted_html.replace('{EDUCATION_ITEMS}', education)
         
-        logger.info(f"Formatted CV using template, length: {len(formatted_html)} characters")
+        logger.info(f"✅ Formatted CV using template, length: {len(formatted_html)} characters")
         
         return {
             'success': True,
@@ -452,7 +480,7 @@ class MawneyTemplateFormatter:
                         cleaned_words.append(word)
                 final_name = ' '.join(cleaned_words)
                 parsed['name'] = final_name
-                logger.info(f"Extracted name: {parsed['name']} from position {name_candidates[0][1]} (source: {name_candidates[0][2]})")
+                logger.info(f"✅ Extracted name: '{parsed['name']}' from position {name_candidates[0][1]} (source: {name_candidates[0][2]})")
             else:
                 # Fallback: try to reconstruct name from fragmented text
                 # Look for patterns like "HO PE" or "PE GILBERT" that might be fragments
@@ -541,15 +569,19 @@ class MawneyTemplateFormatter:
                 if parsed['email']:
                     break
         
-        # Phone extraction with better patterns
+        # Phone extraction with better patterns - check full text and individual lines
         phone_patterns = [
             r'\+44[\s\-]?\d{2,4}[\s\-]?\d{3,4}[\s\-]?\d{3,4}',  # UK phone
             r'\+1[\s\-]?\d{3}[\s\-]?\d{3}[\s\-]?\d{4}',  # US phone
             r'\b\d{4}[\s\-]?\d{3}[\s\-]?\d{3}\b',  # UK mobile
             r'\b\d{3}[\s\-]?\d{3}[\s\-]?\d{4}\b',  # US phone
-            r'\+?[\d\s\-\(\)]{10,}'  # General phone pattern
+            r'\+?[\d\s\-\(\)]{10,}',  # General phone pattern
+            r'\b\d{2,4}[\s\-]?\d{3,4}[\s\-]?\d{3,4}\b',  # UK format: 079 2946 0839
+            r'\b0\d{2,3}[\s\-]?\d{3,4}[\s\-]?\d{3,4}\b',  # UK format: 07929 460839
+            r'0\d{2,4}[\s\-]?\d{3,4}[\s\-]?\d{3,4}',  # UK phone without +
         ]
         
+        # First try full text
         for pattern in phone_patterns:
             phone_match = re.search(pattern, full_text)
             if phone_match:
@@ -558,6 +590,22 @@ class MawneyTemplateFormatter:
                 phone = re.sub(r'[^\d\+\s\-\(\)]', '', phone)
                 if len(phone) >= 10:  # Valid phone length
                     parsed['phone'] = phone
+                    logger.info(f"Extracted phone from full text: {parsed['phone']}")
+                    break
+        
+        # If not found, check individual lines (especially first 20 lines)
+        if not parsed['phone']:
+            for line in lines[:20]:
+                for pattern in phone_patterns:
+                    phone_match = re.search(pattern, line)
+                    if phone_match:
+                        phone = phone_match.group(0).strip()
+                        phone = re.sub(r'[^\d\+\s\-\(\)]', '', phone)
+                        if len(phone) >= 10:
+                            parsed['phone'] = phone
+                            logger.info(f"Extracted phone from line: {parsed['phone']}")
+                            break
+                if parsed['phone']:
                     break
         
         # Location extraction
@@ -600,6 +648,8 @@ class MawneyTemplateFormatter:
         experience_section = False
         current_experience = None
         current_responsibilities = []
+        
+        logger.info(f"Starting experience extraction from {len(lines)} lines")
         
         # First pass: Look for jobs near the top (before formal section headers)
         # These are often the most recent/important positions
@@ -890,10 +940,12 @@ class MawneyTemplateFormatter:
         
         if unique_experience:
             parsed['experience'] = unique_experience
-            logger.info(f"Extracted {len(unique_experience)} experience entries ({len(top_section_jobs)} from top section, {len(experience_patterns)} from main section)")
+            logger.info(f"✅ Extracted {len(unique_experience)} experience entries ({len(top_section_jobs)} from top section, {len(experience_patterns)} from main section)")
+            for i, exp in enumerate(unique_experience):
+                logger.info(f"   Experience {i+1}: {exp.get('title', 'N/A')} at {exp.get('company', 'N/A')}")
         else:
             parsed['experience'] = []
-            logger.warning("No experience entries found")
+            logger.warning("⚠️ No experience entries found")
         
         # Extract education with improved parsing
         education_section = False
@@ -989,6 +1041,9 @@ class MawneyTemplateFormatter:
             education_items.append(current_education)
         
         parsed['education'] = education_items
+        logger.info(f"✅ Extracted {len(education_items)} education entries")
+        for i, edu in enumerate(education_items):
+            logger.info(f"   Education {i+1}: {edu.get('degree', 'N/A')} at {edu.get('school', 'N/A')}")
         
         # Extract skills: capture lines under a SKILLS header with better parsing
         try:
@@ -1120,8 +1175,11 @@ class MawneyTemplateFormatter:
                         cleaned_skills.append(skill_clean)
             
             parsed['skills'] = cleaned_skills[:30]  # Limit to 30 skills
+            logger.info(f"✅ Extracted {len(parsed['skills'])} skills")
+            if parsed['skills']:
+                logger.info(f"   Sample skills: {', '.join(parsed['skills'][:5])}")
         except Exception as e:
-            logger.warning(f"Error extracting skills: {e}")
+            logger.warning(f"❌ Error extracting skills: {e}")
             parsed['skills'] = []
 
         return parsed
