@@ -437,19 +437,30 @@ class MawneyTemplateFormatter:
                             if not any(word.lower() in ['the', 'and', 'or', 'of', 'for', 'with', 'from', 'to'] for word in words):
                                 name_candidates.append((line, i, 'standard'))
             
-            # Also check for names that might be split across lines (artistic formatting)
-            # Also check for fragmented names - look for patterns where first part is missing
+            # PRIORITY: Check for fragmented names FIRST (before standard candidates)
+            # Pattern: "H" on one line, "OPE GILBERT" on next - reconstruct to "HOPE GILBERT"
             for i in range(min(8, len(lines) - 1)):
                 line1 = lines[i].strip() if i < len(lines) else ""
                 line2 = lines[i+1].strip() if i+1 < len(lines) else ""
                 
-                # Check if two consecutive lines might form a name
+                # Skip if either line looks like a header or contact info
+                if any(keyword in line1.lower() or keyword in line2.lower() 
+                       for keyword in ['curriculum', 'vitae', 'resume', 'cv', 'professional', 'creative', '@']):
+                    continue
+                
+                # Pattern: "H" on one line, "OPE GILBERT" on next - reconstruct to "HOPE GILBERT"
+                if line1.upper().strip() == 'H' and line2:
+                    line2_upper = line2.upper().strip()
+                    # Check if line2 starts with "OPE" followed by a surname
+                    if line2_upper.startswith('OPE '):
+                        # Reconstruct "HOPE" + rest of line2
+                        reconstructed = f"H{line2}"
+                        name_candidates.append((reconstructed, i, 'reconstructed'))
+                        print(f"✅ Found fragmented name: 'H' + '{line2}' -> '{reconstructed}'")
+                        break  # Found it, stop looking
+                
+                # Also check for names that might be split across lines (artistic formatting)
                 if line1 and line2:
-                    # Skip if either line looks like a header or contact info
-                    if any(keyword in line1.lower() or keyword in line2.lower() 
-                           for keyword in ['curriculum', 'vitae', 'resume', 'cv', 'professional', 'creative', '@']):
-                        continue
-                    
                     combined = f"{line1} {line2}"
                     words = combined.split()
                     if 2 <= len(words) <= 5:
@@ -460,16 +471,6 @@ class MawneyTemplateFormatter:
                         if (is_title_case or is_all_caps) and not any(char in combined for char in ['@', '+', '(', ')', '/', '\\']):
                             if not re.search(r'\d', combined):
                                 name_candidates.append((combined, i, 'split'))
-                
-                # Check for fragmented names where first part might be missing
-                # Pattern: "H" on one line, "OPE GILBERT" on next - reconstruct to "HOPE GILBERT"
-                if line1.upper().strip() == 'H' and line2:
-                    line2_upper = line2.upper().strip()
-                    # Check if line2 starts with "OPE" or contains "OPE" followed by a surname
-                    if line2_upper.startswith('OPE ') or (line2_upper.startswith('OPE') and len(line2.split()) >= 2):
-                        # Reconstruct "HOPE" + rest of line2
-                        reconstructed = f"H{line2}"
-                        name_candidates.append((reconstructed, i, 'reconstructed'))
                 
                 # Pattern: "PE" or "PE GILBERT" - might be missing "HO" or "HOPE"
                 elif line1.upper().strip() == 'PE' and line2:
@@ -628,8 +629,9 @@ class MawneyTemplateFormatter:
         # Extract contact info with improved patterns
         full_text = ' '.join(lines)
         
-        # Email extraction - more comprehensive patterns
+        # Email extraction - more comprehensive patterns (handle spaces in emails)
         email_patterns = [
+            r'\b[A-Za-z0-9._%+-]+\s*@\s*[A-Za-z0-9.-]+\s*\.\s*[A-Z|a-z]{2,}\b',  # Email with spaces anywhere
             r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',  # Standard email
             r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\.?',  # Email with optional trailing dot
             r'[A-Za-z0-9._%+-]+\s*@\s*[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}',  # Email with spaces around @
@@ -640,12 +642,13 @@ class MawneyTemplateFormatter:
             email_match = re.search(pattern, full_text, re.IGNORECASE)
             if email_match:
                 email = email_match.group(0).strip()
-                # Clean up email (remove spaces, trailing dots)
+                # Clean up email (remove ALL spaces, trailing dots)
                 email = re.sub(r'\s+', '', email)
                 email = email.rstrip('.')
                 if '@' in email and '.' in email.split('@')[1]:
                     parsed['email'] = email
                     logger.info(f"Extracted email: {parsed['email']}")
+                    print(f"✅ Extracted email: {parsed['email']}")
                     break
         
         # Also check individual lines for emails (sometimes they're on their own line)
@@ -703,13 +706,22 @@ class MawneyTemplateFormatter:
                 if parsed['phone']:
                     break
         
-        # Location extraction
+        # Location extraction - be more careful, don't pick up job entries
         location_keywords = ['england', 'uk', 'united kingdom', 'london', 'manchester', 'birmingham', 'leeds', 'sheffield', 'bristol', 'newcastle', 'liverpool']
-        for line in lines:
+        for i, line in enumerate(lines[:15]):  # Only check first 15 lines (where location usually is)
             line_lower = line.lower()
+            # Skip if line looks like a job entry (has dates or company indicators)
+            has_date = bool(re.search(r'\b(19|20)\d{2}\b', line))
+            has_company = any(indicator in line_lower for indicator in ['partners', 'ltd', 'inc', 'llc', 'corp', 'company'])
+            if has_date or has_company:
+                continue
+            # Check for location keywords
             if any(keyword in line_lower for keyword in location_keywords):
-                parsed['location'] = line
-                break
+                # Make sure it's not part of a job entry
+                if not re.search(r'\(.*(19|20)\d{2}', line):  # Not a date in parentheses
+                    parsed['location'] = line.strip()
+                    print(f"✅ Extracted location: {parsed['location']}")
+                    break
         
         # Extract professional summary - look for actual CV content, not auto-populated
         summary_started = False
@@ -831,10 +843,26 @@ class MawneyTemplateFormatter:
                     break
             
             if not experience_section:
+                # Check if this line might be a job title ending with ":" (common pattern)
+                # If so, check if next line has company/location/dates
+                if line.strip().endswith(':') and any(indicator in line_lower for indicator in job_title_indicators):
+                    # Check next line for company/location/dates
+                    if i+1 < len(lines):
+                        next_line = lines[i+1].strip()
+                        next_line_lower = next_line.lower()
+                        has_date_next = bool(re.search(r'\b(19|20)\d{2}\s*[-–]', next_line, re.IGNORECASE))
+                        has_month_date_next = bool(re.search(r'\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}\s*[-–]', next_line, re.IGNORECASE))
+                        looks_like_company_next = any(indicator in next_line_lower for indicator in company_indicators)
+                        
+                        if (has_date_next or has_month_date_next) and (looks_like_company_next or len(next_line.split()) <= 8):
+                            # This is a job entry: title on this line, company/dates on next
+                            experience_section = True  # Start experience section
+                            # Process this as a job entry (will be handled below)
                 continue
             
             # Check if line looks like a job title/company header
             # Patterns: "Job Title — Company — Location — Dates" or "Job Title, Company, Location, Dates"
+            # OR: "Job Title:" on one line, "Company, Location (Dates)" on next line
             has_date = bool(re.search(r'\b(19|20)\d{2}\s*[-–]\s*((?:19|20)\d{2}|Present|Current|Now)\b', line, re.IGNORECASE))
             has_month_date = bool(re.search(r'\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}\s*[-–]', line, re.IGNORECASE))
             
@@ -846,6 +874,7 @@ class MawneyTemplateFormatter:
             
             # Check if previous line might be part of this job entry (fragmented text)
             prev_line = lines[i-1].strip() if i > 0 else ""
+            prev_line_ends_colon = prev_line.endswith(':')
             is_continuation = (prev_line and 
                               not prev_line.endswith('.') and 
                               len(prev_line) < 30 and 
@@ -854,6 +883,43 @@ class MawneyTemplateFormatter:
             
             # Also check if line has location + date pattern (common in CVs)
             has_location_date = bool(re.search(r'(London|Leeds|Remote|UK|USA)[^,]*,\s*[^,]*\s*\(?\s*(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|19|20)\d{2}', line, re.IGNORECASE))
+            
+            # Special case: Previous line ended with ":" and looked like a job title
+            # This line has company/location/dates
+            if prev_line_ends_colon and any(indicator in prev_line.lower() for indicator in job_title_indicators):
+                if (has_date or has_month_date or has_location_date) and (looks_like_company or len(line.split()) <= 10):
+                    # This is a job entry: title was on previous line, company/dates on this line
+                    # Save previous experience
+                    if current_experience:
+                        current_experience['responsibilities'] = current_responsibilities
+                        experience_patterns.append(current_experience)
+                    
+                    # Extract job title from previous line
+                    title = prev_line.rstrip(':').strip()
+                    
+                    # Extract company, location, dates from this line
+                    date_match = re.search(r'((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}|\d{4})\s*[-–]\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}|\d{4}|Present|Current|Now)', line, re.IGNORECASE)
+                    dates = date_match.group(0).strip() if date_match else ""
+                    
+                    # Remove dates from line for company/location extraction
+                    line_without_dates = re.sub(r'\s*\(?\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}|\d{4})\s*[-–]\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}|\d{4}|Present|Current|Now)\s*\)?', '', line).strip()
+                    parts = re.split(r'\s*,\s*', line_without_dates)
+                    
+                    company = parts[0].strip() if parts else ""
+                    location = parts[1].strip() if len(parts) > 1 else ""
+                    
+                    # Clean up and reconstruct
+                    company = self._reconstruct_company_names(company)
+                    
+                    current_experience = {
+                        'title': title if title else 'POSITION',
+                        'company': company if company else 'COMPANY',
+                        'location': location if location else '',
+                        'dates': dates if dates else '',
+                        'responsibilities': []
+                    }
+                    current_responsibilities = []
+                    continue  # Skip to next line
             
             # If line has date or looks like job/company, it's likely a new experience entry
             # But check if it might be continuation of previous line
