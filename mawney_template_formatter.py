@@ -297,60 +297,105 @@ class MawneyTemplateFormatter:
                     break
         
         # Extract experience with improved structure detection
-        # First, try pattern-based extraction for unstructured text
+        # Use line-by-line parsing which works better with fragmented PDF text
         experience_patterns = []
-        full_text = ' '.join(lines)
+        experience_section = False
+        current_experience = None
+        current_responsibilities = []
         
-        # Look for common experience patterns in unstructured text - FLEXIBLE PATTERN
-        # Match: JOB TITLE, COMPANY, LOCATION, DATES with flexible spacing
-        experience_regex = r'(RISK REPORTING ASSOCIATE|ANALYST|MANAGER|DIRECTOR|OFFICER|SPECIALIST)[^a-z]*(MORGAN STANLEY|GOLDMAN SACHS|JP MORGAN|BARCLAYS|HSBC|DEUTSCHE BANK|CREDIT SUISSE|UBS|BNP PARIBAS|SOCIETE GENERALE|NOMURA|MACQUARIE|CITI|BANK OF AMERICA|WELLS FARGO|CHASE|JPMORGAN|JP MORGAN CHASE)[^a-z]*(LONDON[^a-z]*UK|NEW YORK[^a-z]*USA|CHICAGO[^a-z]*USA|BOSTON[^a-z]*USA|SAN FRANCISCO[^a-z]*USA|TORONTO[^a-z]*CANADA|SYDNEY[^a-z]*AUSTRALIA|SINGAPORE|HONG KONG|TOKYO[^a-z]*JAPAN)[^a-z]*((?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC|JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER)[^a-z]*(?:19|20)\d{2}[-–](?:19|20)\d{2}|(?:19|20)\d{2}[-–](?:Present|Current))'
+        for i, line in enumerate(lines):
+            line_lower = line.lower().strip()
+            line_upper = line.upper().strip()
+            
+            # Detect start of experience section
+            if any(keyword in line_lower for keyword in ['work experience', 'professional experience', 'employment', 'career history', 'experience']):
+                experience_section = True
+                continue
+            
+            # Detect end of experience section
+            if experience_section and any(keyword in line_lower for keyword in ['education', 'skills', 'interests', 'languages', 'certification', 'qualifications']):
+                if current_experience:
+                    current_experience['responsibilities'] = current_responsibilities
+                    experience_patterns.append(current_experience)
+                    current_experience = None
+                    current_responsibilities = []
+                experience_section = False
+                break
+            
+            if not experience_section:
+                continue
+            
+            # Check if line looks like a job title/company header
+            # Patterns: "Job Title — Company — Location — Dates" or "Job Title, Company, Location, Dates"
+            has_date = bool(re.search(r'\b(19|20)\d{2}\s*[-–]\s*((?:19|20)\d{2}|Present|Current|Now)\b', line, re.IGNORECASE))
+            has_month_date = bool(re.search(r'\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}\s*[-–]', line, re.IGNORECASE))
+            
+            # Check if line contains job title indicators
+            job_title_indicators = ['designer', 'developer', 'administrator', 'analyst', 'manager', 'director', 'officer', 'specialist', 'associate', 'executive', 'consultant', 'engineer']
+            looks_like_job = any(indicator in line_lower for indicator in job_title_indicators)
+            
+            # Check if line contains company indicators
+            company_indicators = ['ltd', 'inc', 'llc', 'corp', 'partners', 'capital', 'management', 'group', 'plc', 'bank', 'fund']
+            looks_like_company = any(indicator in line_lower for indicator in company_indicators) or (line_upper.isupper() and len(line.split()) >= 2)
+            
+            # If line has date or looks like job/company, it's likely a new experience entry
+            if (has_date or has_month_date) and (looks_like_job or looks_like_company or len(line.split()) <= 6):
+                # Save previous experience
+                if current_experience:
+                    current_experience['responsibilities'] = current_responsibilities
+                    experience_patterns.append(current_experience)
+                
+                # Parse the new experience line
+                # Try to extract: Title, Company, Location, Dates
+                parts = re.split(r'\s*[—–-]\s*|\s*,\s*', line)
+                
+                # Extract dates
+                date_match = re.search(r'((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}|\d{4})\s*[-–]\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}|\d{4}|Present|Current|Now)', line, re.IGNORECASE)
+                dates = date_match.group(0).strip() if date_match else ""
+                
+                # Remove dates from line for title/company extraction
+                line_without_dates = re.sub(r'\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}|\d{4})\s*[-–]\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}|\d{4}|Present|Current|Now)\s*', '', line).strip()
+                parts = re.split(r'\s*[—–-]\s*|\s*,\s*', line_without_dates)
+                
+                title = parts[0].strip() if parts else line_without_dates
+                company = parts[1].strip() if len(parts) > 1 else ""
+                location = parts[2].strip() if len(parts) > 2 else ""
+                
+                # Clean up
+                title = re.sub(r'\s*[—–-]\s*$', '', title).strip()
+                company = re.sub(r'^\s*[—–-]\s*', '', company).strip()
+                
+                current_experience = {
+                    'title': title if title else 'POSITION',
+                    'company': company if company else 'COMPANY',
+                    'location': location if location else '',
+                    'dates': dates if dates else '',
+                    'responsibilities': []
+                }
+                current_responsibilities = []
+            
+            # Check if line is a responsibility/bullet point
+            elif current_experience:
+                # Remove bullet markers
+                clean_line = re.sub(r'^[•\-\*◦·]\s*', '', line).strip()
+                
+                # Skip if it looks like another job entry
+                if re.search(r'\b(19|20)\d{2}\s*[-–]', clean_line) and len(clean_line.split()) <= 8:
+                    # This might be a date line for current job, add as responsibility
+                    if len(clean_line) > 5:
+                        current_responsibilities.append(clean_line)
+                elif clean_line and len(clean_line) > 10:
+                    # Check if it's a sentence fragment that should be combined with previous
+                    if current_responsibilities and not clean_line[0].isupper() and len(clean_line) < 50:
+                        # Might be continuation of previous bullet
+                        current_responsibilities[-1] += " " + clean_line
+                    else:
+                        current_responsibilities.append(clean_line)
         
-        matches = re.finditer(experience_regex, full_text, re.IGNORECASE)
-        for match in matches:
-            title = match.group(1).strip()
-            company = match.group(2).strip()
-            location = match.group(3).strip()
-            dates = match.group(4).strip()
-            
-            # Extract responsibilities that follow
-            responsibilities = []
-            start_pos = match.end()
-            next_match = None
-            
-            # Find next experience or end of text
-            next_matches = list(re.finditer(experience_regex, full_text[start_pos:], re.IGNORECASE))
-            if next_matches:
-                next_match = next_matches[0]
-                end_pos = start_pos + next_match.start()
-            else:
-                end_pos = len(full_text)
-            
-            # Extract text between this experience and the next
-            responsibility_text = full_text[start_pos:end_pos]
-            
-            # Look for common responsibility patterns
-            responsibility_patterns = [
-                r'MANAGING[^.!?]*[.!?]',
-                r'DEVELOPING[^.!?]*[.!?]',
-                r'ANALYZING[^.!?]*[.!?]',
-                r'CREATING[^.!?]*[.!?]',
-                r'IMPLEMENTING[^.!?]*[.!?]',
-                r'RESPONSIBLE FOR[^.!?]*[.!?]'
-            ]
-            
-            for pattern in responsibility_patterns:
-                resp_matches = re.findall(pattern, responsibility_text, re.IGNORECASE)
-                for resp in resp_matches:
-                    if resp.strip() and len(resp.strip()) > 10:
-                        responsibilities.append(resp.strip())
-            
-            experience_patterns.append({
-                'title': title,
-                'company': company,
-                'location': location,
-                'dates': dates,
-                'responsibilities': responsibilities
-            })
+        # Save last experience
+        if current_experience:
+            current_experience['responsibilities'] = current_responsibilities
+            experience_patterns.append(current_experience)
         
         # If we found experience patterns, use them
         if experience_patterns:
@@ -421,63 +466,218 @@ class MawneyTemplateFormatter:
             if current_experience:
                 parsed['experience'].append(current_experience)
         
-        # Extract education
+        # Extract education with improved parsing
         education_section = False
-        current_education = {}
+        current_education = None
+        education_items = []
         
-        for line in lines:
-            if 'education' in line.lower():
+        for i, line in enumerate(lines):
+            line_lower = line.lower().strip()
+            line_upper = line.upper().strip()
+            
+            # Detect start of education section
+            if 'education' in line_lower or 'qualifications' in line_lower or 'academic' in line_lower:
                 education_section = True
                 continue
-            elif education_section and any(keyword in line.lower() for keyword in ['skills', 'interests', 'certifications']):
+            
+            # Detect end of education section
+            if education_section and any(keyword in line_lower for keyword in ['skills', 'interests', 'certifications', 'experience', 'work']):
                 if current_education:
-                    parsed['education'].append(current_education)
+                    education_items.append(current_education)
+                    current_education = None
+                education_section = False
                 break
-            elif education_section and line:
-                if self._is_school_line(line):
-                    if current_education:
-                        parsed['education'].append(current_education)
-                    current_education = {
-                        'school': line,
-                        'degree': '',
-                        'dates': '',
-                        'details': []
-                    }
-                elif current_education and not current_education['degree']:
-                    current_education['degree'] = line
-                elif current_education and line.startswith(('•', '-', '*')) or line.startswith(' '):
-                    current_education['details'].append(line.strip('•-* '))
+            
+            if not education_section:
+                continue
+            
+            # Check if line looks like a degree or institution
+            has_year = bool(re.search(r'\b(19|20)\d{2}\b', line))
+            is_degree_line = any(word in line_lower for word in ['bsc', 'ba', 'ma', 'ms', 'mba', 'phd', 'degree', 'honours', 'diploma', 'certificate'])
+            is_school_line = any(word in line_lower for word in ['university', 'college', 'school', 'institute', 'academy'])
+            
+            # If line has year and looks like education, or is clearly a school/degree
+            if (has_year and (is_degree_line or is_school_line)) or (is_school_line and len(line.split()) <= 5):
+                # Save previous education
+                if current_education:
+                    education_items.append(current_education)
+                
+                # Parse education line
+                # Try to extract: Degree, Institution, Year
+                parts = re.split(r'\s*[—–-]\s*|\s*,\s*|\s*\(|\s*\)', line)
+                
+                # Extract year
+                year_match = re.search(r'\b(19|20)\d{2}\b', line)
+                year = year_match.group(0) if year_match else ""
+                
+                # Remove year from line
+                line_without_year = re.sub(r'\s*\b(19|20)\d{2}\b\s*', '', line).strip()
+                parts = re.split(r'\s*[—–-]\s*|\s*,\s*|\s*\(|\s*\)', line_without_year)
+                
+                # Determine if first part is degree or institution
+                if is_degree_line and parts:
+                    degree = parts[0].strip()
+                    institution = parts[1].strip() if len(parts) > 1 else ""
+                elif is_school_line and parts:
+                    institution = parts[0].strip()
+                    degree = parts[1].strip() if len(parts) > 1 else ""
+                else:
+                    # Try to guess based on content
+                    if any(word in parts[0].lower() for word in ['bsc', 'ba', 'ma', 'ms', 'mba', 'phd']):
+                        degree = parts[0].strip()
+                        institution = parts[1].strip() if len(parts) > 1 else ""
+                    else:
+                        institution = parts[0].strip()
+                        degree = parts[1].strip() if len(parts) > 1 else ""
+                
+                current_education = {
+                    'school': institution if institution else 'INSTITUTION',
+                    'degree': degree if degree else line_without_year,
+                    'dates': year if year else '',
+                    'details': []
+                }
+            elif current_education:
+                # Add to details
+                clean_line = re.sub(r'^[•\-\*◦·]\s*', '', line).strip()
+                if clean_line and len(clean_line) > 5:
+                    # Check if it's a continuation
+                    if current_education['details'] and not clean_line[0].isupper() and len(clean_line) < 50:
+                        current_education['details'][-1] += " " + clean_line
+                    else:
+                        current_education['details'].append(clean_line)
+            elif education_section and len(line) > 10:
+                # Might be a degree/institution without clear markers
+                year_match = re.search(r'\b(19|20)\d{2}\b', line)
+                current_education = {
+                    'school': line if is_school_line else 'INSTITUTION',
+                    'degree': line if is_degree_line else '',
+                    'dates': year_match.group(0) if year_match else '',
+                    'details': []
+                }
         
+        # Save last education
         if current_education:
-            parsed['education'].append(current_education)
+            education_items.append(current_education)
         
-        # Extract skills: capture lines under a SKILLS header or comma-separated skills
+        parsed['education'] = education_items
+        
+        # Extract skills: capture lines under a SKILLS header with better parsing
         try:
             skills_section = False
             skills_collected: List[str] = []
+            current_skill_group = []
+            
             for line in lines:
-                ll = line.lower()
-                if any(h in ll for h in ['skills', 'technical & creative skills', 'core strengths', 'competencies']):
+                ll = line.lower().strip()
+                line_clean = line.strip()
+                
+                # Detect skills section start
+                if any(h in ll for h in ['skills', 'technical', 'creative skills', 'core strengths', 'competencies', 'key skills']):
                     skills_section = True
                     continue
-                if skills_section and any(h in ll for h in ['education', 'experience', 'summary', 'profile', 'interests', 'certifications']):
+                
+                # Detect skills section end
+                if skills_section and any(h in ll for h in ['education', 'experience', 'summary', 'profile', 'interests', 'certifications', 'languages']):
+                    # Process any pending skill group
+                    if current_skill_group:
+                        skills_collected.extend(current_skill_group)
+                        current_skill_group = []
                     break
-                if skills_section:
-                    # bullets
-                    if line.startswith(('•', '-', '·')):
-                        item = line.lstrip('•-· ').strip()
-                        if item:
-                            skills_collected.append(item)
-                    else:
-                        # comma separated within the same line
-                        if ',' in line:
-                            for part in [p.strip() for p in line.split(',') if p.strip()]:
-                                skills_collected.append(part)
-            # de-dup and keep reasonable length
+                
+                if skills_section and line_clean:
+                    # Handle bullet points
+                    if line_clean.startswith(('•', '-', '·', '*')):
+                        # Process previous group if exists
+                        if current_skill_group:
+                            skills_collected.extend(current_skill_group)
+                            current_skill_group = []
+                        
+                        item = re.sub(r'^[•\-\*◦·]\s*', '', line_clean).strip()
+                        # Handle skill categories like "Development: Python, JavaScript"
+                        if ':' in item:
+                            category, skills_str = item.split(':', 1)
+                            category = category.strip()
+                            # Add category if it's substantial
+                            if len(category) > 2:
+                                skills_collected.append(category)
+                            # Add individual skills
+                            for skill in [s.strip() for s in skills_str.split(',') if s.strip()]:
+                                if skill:
+                                    skills_collected.append(skill)
+                        else:
+                            if item:
+                                skills_collected.append(item)
+                    
+                    # Handle comma-separated skills
+                    elif ',' in line_clean and len(line_clean) < 200:
+                        # Process previous group
+                        if current_skill_group:
+                            skills_collected.extend(current_skill_group)
+                            current_skill_group = []
+                        
+                        # Check if it's a category line like "Development: Python, JavaScript, TypeScript"
+                        if ':' in line_clean:
+                            category, skills_str = line_clean.split(':', 1)
+                            category = category.strip()
+                            if len(category) > 2:
+                                skills_collected.append(category)
+                            for skill in [s.strip() for s in skills_str.split(',') if s.strip()]:
+                                if skill:
+                                    skills_collected.append(skill)
+                        else:
+                            # Just comma-separated skills
+                            for skill in [s.strip() for s in line_clean.split(',') if s.strip()]:
+                                if skill and len(skill) > 2:
+                                    skills_collected.append(skill)
+                    
+                    # Handle skill category headers (like "Development:" or "Design:")
+                    elif line_clean.endswith(':') and len(line_clean) < 30:
+                        # Process previous group
+                        if current_skill_group:
+                            skills_collected.extend(current_skill_group)
+                            current_skill_group = []
+                        # This is a category header, next lines will be skills
+                        skills_collected.append(line_clean.rstrip(':'))
+                    
+                    # Handle continuation lines (might be part of previous skill)
+                    elif current_skill_group or (skills_collected and len(line_clean) < 50 and not line_clean[0].isupper()):
+                        # Might be continuation
+                        if current_skill_group:
+                            current_skill_group[-1] += " " + line_clean
+                        elif skills_collected:
+                            # Try to append to last skill if it makes sense
+                            last_skill = skills_collected[-1]
+                            if len(last_skill) < 30 and not last_skill.endswith(':'):
+                                skills_collected[-1] += " " + line_clean
+                            else:
+                                skills_collected.append(line_clean)
+                    
+                    # Standalone skill line
+                    elif len(line_clean) > 2 and len(line_clean) < 100:
+                        if current_skill_group:
+                            skills_collected.extend(current_skill_group)
+                            current_skill_group = []
+                        skills_collected.append(line_clean)
+            
+            # Process any remaining group
+            if current_skill_group:
+                skills_collected.extend(current_skill_group)
+            
+            # Clean up skills: remove duplicates, filter out invalid entries
             seen = set()
-            parsed['skills'] = [s for s in skills_collected if not (s.lower() in seen or seen.add(s.lower()))][:30]
-        except Exception:
-            pass
+            cleaned_skills = []
+            for skill in skills_collected:
+                skill_clean = skill.strip()
+                if skill_clean and len(skill_clean) > 2 and len(skill_clean) < 100:
+                    skill_lower = skill_clean.lower()
+                    if skill_lower not in seen:
+                        seen.add(skill_lower)
+                        cleaned_skills.append(skill_clean)
+            
+            parsed['skills'] = cleaned_skills[:30]  # Limit to 30 skills
+        except Exception as e:
+            logger.warning(f"Error extracting skills: {e}")
+            parsed['skills'] = []
 
         return parsed
     
