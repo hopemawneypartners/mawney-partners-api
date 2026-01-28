@@ -456,12 +456,9 @@ class MawneyTemplateFormatter:
                     line2.upper().strip() == 'O' and 
                     line3 and line3.upper().strip().startswith('PE ')):
                     # Combine: "H" + "O" + "PE GILBERT" = "HOPE GILBERT"
-                    reconstructed = f"H{line3}"  # "H" + "PE GILBERT" = "HPE GILBERT" - WRONG!
-                    # Fix: Need to combine H + O + PE = HOPE
-                    if line3.upper().strip().startswith('PE '):
-                        # Remove "PE " and add "HOPE "
-                        rest_of_name = line3[3:].strip()  # Everything after "PE "
-                        reconstructed = f"HOPE {rest_of_name}"
+                    # Remove "PE " from line3 and add "HOPE "
+                    rest_of_name = line3[3:].strip() if line3.startswith('PE ') or line3.startswith('pe ') else line3.strip()
+                    reconstructed = f"HOPE {rest_of_name}"
                     name_candidates.append((reconstructed, i, 'reconstructed'))
                     print(f"✅ Found 3-line fragmented name: 'H' + 'O' + '{line3}' -> '{reconstructed}'")
                     continue
