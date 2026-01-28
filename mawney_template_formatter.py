@@ -1029,6 +1029,7 @@ class MawneyTemplateFormatter:
             
             # Detect end of education section - only if it's a clear section header
             # Don't stop on partial matches in content
+            line_clean = line.strip()  # Define line_clean here
             is_section_header = (line_upper.isupper() or 
                                 line_upper.startswith(('SKILLS', 'Skills', 'EXPERIENCE', 'Experience', 
                                                        'WORK', 'Work', 'INTERESTS', 'Interests',
