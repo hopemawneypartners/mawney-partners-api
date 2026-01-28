@@ -517,9 +517,10 @@ class MawneyTemplateFormatter:
                 company = parts[1].strip() if len(parts) > 1 else ""
                 location = parts[2].strip() if len(parts) > 2 else ""
                 
-                # Clean up
+                # Clean up and reconstruct fragmented company names
                 title = re.sub(r'\s*[—–-]\s*$', '', title).strip()
                 company = re.sub(r'^\s*[—–-]\s*', '', company).strip()
+                company = self._reconstruct_company_names(company)
                 
                 current_experience = {
                     'title': title if title else 'POSITION',
@@ -546,9 +547,10 @@ class MawneyTemplateFormatter:
                 company = parts[1].strip() if len(parts) > 1 else ""
                 location = parts[2].strip() if len(parts) > 2 else ""
                 
-                # Clean up
+                # Clean up and reconstruct fragmented company names
                 title = re.sub(r'\s*[—–-]\s*$', '', title).strip()
                 company = re.sub(r'^\s*[—–-]\s*', '', company).strip()
+                company = self._reconstruct_company_names(company)
                 
                 current_experience = {
                     'title': title if title else 'POSITION',
