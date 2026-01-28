@@ -65,7 +65,7 @@ class MawneyTemplateFormatter:
         formatted_html = template
         
         # Log what we're putting into the template
-        name = parsed_data.get('name', '')
+        name = parsed_data.get('name', '').strip()
         contact_info = self._format_contact_info(parsed_data)
         summary = self._format_professional_summary(parsed_data)
         skills = self._format_skills_list(parsed_data)
@@ -73,21 +73,38 @@ class MawneyTemplateFormatter:
         education = self._format_education_items(parsed_data)
         
         logger.info(f"📝 Template replacement:")
-        logger.info(f"   NAME length: {len(name)} chars - '{name[:50]}...'")
-        logger.info(f"   CONTACT_INFO length: {len(contact_info)} chars - '{contact_info[:50]}...'")
-        logger.info(f"   SUMMARY length: {len(summary)} chars")
-        logger.info(f"   SKILLS length: {len(skills)} chars")
-        logger.info(f"   EXPERIENCE length: {len(experience)} chars")
-        logger.info(f"   EDUCATION length: {len(education)} chars")
+        logger.info(f"   NAME: '{name}' (length: {len(name)} chars)")
+        logger.info(f"   CONTACT_INFO: '{contact_info}' (length: {len(contact_info)} chars)")
+        logger.info(f"   SUMMARY: length {len(summary)} chars")
+        logger.info(f"   SKILLS: length {len(skills)} chars")
+        logger.info(f"   EXPERIENCE: length {len(experience)} chars")
+        logger.info(f"   EDUCATION: length {len(education)} chars")
+        
+        # Verify template has placeholders before replacement
+        if '{NAME}' not in formatted_html:
+            logger.error("❌ Template missing {NAME} placeholder!")
+        if '{CONTACT_INFO}' not in formatted_html:
+            logger.error("❌ Template missing {CONTACT_INFO} placeholder!")
+        if '{SKILLS_LIST}' not in formatted_html:
+            logger.error("❌ Template missing {SKILLS_LIST} placeholder!")
+        if '{EXPERIENCE_ITEMS}' not in formatted_html:
+            logger.error("❌ Template missing {EXPERIENCE_ITEMS} placeholder!")
+        if '{EDUCATION_ITEMS}' not in formatted_html:
+            logger.error("❌ Template missing {EDUCATION_ITEMS} placeholder!")
         
         formatted_html = formatted_html.replace('{TOP_LOGO_BASE64}', top_logo_base64)
         formatted_html = formatted_html.replace('{BOTTOM_LOGO_BASE64}', bottom_logo_base64)
-        formatted_html = formatted_html.replace('{NAME}', name)
-        formatted_html = formatted_html.replace('{CONTACT_INFO}', contact_info)
+        formatted_html = formatted_html.replace('{NAME}', name if name else 'CANDIDATE NAME')
+        formatted_html = formatted_html.replace('{CONTACT_INFO}', contact_info if contact_info else 'Contact information not provided')
         formatted_html = formatted_html.replace('{PROFESSIONAL_SUMMARY}', summary)
-        formatted_html = formatted_html.replace('{SKILLS_LIST}', skills)
-        formatted_html = formatted_html.replace('{EXPERIENCE_ITEMS}', experience)
-        formatted_html = formatted_html.replace('{EDUCATION_ITEMS}', education)
+        formatted_html = formatted_html.replace('{SKILLS_LIST}', skills if skills else '<li>Skills not provided</li>')
+        formatted_html = formatted_html.replace('{EXPERIENCE_ITEMS}', experience if experience else '<div class="experience-item"><div class="job-header">No experience listed</div></div>')
+        formatted_html = formatted_html.replace('{EDUCATION_ITEMS}', education if education else '<div class="education-item"><div class="education-header">No education listed</div></div>')
+        
+        # Verify replacements worked
+        if '{NAME}' in formatted_html or '{CONTACT_INFO}' in formatted_html or '{SKILLS_LIST}' in formatted_html:
+            logger.error("❌ Some placeholders were NOT replaced!")
+            logger.error(f"   Remaining placeholders: {[p for p in ['{NAME}', '{CONTACT_INFO}', '{SKILLS_LIST}', '{EXPERIENCE_ITEMS}', '{EDUCATION_ITEMS}'] if p in formatted_html]}")
         
         logger.info(f"✅ Formatted CV using template, length: {len(formatted_html)} characters")
         
@@ -1263,14 +1280,20 @@ class MawneyTemplateFormatter:
     def _format_contact_info(self, data: Dict[str, Any]) -> str:
         """Format contact information"""
         contact_parts = []
-        if data.get('phone'):
-            contact_parts.append(data['phone'])
-        if data.get('email'):
-            contact_parts.append(data['email'])
-        if data.get('location'):
-            contact_parts.append(data['location'])
+        phone = data.get('phone', '').strip()
+        email = data.get('email', '').strip()
+        location = data.get('location', '').strip()
         
-        return ' | '.join(contact_parts)
+        if phone:
+            contact_parts.append(phone)
+        if email:
+            contact_parts.append(email)
+        if location:
+            contact_parts.append(location)
+        
+        result = ' | '.join(contact_parts) if contact_parts else ''
+        logger.info(f"📞 Contact info formatted: '{result}' (phone: {bool(phone)}, email: {bool(email)}, location: {bool(location)})")
+        return result
     
     def _format_professional_summary(self, data: Dict[str, Any]) -> str:
         """Format professional summary"""
@@ -1282,25 +1305,26 @@ class MawneyTemplateFormatter:
     def _format_skills_list(self, data: Dict[str, Any]) -> str:
         """Format skills as a single list"""
         skills = data.get('skills', [])
-        if not skills:
-            # Default skills based on Mawney Partners examples
-            skills = [
-                'Investment Analysis',
-                'Portfolio Management',
-                'Risk Management',
-                'Client Relations',
-                'Financial Modeling',
-                'Due Diligence',
-                'Fund Management',
-                'Capital Markets'
-            ]
+        if not skills or len(skills) == 0:
+            logger.warning("⚠️ No skills found in data, using empty list")
+            return ''  # Return empty instead of default skills
         
-        return '\n'.join([f'<li>{skill}</li>' for skill in skills])
+        result = '\n'.join([f'<li>{skill}</li>' for skill in skills if skill and str(skill).strip()])
+        logger.info(f"💼 Skills formatted: {len(skills)} skills, result length: {len(result)}")
+        return result
     
     def _format_experience_items(self, data: Dict[str, Any]) -> str:
         """Format experience items with professional structure"""
+        experience_list = data.get('experience', [])
+        logger.info(f"💼 Formatting {len(experience_list)} experience items")
+        
+        if not experience_list or len(experience_list) == 0:
+            logger.warning("⚠️ No experience items found in data")
+            return ''  # Return empty instead of placeholder
+        
         items = []
-        for exp in data.get('experience', []):
+        for i, exp in enumerate(experience_list):
+            logger.info(f"   Processing experience {i+1}: {exp.get('title', 'N/A')} at {exp.get('company', 'N/A')}")
             company = exp.get('company', '').strip()
             title = exp.get('title', '').strip()
             dates = exp.get('dates', '').strip()
@@ -1331,8 +1355,16 @@ class MawneyTemplateFormatter:
     
     def _format_education_items(self, data: Dict[str, Any]) -> str:
         """Format education items"""
+        education_list = data.get('education', [])
+        logger.info(f"🎓 Formatting {len(education_list)} education items")
+        
+        if not education_list or len(education_list) == 0:
+            logger.warning("⚠️ No education items found in data")
+            return ''  # Return empty instead of placeholder
+        
         items = []
-        for edu in data.get('education', []):
+        for i, edu in enumerate(education_list):
+            logger.info(f"   Processing education {i+1}: {edu.get('degree', 'N/A')} at {edu.get('school', 'N/A')}")
             school = edu.get('school', '')
             degree = edu.get('degree', '')
             dates = edu.get('dates', '')
