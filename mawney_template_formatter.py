@@ -704,11 +704,34 @@ class MawneyTemplateFormatter:
         # Use line-by-line parsing which works better with fragmented PDF text
         # IMPORTANT: Also check for jobs BEFORE the "WORK EXPERIENCE" header
         # Many CVs list recent jobs near the top before the formal section header
+        
+        # Define job and company indicators BEFORE they're used (needed for top section jobs detection)
+        job_title_indicators = [
+            # Financial industry roles
+            'analyst', 'associate', 'director', 'manager', 'vice president', 'vp', 'executive', 'officer', 'specialist',
+            'trader', 'portfolio', 'risk', 'quantitative', 'quant', 'researcher', 'researcher', 'strategist',
+            'consultant', 'advisor', 'adviser', 'investment', 'banker', 'broker', 'dealer',
+            # General professional roles
+            'designer', 'developer', 'administrator', 'engineer', 'coordinator', 'lead', 'senior', 'junior', 'assistant',
+            'marketing', 'business', 'development', 'freelance', 'recruitment'
+        ]
+        
+        company_indicators = [
+            # Financial institutions
+            'bank', 'capital', 'partners', 'group', 'fund', 'management', 'investment', 'advisory', 'holdings',
+            'securities', 'trading', 'asset', 'wealth', 'private equity', 'hedge fund',
+            # Company suffixes
+            'ltd', 'inc', 'llc', 'corp', 'plc',
+            # Common company words
+            'clients', 'various', 'remote', 'london', 'new york', 'leeds', 'manchester'
+        ]
+        
         experience_patterns = []
         experience_section = False
         current_experience = None
         current_responsibilities = []
         
+        print(f"Starting experience extraction from {len(lines)} lines")
         logger.info(f"Starting experience extraction from {len(lines)} lines")
         
         # First pass: Look for jobs near the top (before formal section headers)
@@ -780,28 +803,10 @@ class MawneyTemplateFormatter:
             has_date = bool(re.search(r'\b(19|20)\d{2}\s*[-–]\s*((?:19|20)\d{2}|Present|Current|Now)\b', line, re.IGNORECASE))
             has_month_date = bool(re.search(r'\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}\s*[-–]', line, re.IGNORECASE))
             
-            # Check if line contains job title indicators - FINANCIAL INDUSTRY FOCUSED
-            job_title_indicators = [
-                # Financial industry roles
-                'analyst', 'associate', 'director', 'manager', 'vice president', 'vp', 'executive', 'officer', 'specialist',
-                'trader', 'portfolio', 'risk', 'quantitative', 'quant', 'researcher', 'researcher', 'strategist',
-                'consultant', 'advisor', 'adviser', 'investment', 'banker', 'broker', 'dealer',
-                # General professional roles
-                'designer', 'developer', 'administrator', 'engineer', 'coordinator', 'lead', 'senior', 'junior', 'assistant',
-                'marketing', 'business', 'development', 'freelance', 'recruitment'
-            ]
+            # Check if line contains job title indicators (already defined above)
             looks_like_job = any(indicator in line_lower for indicator in job_title_indicators)
             
-            # Check if line contains company indicators - FINANCIAL INDUSTRY FOCUSED
-            company_indicators = [
-                # Financial institutions
-                'bank', 'capital', 'partners', 'group', 'fund', 'management', 'investment', 'advisory', 'holdings',
-                'securities', 'trading', 'asset', 'wealth', 'private equity', 'hedge fund',
-                # Company suffixes
-                'ltd', 'inc', 'llc', 'corp', 'plc',
-                # Common company words
-                'clients', 'various', 'remote', 'london', 'new york', 'leeds', 'manchester'
-            ]
+            # Check if line contains company indicators (already defined above)
             looks_like_company = any(indicator in line_lower for indicator in company_indicators) or (line_upper.isupper() and len(line.split()) >= 2 and len(line) < 60)
             
             # Check if previous line might be part of this job entry (fragmented text)
