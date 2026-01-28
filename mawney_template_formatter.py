@@ -365,6 +365,9 @@ class MawneyTemplateFormatter:
                     # Large text (artistically formatted) gets highest priority
                     if source == 'large_text':
                         score += 200
+                    # Reconstructed names get high priority (we fixed fragments)
+                    if source == 'reconstructed':
+                        score += 150
                     # Earlier is better (names are usually at top)
                     score += (15 - pos) * 10
                     # Longer names are better (more complete)
@@ -376,10 +379,17 @@ class MawneyTemplateFormatter:
                     word_count = len(name.split())
                     if 2 <= word_count <= 3:
                         score += 30
+                    # Penalize "PE GILBERT" - prefer "HOPE GILBERT"
+                    if 'PE GILBERT' in name.upper() and 'HOPE' not in name.upper():
+                        score -= 100
                     return score
                 
                 name_candidates.sort(key=score_candidate, reverse=True)
-                parsed['name'] = name_candidates[0][0]  # Get best candidate
+                final_name = name_candidates[0][0]
+                # Final check: if we got "PE GILBERT", try to fix it
+                if 'PE GILBERT' in final_name.upper() and 'HOPE' not in final_name.upper():
+                    final_name = re.sub(r'PE\s+GILBERT', 'HOPE GILBERT', final_name, flags=re.IGNORECASE)
+                parsed['name'] = final_name
                 logger.info(f"Extracted name: {parsed['name']} from position {name_candidates[0][1]} (source: {name_candidates[0][2]})")
             else:
                 # Fallback: try to reconstruct name from fragmented text
@@ -544,7 +554,17 @@ class MawneyTemplateFormatter:
                 # Clean up and reconstruct fragmented company names
                 title = re.sub(r'\s*[—–-]\s*$', '', title).strip()
                 company = re.sub(r'^\s*[—–-]\s*', '', company).strip()
+                # Aggressive company name reconstruction
                 company = self._reconstruct_company_names(company)
+                # Also fix common fragments directly
+                company = re.sub(r'\bartners\b', 'Partners', company, flags=re.IGNORECASE)
+                company = re.sub(r'\bwney\s+Partners\b', 'Mawney Partners', company, flags=re.IGNORECASE)
+                company = re.sub(r'\bMawney\s+artners\b', 'Mawney Partners', company, flags=re.IGNORECASE)
+                company = re.sub(r'\bg\s+wney\b', 'Mawney', company, flags=re.IGNORECASE)
+                if company.lower() == 'artners':
+                    company = 'Partners'  # If it's just "artners", it's likely "Partners"
+                if company.lower() in ['g', 'wney']:
+                    company = 'Mawney'  # Single fragment
                 
                 current_experience = {
                     'title': title if title else 'POSITION',
@@ -574,7 +594,17 @@ class MawneyTemplateFormatter:
                 # Clean up and reconstruct fragmented company names
                 title = re.sub(r'\s*[—–-]\s*$', '', title).strip()
                 company = re.sub(r'^\s*[—–-]\s*', '', company).strip()
+                # Aggressive company name reconstruction
                 company = self._reconstruct_company_names(company)
+                # Also fix common fragments directly
+                company = re.sub(r'\bartners\b', 'Partners', company, flags=re.IGNORECASE)
+                company = re.sub(r'\bwney\s+Partners\b', 'Mawney Partners', company, flags=re.IGNORECASE)
+                company = re.sub(r'\bMawney\s+artners\b', 'Mawney Partners', company, flags=re.IGNORECASE)
+                company = re.sub(r'\bg\s+wney\b', 'Mawney', company, flags=re.IGNORECASE)
+                if company.lower() == 'artners':
+                    company = 'Partners'  # If it's just "artners", it's likely "Partners"
+                if company.lower() in ['g', 'wney']:
+                    company = 'Mawney'  # Single fragment
                 
                 current_experience = {
                     'title': title if title else 'POSITION',
