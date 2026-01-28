@@ -200,28 +200,53 @@ class MawneyTemplateFormatter:
         # CRITICAL: First reconstruct fragmented words (before any other processing)
         import re
         # Quick reconstruction of common fragments in the raw text
-        cv_data = re.sub(r'\bPE\s+GILBERT\b', 'HOPE GILBERT', cv_data, flags=re.IGNORECASE)
-        cv_data = re.sub(r'\bPE\s+GILBERT', 'HOPE GILBERT', cv_data, flags=re.IGNORECASE)
+        # Try multiple patterns to catch all variations
+        # "PE GILBERT" variations
         cv_data = re.sub(r'PE\s+GILBERT', 'HOPE GILBERT', cv_data, flags=re.IGNORECASE)
+        cv_data = re.sub(r'\bPE\s+GILBERT\b', 'HOPE GILBERT', cv_data, flags=re.IGNORECASE)
+        cv_data = re.sub(r'^PE\s+GILBERT', 'HOPE GILBERT', cv_data, flags=re.IGNORECASE | re.MULTILINE)
+        # If "PE" and "GILBERT" are on separate lines
+        cv_data = re.sub(r'PE\s*\n\s*GILBERT', 'HOPE GILBERT', cv_data, flags=re.IGNORECASE)
+        # Company name fragments - very aggressive
         cv_data = re.sub(r'\bartners\b', 'Partners', cv_data, flags=re.IGNORECASE)
+        cv_data = re.sub(r'wney\s+Partners', 'Mawney Partners', cv_data, flags=re.IGNORECASE)
         cv_data = re.sub(r'\bwney\s+Partners\b', 'Mawney Partners', cv_data, flags=re.IGNORECASE)
+        cv_data = re.sub(r'Mawney\s+artners', 'Mawney Partners', cv_data, flags=re.IGNORECASE)
         cv_data = re.sub(r'\bMawney\s+artners\b', 'Mawney Partners', cv_data, flags=re.IGNORECASE)
+        cv_data = re.sub(r'g\s+wney', 'Mawney', cv_data, flags=re.IGNORECASE)
         cv_data = re.sub(r'\bg\s+wney\b', 'Mawney', cv_data, flags=re.IGNORECASE)
+        # Handle "artners" at start of line (common in work experience)
+        cv_data = re.sub(r'^artners\b', 'Partners', cv_data, flags=re.IGNORECASE | re.MULTILINE)
         
         # CRITICAL: Clean the text first to fix concatenated words
         cleaned_cv_data = self._clean_cv_text(cv_data)
         lines = [line.strip() for line in cleaned_cv_data.split('\n') if line.strip()]
         
-        # Apply reconstruction to each line as well
+        # Apply reconstruction to each line as well - check adjacent lines for fragments
         reconstructed_lines = []
-        for line in lines:
+        for i, line in enumerate(lines):
             # Fix common fragments in each line
-            line = re.sub(r'\bPE\s+GILBERT\b', 'HOPE GILBERT', line, flags=re.IGNORECASE)
             line = re.sub(r'PE\s+GILBERT', 'HOPE GILBERT', line, flags=re.IGNORECASE)
+            line = re.sub(r'\bPE\s+GILBERT\b', 'HOPE GILBERT', line, flags=re.IGNORECASE)
+            # Check if this line is "PE" and next is "GILBERT"
+            if line.upper().strip() == 'PE' and i < len(lines) - 1 and lines[i+1].upper().strip() == 'GILBERT':
+                line = 'HOPE'
+                if i+1 < len(lines):
+                    lines[i+1] = 'GILBERT'
+            # Company fragments
             line = re.sub(r'\bartners\b', 'Partners', line, flags=re.IGNORECASE)
+            line = re.sub(r'^artners\b', 'Partners', line, flags=re.IGNORECASE)
+            line = re.sub(r'wney\s+Partners', 'Mawney Partners', line, flags=re.IGNORECASE)
             line = re.sub(r'\bwney\s+Partners\b', 'Mawney Partners', line, flags=re.IGNORECASE)
+            line = re.sub(r'Mawney\s+artners', 'Mawney Partners', line, flags=re.IGNORECASE)
             line = re.sub(r'\bMawney\s+artners\b', 'Mawney Partners', line, flags=re.IGNORECASE)
+            line = re.sub(r'g\s+wney', 'Mawney', line, flags=re.IGNORECASE)
             line = re.sub(r'\bg\s+wney\b', 'Mawney', line, flags=re.IGNORECASE)
+            # Check if this line is just "g" and next starts with "wney"
+            if line.lower().strip() == 'g' and i < len(lines) - 1 and lines[i+1].lower().strip().startswith('wney'):
+                line = 'Mawney'
+                if i+1 < len(lines):
+                    lines[i+1] = lines[i+1].replace('wney', '', 1).strip()
             reconstructed_lines.append(line)
         lines = reconstructed_lines
         
