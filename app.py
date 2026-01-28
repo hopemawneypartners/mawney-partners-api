@@ -2866,8 +2866,17 @@ def download_cv(filename):
 # ============================================================================
 
 # Industry Moves storage
-# Industry moves are now universal (shared across all users)
-industry_moves = []  # Single shared list of moves for all users
+# NOTE: Industry moves are now stored persistently in the database (IndustryMove model).
+# The old in-memory list is kept only as a temporary cache/fallback for compatibility.
+try:
+    from database.models import IndustryMove, SessionLocal
+except Exception as e:
+    IndustryMove = None
+    SessionLocal = None
+    print(f"⚠️ IndustryMove model not available yet: {e}")
+
+# Deprecated in-memory storage (fallback only)
+industry_moves = []  # Will be gradually phased out in favour of DB-backed storage
 
 # Device tokens for push notifications
 device_tokens = {}  # email -> {device_token, platform, updated_at}
@@ -3357,9 +3366,32 @@ def save_user_messages():
 def get_industry_moves():
     """Get all industry moves (universal - shared across all users)"""
     try:
-        # Moves are now universal, no email filtering needed
-        # But we can still accept email for backward compatibility
-        moves = industry_moves
+        # Moves are now stored in the database (universal across all users)
+        if IndustryMove and SessionLocal:
+            db = SessionLocal()
+            try:
+                db_moves = db.query(IndustryMove).all()
+                moves = []
+                for m in db_moves:
+                    moves.append({
+                        'id': m.id,
+                        'name': m.name,
+                        'from_position': m.from_position,
+                        'from_company': m.from_company,
+                        'to_position': m.to_position,
+                        'to_company': m.to_company,
+                        'region': m.region,
+                        'created_by': m.created_by,
+                        'created_at': m.created_at.isoformat() if m.created_at else None,
+                        'move_date': m.move_date.isoformat() if m.move_date else None,
+                        'image_url': m.image_url,
+                        'note': m.note,
+                    })
+            finally:
+                db.close()
+        else:
+            # Fallback to in-memory list if DB is not available
+            moves = industry_moves
         return jsonify({
             'success': True,
             'moves': moves
@@ -3436,20 +3468,60 @@ def create_industry_move():
                 'error': 'Move data required'
             }), 400
         
-        # Add ID if not present
-        if 'id' not in move:
-            move['id'] = f"move_{int(datetime.now().timestamp() * 1000)}"
-        
-        # Add created_by field
-        move['created_by'] = user_email
-        
-        # Add timestamps
-        if 'created_at' not in move:
-            move['created_at'] = datetime.now().isoformat()
-        move['updated_at'] = datetime.now().isoformat()
-        
-        # Add to universal moves list (shared across all users)
-        industry_moves.append(move)
+        # Persist move to database
+        if not IndustryMove or not SessionLocal:
+            raise RuntimeError("IndustryMove model not available - database not initialized")
+
+        db = SessionLocal()
+        try:
+            import uuid
+
+            move_id = move.get('id') or f"move_{int(datetime.now().timestamp() * 1000)}"
+
+            # Parse dates
+            created_at_dt = datetime.fromisoformat(move.get('created_at')) if move.get('created_at') else datetime.utcnow()
+            move_date_dt = None
+            if move.get('move_date'):
+                try:
+                    move_date_dt = datetime.fromisoformat(move['move_date'].replace('Z', '+00:00'))
+                except Exception:
+                    move_date_dt = None
+
+            db_move = IndustryMove(
+                id=move_id,
+                name=move.get('name', ''),
+                from_position=move.get('from_position', ''),
+                from_company=move.get('from_company', ''),
+                to_position=move.get('to_position', ''),
+                to_company=move.get('to_company', ''),
+                region=move.get('region'),
+                created_by=user_email,
+                created_at=created_at_dt,
+                move_date=move_date_dt,
+                image_url=image_url or move.get('image_url'),
+                note=move.get('note')
+            )
+
+            db.add(db_move)
+            db.commit()
+
+            # Build response dict in the same shape the app expects
+            move = {
+                'id': db_move.id,
+                'name': db_move.name,
+                'from_position': db_move.from_position,
+                'from_company': db_move.from_company,
+                'to_position': db_move.to_position,
+                'to_company': db_move.to_company,
+                'region': db_move.region,
+                'created_by': db_move.created_by,
+                'created_at': db_move.created_at.isoformat() if db_move.created_at else None,
+                'move_date': db_move.move_date.isoformat() if db_move.move_date else None,
+                'image_url': db_move.image_url,
+                'note': db_move.note,
+            }
+        finally:
+            db.close()
         
         # Send push notifications to all users (except creator)
         try:
@@ -3474,18 +3546,28 @@ def create_industry_move():
 @app.route('/api/industry-moves/<move_id>', methods=['DELETE'])
 @require_auth
 def delete_industry_move(move_id):
-    """Delete an industry move (universal)"""
+    """Delete an industry move (universal, DB-backed)"""
     try:
-        # Remove move with matching ID from universal list
-        original_count = len(industry_moves)
-        industry_moves[:] = [m for m in industry_moves if m.get('id') != move_id]
-        
-        if len(industry_moves) == original_count:
+        if not IndustryMove or not SessionLocal:
             return jsonify({
                 'success': False,
-                'error': 'Move not found'
-            }), 404
-        
+                'error': 'IndustryMove model not available'
+            }), 500
+
+        db = SessionLocal()
+        try:
+            move = db.query(IndustryMove).filter(IndustryMove.id == move_id).first()
+            if not move:
+                return jsonify({
+                    'success': False,
+                    'error': 'Move not found'
+                }), 404
+
+            db.delete(move)
+            db.commit()
+        finally:
+            db.close()
+
         return jsonify({
             'success': True,
             'message': 'Move deleted successfully'
@@ -3497,42 +3579,62 @@ def delete_industry_move(move_id):
         }), 500
 
 @app.route('/api/industry-moves/<move_id>', methods=['PUT'])
+@require_auth
 def update_industry_move(move_id):
-    """Update an industry move"""
+    """Update an industry move (DB-backed)"""
     try:
-        email = request.args.get('email')
-        data = request.get_json()
+        if not IndustryMove or not SessionLocal:
+            return jsonify({
+                'success': False,
+                'error': 'IndustryMove model not available'
+            }), 500
+
+        data = request.get_json() or {}
         move_data = data.get('move', {})
-        
-        if not email:
-            return jsonify({
-                'success': False,
-                'error': 'Email parameter required'
-            }), 400
-        
-        # Find and update move in universal list
-        move_found = False
-        for i, move in enumerate(industry_moves):
-            if move.get('id') == move_id:
-                move_data['id'] = move_id
-                move_data['updated_at'] = datetime.now().isoformat()
-                # Preserve created_by and created_at
-                move_data['created_by'] = move.get('created_by')
-                if 'created_at' not in move_data:
-                    move_data['created_at'] = move.get('created_at', datetime.now().isoformat())
-                industry_moves[i] = move_data
-                move_found = True
-                break
-        
-        if not move_found:
-            return jsonify({
-                'success': False,
-                'error': 'Move not found'
-            }), 404
-        
+
+        db = SessionLocal()
+        try:
+            move = db.query(IndustryMove).filter(IndustryMove.id == move_id).first()
+            if not move:
+                return jsonify({
+                    'success': False,
+                    'error': 'Move not found'
+                }), 404
+
+            # Update editable fields
+            for field in ['name', 'from_position', 'from_company', 'to_position', 'to_company', 'region', 'note']:
+                if field in move_data:
+                    setattr(move, field, move_data[field])
+
+            if 'move_date' in move_data:
+                try:
+                    move.move_date = datetime.fromisoformat(move_data['move_date'].replace('Z', '+00:00'))
+                except Exception:
+                    move.move_date = None
+
+            move.updated_at = datetime.utcnow()
+            db.commit()
+
+            updated = {
+                'id': move.id,
+                'name': move.name,
+                'from_position': move.from_position,
+                'from_company': move.from_company,
+                'to_position': move.to_position,
+                'to_company': move.to_company,
+                'region': move.region,
+                'created_by': move.created_by,
+                'created_at': move.created_at.isoformat() if move.created_at else None,
+                'move_date': move.move_date.isoformat() if move.move_date else None,
+                'image_url': move.image_url,
+                'note': move.note,
+            }
+        finally:
+            db.close()
+
         return jsonify({
             'success': True,
-            'move': move_data
+            'move': updated
         })
     except Exception as e:
         return jsonify({
@@ -3544,16 +3646,46 @@ def update_industry_move(move_id):
 def search_industry_moves(name):
     """Search industry moves by name (universal)"""
     try:
-        moves = industry_moves
         name_lower = name.lower()
-        
-        # Search in person name, company, or role
-        matching_moves = [
-            m for m in moves
-            if name_lower in m.get('person_name', '').lower() or
-               name_lower in m.get('company', '').lower() or
-               name_lower in m.get('role', '').lower()
-        ]
+
+        if IndustryMove and SessionLocal:
+            db = SessionLocal()
+            try:
+                db_moves = db.query(IndustryMove).all()
+                matching_moves = []
+                for m in db_moves:
+                    if (
+                        name_lower in (m.name or "").lower() or
+                        name_lower in (m.from_company or "").lower() or
+                        name_lower in (m.to_company or "").lower() or
+                        name_lower in (m.from_position or "").lower() or
+                        name_lower in (m.to_position or "").lower()
+                    ):
+                        matching_moves.append({
+                            'id': m.id,
+                            'name': m.name,
+                            'from_position': m.from_position,
+                            'from_company': m.from_company,
+                            'to_position': m.to_position,
+                            'to_company': m.to_company,
+                            'region': m.region,
+                            'created_by': m.created_by,
+                            'created_at': m.created_at.isoformat() if m.created_at else None,
+                            'move_date': m.move_date.isoformat() if m.move_date else None,
+                            'image_url': m.image_url,
+                            'note': m.note,
+                        })
+            finally:
+                db.close()
+        else:
+            # Fallback to in-memory list
+            moves = industry_moves
+            matching_moves = [
+                m for m in moves
+                if name_lower in m.get('name', '').lower() or
+                   name_lower in m.get('from_company', '').lower() or
+                   name_lower in m.get('to_company', '').lower()
+            ]
         
         return jsonify({
             'success': True,
@@ -3569,14 +3701,41 @@ def search_industry_moves(name):
 def get_company_moves(company):
     """Get moves for a specific company (universal)"""
     try:
-        moves = industry_moves
         company_lower = company.lower()
-        
-        matching_moves = [
-            m for m in moves
-            if company_lower in m.get('from_company', '').lower() or
-               company_lower in m.get('to_company', '').lower()
-        ]
+
+        if IndustryMove and SessionLocal:
+            db = SessionLocal()
+            try:
+                db_moves = db.query(IndustryMove).all()
+                matching_moves = []
+                for m in db_moves:
+                    if (
+                        company_lower in (m.from_company or "").lower() or
+                        company_lower in (m.to_company or "").lower()
+                    ):
+                        matching_moves.append({
+                            'id': m.id,
+                            'name': m.name,
+                            'from_position': m.from_position,
+                            'from_company': m.from_company,
+                            'to_position': m.to_position,
+                            'to_company': m.to_company,
+                            'region': m.region,
+                            'created_by': m.created_by,
+                            'created_at': m.created_at.isoformat() if m.created_at else None,
+                            'move_date': m.move_date.isoformat() if m.move_date else None,
+                            'image_url': m.image_url,
+                            'note': m.note,
+                        })
+            finally:
+                db.close()
+        else:
+            moves = industry_moves
+            matching_moves = [
+                m for m in moves
+                if company_lower in m.get('from_company', '').lower() or
+                   company_lower in m.get('to_company', '').lower()
+            ]
         
         return jsonify({
             'success': True,
@@ -3592,15 +3751,13 @@ def get_company_moves(company):
 def get_leaderboard():
     """Get leaderboard of top movers (universal)"""
     try:
-        # Email is optional now (for backward compatibility)
-        # Count moves per user from the universal list
         user_counts = {}
         user_names = {}  # Store user names if available
-        
+
         # Get user names from database if possible
         try:
-            from database.models import SessionLocal, User
-            db = SessionLocal()
+            from database.models import SessionLocal as UserSessionLocal, User
+            db = UserSessionLocal()
             try:
                 users = db.query(User).filter(User.is_deleted == False).all()
                 for user in users:
@@ -3609,14 +3766,24 @@ def get_leaderboard():
                 db.close()
         except Exception as e:
             print(f"⚠️ Could not fetch user names from DB: {e}")
-        
-        for move in industry_moves:
-            user_email = move.get('created_by', 'unknown')
-            if user_email and user_email != 'unknown':
-                user_counts[user_email] = user_counts.get(user_email, 0) + 1
-                # Try to get user name from user_profiles if available
-                if user_email in user_profiles:
-                    user_names[user_email] = user_profiles[user_email].get('name', user_email.split('@')[0].replace('.', ' ').title())
+
+        # Count moves per user from DB
+        if IndustryMove and SessionLocal:
+            db = SessionLocal()
+            try:
+                db_moves = db.query(IndustryMove).all()
+                for m in db_moves:
+                    user_email = m.created_by or 'unknown'
+                    if user_email and user_email != 'unknown':
+                        user_counts[user_email] = user_counts.get(user_email, 0) + 1
+            finally:
+                db.close()
+        else:
+            # Fallback to in-memory list
+            for move in industry_moves:
+                user_email = move.get('created_by', 'unknown')
+                if user_email and user_email != 'unknown':
+                    user_counts[user_email] = user_counts.get(user_email, 0) + 1
         
         # Build leaderboard entries matching LeaderboardEntry structure
         leaderboard = []
@@ -3652,8 +3819,30 @@ def get_industry_moves_stats():
     """Get statistics about moves (universal)"""
     try:
         email = request.args.get('email')  # Optional - filter by user if provided
-        if email:
-            moves = [m for m in industry_moves if m.get('created_by') == email]
+
+        if IndustryMove and SessionLocal:
+            db = SessionLocal()
+            try:
+                query = db.query(IndustryMove)
+                if email:
+                    query = query.filter(IndustryMove.created_by == email)
+                db_moves = query.all()
+                moves = [{
+                    'id': m.id,
+                    'name': m.name,
+                    'from_position': m.from_position,
+                    'from_company': m.from_company,
+                    'to_position': m.to_position,
+                    'to_company': m.to_company,
+                    'region': m.region,
+                    'created_by': m.created_by,
+                    'created_at': m.created_at.isoformat() if m.created_at else None,
+                    'move_date': m.move_date.isoformat() if m.move_date else None,
+                    'image_url': m.image_url,
+                    'note': m.note,
+                } for m in db_moves]
+            finally:
+                db.close()
         else:
             moves = industry_moves
         
@@ -3679,21 +3868,38 @@ def get_autocomplete():
     """Get autocomplete suggestions (universal)"""
     try:
         query = request.args.get('query', '').lower()
-        moves = industry_moves
         suggestions = set()
-        
-        # Collect unique names and companies that match query
-        for move in moves:
-            name = move.get('name', '')
-            from_company = move.get('from_company', '')
-            to_company = move.get('to_company', '')
-            
-            if query in name.lower():
-                suggestions.add(name)
-            if query in from_company.lower():
-                suggestions.add(from_company)
-            if query in to_company.lower():
-                suggestions.add(to_company)
+
+        if IndustryMove and SessionLocal:
+            db = SessionLocal()
+            try:
+                db_moves = db.query(IndustryMove).all()
+                for m in db_moves:
+                    name = m.name or ''
+                    from_company = m.from_company or ''
+                    to_company = m.to_company or ''
+
+                    if query in name.lower():
+                        suggestions.add(name)
+                    if query in from_company.lower():
+                        suggestions.add(from_company)
+                    if query in to_company.lower():
+                        suggestions.add(to_company)
+            finally:
+                db.close()
+        else:
+            moves = industry_moves
+            for move in moves:
+                name = move.get('name', '')
+                from_company = move.get('from_company', '')
+                to_company = move.get('to_company', '')
+
+                if query in name.lower():
+                    suggestions.add(name)
+                if query in from_company.lower():
+                    suggestions.add(from_company)
+                if query in to_company.lower():
+                    suggestions.add(to_company)
         
         return jsonify({
             'success': True,

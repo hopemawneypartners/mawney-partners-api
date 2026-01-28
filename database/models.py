@@ -107,6 +107,25 @@ class RefreshToken(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     is_revoked = Column(Boolean, default=False)
 
+
+class IndustryMove(Base):
+    """Industry move model (universal across all users)"""
+    __tablename__ = 'industry_moves'
+
+    id = Column(String, primary_key=True)
+    name = Column(String, nullable=False)  # Person name
+    from_position = Column(String, nullable=False)
+    from_company = Column(String, nullable=False)
+    to_position = Column(String, nullable=False)
+    to_company = Column(String, nullable=False)
+    region = Column(String, nullable=True)
+    created_by = Column(String, nullable=False, index=True)  # user email
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    move_date = Column(DateTime, nullable=True)
+    image_url = Column(String, nullable=True)
+    note = Column(Text, nullable=True)
+
 def init_db():
     """Initialize database tables"""
     try:
