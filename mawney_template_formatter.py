@@ -783,12 +783,53 @@ class MawneyTemplateFormatter:
         
         # First pass: Look for jobs near the top (before formal section headers)
         # These are often the most recent/important positions
+        # Handle pattern: "Job Title:" on one line, "Company, Location (Dates)" on next
         top_section_jobs = []
         for i, line in enumerate(lines[:30]):  # Check first 30 lines
             line_lower = line.lower().strip()
+            line_stripped = line.strip()
+            
             # Skip if we hit a section header
             if any(keyword in line_lower for keyword in ['work experience', 'professional experience', 'education', 'skills', 'profile', 'summary']):
                 break
+            
+            # Check if this line is a job title ending with ":"
+            if line_stripped.endswith(':') and any(indicator in line_lower for indicator in job_title_indicators):
+                # Check next line for company/location/dates
+                if i+1 < len(lines):
+                    next_line = lines[i+1].strip()
+                    next_line_lower = next_line.lower()
+                    has_date_next = bool(re.search(r'\b(19|20)\d{2}\s*[-–]', next_line, re.IGNORECASE))
+                    has_month_date_next = bool(re.search(r'\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}\s*[-–]', next_line, re.IGNORECASE))
+                    looks_like_company_next = any(indicator in next_line_lower for indicator in company_indicators)
+                    
+                    if (has_date_next or has_month_date_next) and (looks_like_company_next or len(next_line.split()) <= 10):
+                        # Extract job title from this line
+                        title = line_stripped.rstrip(':').strip()
+                        
+                        # Extract company, location, dates from next line
+                        date_match = re.search(r'((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}|\d{4})\s*[-–]\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}|\d{4}|Present|Current|Now)', next_line, re.IGNORECASE)
+                        dates = date_match.group(0).strip() if date_match else ""
+                        
+                        # Remove dates from next line for company/location extraction
+                        next_line_without_dates = re.sub(r'\s*\(?\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}|\d{4})\s*[-–]\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}|\d{4}|Present|Current|Now)\s*\)?', '', next_line).strip()
+                        parts = re.split(r'\s*,\s*', next_line_without_dates)
+                        
+                        company = parts[0].strip() if parts else ""
+                        location = parts[1].strip() if len(parts) > 1 else ""
+                        
+                        # Clean up and reconstruct
+                        company = self._reconstruct_company_names(company)
+                        
+                        top_section_jobs.append({
+                            'title': title if title else 'POSITION',
+                            'company': company if company else 'COMPANY',
+                            'location': location if location else '',
+                            'dates': dates,
+                            'responsibilities': []
+                        })
+                        print(f"✅ Found top section job: {title} at {company}")
+                        continue  # Skip to next iteration (skip next line since we processed it)
             
             # Check if this line looks like a job entry (has date + job/company keywords)
             has_date = bool(re.search(r'\b(19|20)\d{2}\s*[-–]', line, re.IGNORECASE))
