@@ -196,7 +196,9 @@ class FileAnalyzer:
                                     })
                         
                         if text:
-                            # Clean the extracted text
+                            # FIRST: Reconstruct fragmented words before other cleaning
+                            text = self._reconstruct_fragmented_words(text)
+                            # THEN: Clean the extracted text
                             cleaned_text = self._clean_extracted_text(text)
                             page_texts.append((page_idx, cleaned_text))
                             extracted_text += cleaned_text + "\n"
@@ -220,9 +222,9 @@ class FileAnalyzer:
                             full_first_page_ocr = pytesseract.image_to_string(first_image, lang='eng', config='--psm 6')
                             logger.info(f"OCR extracted {len(full_first_page_ocr)} characters from full first page")
                             
-                            # Use the longer/more complete version
-                            if len(full_first_page_ocr) > len(first_page_ocr_top):
-                                first_page_ocr = full_first_page_ocr
+                            # Merge both OCR results (header + full page) for maximum coverage
+                            if full_first_page_ocr:
+                                first_page_ocr = self._merge_text_extractions(first_page_ocr_top, full_first_page_ocr)
                             else:
                                 first_page_ocr = first_page_ocr_top
                     except Exception as ocr_err:
@@ -231,9 +233,11 @@ class FileAnalyzer:
                     # Merge first page OCR with extracted text - always prefer more complete text
                     if first_page_ocr and page_texts:
                         first_page_text = page_texts[0][1] if page_texts else ""
+                        # Reconstruct fragmented words in OCR text first
+                        first_page_ocr = self._reconstruct_fragmented_words(first_page_ocr)
                         # Always merge - OCR often catches text that extraction misses
                         merged_first = self._merge_text_extractions(first_page_text, first_page_ocr)
-                        # Clean the merged text
+                        # Clean the merged text (which will also reconstruct again, but that's fine)
                         merged_first = self._clean_extracted_text(merged_first)
                         page_texts[0] = (0, merged_first)
                         logger.info(f"Merged first page: extracted {len(first_page_text)} + OCR {len(first_page_ocr)} = merged {len(merged_first)}")
@@ -457,40 +461,45 @@ class FileAnalyzer:
         
         # Common word fragments to merge
         # Pattern: (fragment1)(fragment2) -> (full_word)
+        # Apply multiple times to catch nested fragments
         fragment_patterns = [
-            # Name fragments - be more aggressive
-            (r'\bPE\s+GILBERT\b', 'HOPE GILBERT'),
-            (r'\bHO\s+PE\s+GILBERT\b', 'HOPE GILBERT'),
-            (r'\bH\s+O\s+PE\s+GILBERT\b', 'HOPE GILBERT'),
-            (r'\bPE\s+GE\b', 'PAGE'),
+            # Name fragments - be more aggressive (case insensitive, flexible spacing)
+            (r'\bPE\s+GILBERT\b', 'HOPE GILBERT', re.IGNORECASE),
+            (r'\bHO\s+PE\s+GILBERT\b', 'HOPE GILBERT', re.IGNORECASE),
+            (r'\bH\s+O\s+PE\s+GILBERT\b', 'HOPE GILBERT', re.IGNORECASE),
+            (r'\bH\s+O\s+PE\b', 'HOPE', re.IGNORECASE),
+            (r'\bPE\s+GE\b', 'PAGE', re.IGNORECASE),
             # Company name fragments - comprehensive patterns
-            (r'\bartners\b', 'Partners'),
-            (r'\bwney\s+Partners\b', 'Mawney Partners'),
-            (r'\bMawney\s+artners\b', 'Mawney Partners'),
-            (r'\bM\s+awney\s+Partners\b', 'Mawney Partners'),
-            (r'\bg\s+wney\b', 'Mawney'),  # "g" + "wney" = "Mawney" (missing "Ma")
-            (r'\bMa\s+wney\b', 'Mawney'),
-            (r'\bM\s+a\s+wney\b', 'Mawney'),
+            (r'\bartners\b', 'Partners', re.IGNORECASE),
+            (r'\bwney\s+Partners\b', 'Mawney Partners', re.IGNORECASE),
+            (r'\bMawney\s+artners\b', 'Mawney Partners', re.IGNORECASE),
+            (r'\bM\s+awney\s+Partners\b', 'Mawney Partners', re.IGNORECASE),
+            (r'\bg\s+wney\b', 'Mawney', re.IGNORECASE),  # "g" + "wney" = "Mawney" (missing "Ma")
+            (r'\bMa\s+wney\b', 'Mawney', re.IGNORECASE),
+            (r'\bM\s+a\s+wney\b', 'Mawney', re.IGNORECASE),
+            (r'\bM\s+awney\b', 'Mawney', re.IGNORECASE),
             # Common word fragments - more patterns
-            (r'\bde\s+velopment\b', 'development'),
-            (r'\bde\s+sign\b', 'design'),
-            (r'\bde\s+signer\b', 'designer'),
-            (r'\bde\s+veloper\b', 'developer'),
-            (r'\bcre\s+ative\b', 'creative'),
-            (r'\bpro\s+fessional\b', 'professional'),
-            (r'\bmar\s+keting\b', 'marketing'),
-            (r'\bcom\s+munication\b', 'communication'),
-            (r'\bstrat\s+egy\b', 'strategy'),
-            (r'\bstrat\s+egic\b', 'strategic'),
-            (r'\bex\s+perience\b', 'experience'),
-            (r'\bex\s+ecutive\b', 'executive'),
-            (r'\bad\s+ministrator\b', 'administrator'),
-            (r'\bman\s+agement\b', 'management'),
-            (r'\bde\s+sign\s+to\s+create\s+human\b', ''),  # Remove this fragment
+            (r'\bde\s+velopment\b', 'development', re.IGNORECASE),
+            (r'\bde\s+sign\b', 'design', re.IGNORECASE),
+            (r'\bde\s+signer\b', 'designer', re.IGNORECASE),
+            (r'\bde\s+veloper\b', 'developer', re.IGNORECASE),
+            (r'\bcre\s+ative\b', 'creative', re.IGNORECASE),
+            (r'\bpro\s+fessional\b', 'professional', re.IGNORECASE),
+            (r'\bmar\s+keting\b', 'marketing', re.IGNORECASE),
+            (r'\bcom\s+munication\b', 'communication', re.IGNORECASE),
+            (r'\bstrat\s+egy\b', 'strategy', re.IGNORECASE),
+            (r'\bstrat\s+egic\b', 'strategic', re.IGNORECASE),
+            (r'\bex\s+perience\b', 'experience', re.IGNORECASE),
+            (r'\bex\s+ecutive\b', 'executive', re.IGNORECASE),
+            (r'\bad\s+ministrator\b', 'administrator', re.IGNORECASE),
+            (r'\bman\s+agement\b', 'management', re.IGNORECASE),
+            (r'\bde\s+sign\s+to\s+create\s+human\b', '', re.IGNORECASE),  # Remove this fragment
         ]
         
-        for pattern, replacement in fragment_patterns:
-            text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
+        # Apply patterns multiple times to catch nested fragments
+        for _ in range(3):  # Apply up to 3 times for nested fragments
+            for pattern, replacement, flags in fragment_patterns:
+                text = re.sub(pattern, replacement, text, flags=flags)
         
         # Try to merge single-character words with following words
         # Pattern: "word g word" -> "word Mawney word" (if context suggests it)
@@ -544,6 +553,33 @@ class FileAnalyzer:
                             merged_words[-1] = 'HOPE'
                             i += 1  # Skip "PE"
                             continue
+                        # Or if "PE" is standalone before "GILBERT", try to find "HO" earlier
+                        elif i > 0:
+                            # Look back for "HO" or "H O"
+                            for j in range(max(0, i-3), i):
+                                prev_word = merged_words[j] if j < len(merged_words) else words[j]
+                                if prev_word.upper() in ['HO', 'H', 'O']:
+                                    # Try to reconstruct
+                                    if prev_word.upper() == 'HO':
+                                        merged_words[j] = 'HOPE'
+                                        i += 1  # Skip "PE"
+                                        break
+                                    elif prev_word.upper() == 'H' and j < len(merged_words) - 1:
+                                        next_prev = merged_words[j+1] if j+1 < len(merged_words) else words[j+1]
+                                        if next_prev.upper() == 'O':
+                                            merged_words[j] = 'HOPE'
+                                            merged_words.pop(j+1)  # Remove the "O"
+                                            i += 1  # Skip "PE"
+                                            break
+                            else:
+                                # No "HO" found, but "PE GILBERT" might still be a fragment
+                                # Check if there's a single char before "PE"
+                                if i > 0 and len(words[i-1]) == 1:
+                                    # Might be "H PE" or similar
+                                    pass
+                                merged_words.append(word)
+                                i += 1
+                                continue
                 
                 merged_words.append(word)
                 i += 1
