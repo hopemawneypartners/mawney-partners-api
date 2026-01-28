@@ -1308,7 +1308,8 @@ class MawneyTemplateFormatter:
                 })
                 print(f"✅ Found top section education: {degree} at {institution}")
         
-        # Now do the main parsing starting from education section
+        # Now do the main parsing - look for education entries ANYWHERE in the document
+        # Don't require a specific "EDUCATION" header - many CVs list education under various headers
         for i, line in enumerate(lines):
             line_lower = line.lower().strip()
             line_clean = line.strip()  # Define line_clean here
@@ -1318,6 +1319,18 @@ class MawneyTemplateFormatter:
             if 'education' in line_lower or 'qualifications' in line_lower or 'academic' in line_lower:
                 education_section = True
                 continue
+            
+            # UNIVERSAL education detection - look for education entries ANYWHERE
+            # Check if this line looks like a degree/institution entry (has year + degree keywords)
+            if not education_section:
+                has_year = bool(re.search(r'\b(19|20)\d{2}\b', line))
+                is_degree_line = any(word in line_lower for word in ['bsc', 'ba', 'ma', 'ms', 'mba', 'phd', 'degree', 'honours', 'honors', 'diploma', 'certificate'])
+                is_school_line = any(word in line_lower for word in ['university', 'college', 'school', 'institute', 'academy'])
+                
+                # If line has year and looks like education, start education section
+                if has_year and (is_degree_line or is_school_line):
+                    education_section = True
+                    # Process this line as education (will be handled below)
             
             # Detect end of education section - only if it's a clear section header
             # Don't stop on partial matches in content
