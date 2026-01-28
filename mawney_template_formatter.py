@@ -455,7 +455,13 @@ class MawneyTemplateFormatter:
                 if (line1.upper().strip() == 'H' and 
                     line2.upper().strip() == 'O' and 
                     line3 and line3.upper().strip().startswith('PE ')):
-                    reconstructed = f"H{line3}"
+                    # Combine: "H" + "O" + "PE GILBERT" = "HOPE GILBERT"
+                    reconstructed = f"H{line3}"  # "H" + "PE GILBERT" = "HPE GILBERT" - WRONG!
+                    # Fix: Need to combine H + O + PE = HOPE
+                    if line3.upper().strip().startswith('PE '):
+                        # Remove "PE " and add "HOPE "
+                        rest_of_name = line3[3:].strip()  # Everything after "PE "
+                        reconstructed = f"HOPE {rest_of_name}"
                     name_candidates.append((reconstructed, i, 'reconstructed'))
                     print(f"✅ Found 3-line fragmented name: 'H' + 'O' + '{line3}' -> '{reconstructed}'")
                     continue
@@ -767,24 +773,46 @@ class MawneyTemplateFormatter:
         summary_started = False
         current_summary = []
         
-        for line in lines:
-            line_lower = line.lower()
-            if any(keyword in line_lower for keyword in ['professional summary', 'profile', 'overview', 'objective']):
+        for i, line in enumerate(lines):
+            line_lower = line.lower().strip()
+            line_stripped = line.strip()
+            
+            # Detect start of summary section
+            if any(keyword in line_lower for keyword in ['professional summary', 'profile', 'overview', 'objective', 'summary']):
                 summary_started = True
                 continue
-            elif summary_started and any(keyword in line_lower for keyword in ['experience', 'education', 'skills', 'work']):
-                break
-            elif summary_started and line and len(line) > 20:  # Substantial content
-                current_summary.append(line)
+            
+            # Stop if we hit a section header (but allow summary content to continue)
+            if summary_started and any(keyword in line_lower for keyword in ['work experience', 'professional experience', 'employment', 'education', 'skills', 'qualifications']):
+                # Only stop if it's a clear section header (short, all caps or title case)
+                if len(line_stripped) < 50 and (line_stripped.isupper() or (line_stripped[0].isupper() and line_stripped.count(' ') < 5)):
+                    break
+            
+            # Collect summary content
+            if summary_started and line_stripped and len(line_stripped) > 10:
+                # Skip bullet points and very short lines
+                if not line_stripped.startswith(('•', '-', '*')) and len(line_stripped) > 15:
+                    current_summary.append(line_stripped)
         
         # Only use actual CV summary, not auto-populated content
         if current_summary and not any(generic in ' '.join(current_summary).lower() for generic in ['postgraduate and certified', 'looking for an analyst position', 'financial risk management']):
             parsed['summary'] = ' '.join(current_summary)
+            print(f"✅ Extracted summary: {parsed['summary'][:100]}...")
         else:
             # Extract first substantial paragraph as summary if no dedicated summary section
-            for line in lines[2:8]:  # Check lines 3-8 for potential summary
-                if len(line) > 50 and not any(keyword in line.lower() for keyword in ['experience', 'education', 'skills', 'work', 'contact']):
-                    parsed['summary'] = line
+            # Look for descriptive text that's not a name, contact, or section header
+            for i, line in enumerate(lines[2:15]):  # Check lines 3-15 for potential summary
+                line_stripped = line.strip()
+                line_lower = line_stripped.lower()
+                
+                # Skip if it looks like a name, contact, or section header
+                if (len(line_stripped) > 50 and 
+                    not any(keyword in line_lower for keyword in ['experience', 'education', 'skills', 'work', 'contact', '@', 'curriculum', 'vitae', 'resume']) and
+                    not line_stripped.isupper() and
+                    not re.search(r'\+?[\d\s\-\(\)]{10,}', line_stripped) and  # Not a phone number
+                    not re.search(r'^[A-Z][a-z]+ [A-Z][a-z]+$', line_stripped)):  # Not just a name
+                    parsed['summary'] = line_stripped
+                    print(f"✅ Extracted summary from line {i+3}: {parsed['summary'][:100]}...")
                     break
         
         # Extract experience with improved structure detection
