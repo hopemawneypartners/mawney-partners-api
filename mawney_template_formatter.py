@@ -23,6 +23,9 @@ class MawneyTemplateFormatter:
     def format_cv_with_template(self, cv_data: str, filename: str = '', font_info: List[Dict] = None) -> Dict[str, Any]:
         """Format CV using the exact Mawney Partners template (compatible with AI assistant)"""
         try:
+            print(f"🎯 format_cv_with_template called with {len(cv_data)} chars of data")
+            print(f"Using template path: {self.template_path}")
+            print(f"Template exists: {os.path.exists(self.template_path)}")
             logger.info(f"🎯 format_cv_with_template called with {len(cv_data)} chars of data")
             logger.info(f"Using template path: {self.template_path}")
             logger.info(f"Template exists: {os.path.exists(self.template_path)}")
@@ -45,6 +48,15 @@ class MawneyTemplateFormatter:
             logger.info(f"📝 CV data parsing completed")
             
             # Log what was extracted for debugging
+            print(f"📊 Parsed CV data summary:")
+            print(f"   Name: {parsed_data.get('name', 'NOT FOUND')}")
+            print(f"   Email: {parsed_data.get('email', 'NOT FOUND')}")
+            print(f"   Phone: {parsed_data.get('phone', 'NOT FOUND')}")
+            print(f"   Location: {parsed_data.get('location', 'NOT FOUND')}")
+            print(f"   Experience entries: {len(parsed_data.get('experience', []))}")
+            print(f"   Education entries: {len(parsed_data.get('education', []))}")
+            print(f"   Skills count: {len(parsed_data.get('skills', []))}")
+            print(f"   Summary length: {len(parsed_data.get('summary', ''))}")
             logger.info(f"📊 Parsed CV data summary:")
             logger.info(f"   Name: {parsed_data.get('name', 'NOT FOUND')}")
             logger.info(f"   Email: {parsed_data.get('email', 'NOT FOUND')}")
@@ -87,6 +99,13 @@ class MawneyTemplateFormatter:
         experience = self._format_experience_items(parsed_data)
         education = self._format_education_items(parsed_data)
         
+        print(f"📝 Template replacement:")
+        print(f"   NAME: '{name}' (length: {len(name)} chars)")
+        print(f"   CONTACT_INFO: '{contact_info}' (length: {len(contact_info)} chars)")
+        print(f"   SUMMARY: length {len(summary)} chars")
+        print(f"   SKILLS: length {len(skills)} chars")
+        print(f"   EXPERIENCE: length {len(experience)} chars")
+        print(f"   EDUCATION: length {len(education)} chars")
         logger.info(f"📝 Template replacement:")
         logger.info(f"   NAME: '{name}' (length: {len(name)} chars)")
         logger.info(f"   CONTACT_INFO: '{contact_info}' (length: {len(contact_info)} chars)")
