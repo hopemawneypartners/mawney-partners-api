@@ -962,8 +962,14 @@ class MawneyTemplateFormatter:
                 education_section = True
                 continue
             
-            # Detect end of education section
-            if education_section and any(keyword in line_lower for keyword in ['skills', 'interests', 'certifications', 'experience', 'work']):
+            # Detect end of education section - only if it's a clear section header
+            # Don't stop on partial matches in content
+            is_section_header = (line_upper.isupper() or 
+                                line_upper.startswith(('SKILLS', 'Skills', 'EXPERIENCE', 'Experience', 
+                                                       'WORK', 'Work', 'INTERESTS', 'Interests',
+                                                       'CERTIFICATIONS', 'Certifications')))
+            if education_section and is_section_header and len(line_clean.split()) <= 3:
+                # Only stop if it looks like a section header (short, clear)
                 if current_education:
                     education_items.append(current_education)
                     current_education = None
