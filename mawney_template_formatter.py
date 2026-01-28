@@ -20,14 +20,14 @@ class MawneyTemplateFormatter:
     def __init__(self):
         self.template_path = os.path.join(os.path.dirname(__file__), 'mawney_cv_template_correct.html')
         
-    def format_cv_with_template(self, cv_data: str, filename: str = '') -> Dict[str, Any]:
+    def format_cv_with_template(self, cv_data: str, filename: str = '', font_info: List[Dict] = None) -> Dict[str, Any]:
         """Format CV using the exact Mawney Partners template (compatible with AI assistant)"""
         try:
             logger.info(f"Using template path: {self.template_path}")
             logger.info(f"Template exists: {os.path.exists(self.template_path)}")
             
-            # Parse the CV data
-            parsed_data = self._parse_cv_data(cv_data)
+            # Parse the CV data (pass font_info for better name extraction)
+            parsed_data = self._parse_cv_data(cv_data, font_info=font_info)
             
             # Load the template
             with open(self.template_path, 'r', encoding='utf-8') as f:
@@ -195,11 +195,27 @@ class MawneyTemplateFormatter:
         
         return text
 
-    def _parse_cv_data(self, cv_data: str) -> Dict[str, Any]:
+    def _parse_cv_data(self, cv_data: str, font_info: List[Dict] = None) -> Dict[str, Any]:
         """Parse CV data to extract structured information with professional formatting"""
         # CRITICAL: Clean the text first to fix concatenated words
         cleaned_cv_data = self._clean_cv_text(cv_data)
         lines = [line.strip() for line in cleaned_cv_data.split('\n') if line.strip()]
+        
+        # Use font_info to help identify large text (likely names)
+        large_text_candidates = []
+        if font_info:
+            for info in font_info:
+                large_text = info.get('large_text', '')
+                if large_text:
+                    # Split into potential name candidates
+                    words = large_text.split()
+                    if 2 <= len(words) <= 5:
+                        candidate = ' '.join(words)
+                        # Check if it looks like a name
+                        if all(word[0].isupper() for word in words if word and word[0].isalpha()):
+                            if not re.search(r'\d', candidate) and not any(char in candidate for char in ['@', '+']):
+                                large_text_candidates.append(candidate)
+                                logger.info(f"Found large text candidate (likely name): {candidate}")
         
         parsed = {
             'name': '',
@@ -214,37 +230,108 @@ class MawneyTemplateFormatter:
         }
         
         # Extract name with better pattern matching and fragmentation handling
+        # Also check for artistically formatted names (large text, all caps, styled)
         if lines:
             name_candidates = []
             
             # First, try to find name in first few lines (most common location)
-            for i, line in enumerate(lines[:10]):
+            # Be more aggressive - names are often artistically formatted
+            for i, line in enumerate(lines[:15]):  # Check more lines
+                line_original = line
+                line = line.strip()
+                
                 # Skip obvious headers
-                if any(keyword in line.lower() for keyword in ['curriculum', 'vitae', 'resume', 'cv', 'page', 'document']):
+                if any(keyword in line.lower() for keyword in ['curriculum', 'vitae', 'resume', 'cv', 'page', 'document', 'professional', 'creative']):
                     continue
                 
                 # Skip contact info lines
                 if '@' in line or re.search(r'\+?[\d\s\-\(\)]{10,}', line):
                     continue
                 
+                # Skip lines that are clearly not names
+                if any(word in line.lower() for word in ['experience', 'education', 'skills', 'summary', 'profile', 'objective']):
+                    continue
+                
                 words = line.split()
                 
                 # Look for proper name patterns (2-4 words, title case or all caps)
-                if 2 <= len(words) <= 4:
+                # Be more lenient for artistically formatted names
+                if 2 <= len(words) <= 5:  # Allow up to 5 words (e.g., "Mary Jane Watson Smith")
                     # Check if all words start with capital (title case) or all uppercase
                     is_title_case = all(word[0].isupper() for word in words if word and word[0].isalpha())
-                    is_all_caps = line.isupper() and len(line) < 50
+                    is_all_caps = line.isupper() and len(line) < 60  # Allow longer all-caps names
                     
-                    if (is_title_case or is_all_caps) and not any(char in line for char in ['@', '+', '(', ')', '/', '\\']):
-                        # Additional check: names usually don't have numbers or special punctuation
-                        if not re.search(r'\d', line) and not re.search(r'[^\w\s]', line):
-                            name_candidates.append((line, i))
+                    # Also check for mixed case (artistic formatting)
+                    has_capitals = any(word[0].isupper() for word in words if word and word[0].isalpha())
+                    mostly_capitals = sum(1 for word in words if word and word[0].isupper()) >= len(words) * 0.8
+                    
+                    if (is_title_case or is_all_caps or (has_capitals and mostly_capitals)) and not any(char in line for char in ['@', '+', '(', ')', '/', '\\']):
+                        # Additional check: names usually don't have numbers
+                        # But allow some special chars for artistic formatting
+                        has_numbers = bool(re.search(r'\d', line))
+                        # Allow some punctuation for artistic names (e.g., "O'Brien")
+                        special_chars = re.findall(r'[^\w\s]', line)
+                        has_too_many_special = len(special_chars) > 2
+                        
+                        if not has_numbers and not has_too_many_special:
+                            # Check if it looks like a real name (not a job title or section)
+                            if not any(word.lower() in ['the', 'and', 'or', 'of', 'for', 'with', 'from', 'to'] for word in words):
+                                name_candidates.append((line, i, 'standard'))
             
-            # If we found candidates, pick the best one (usually first, but check for completeness)
+            # Also check for names that might be split across lines (artistic formatting)
+            for i in range(min(5, len(lines) - 1)):
+                line1 = lines[i].strip() if i < len(lines) else ""
+                line2 = lines[i+1].strip() if i+1 < len(lines) else ""
+                
+                # Check if two consecutive lines might form a name
+                if line1 and line2:
+                    # Skip if either line looks like a header or contact info
+                    if any(keyword in line1.lower() or keyword in line2.lower() 
+                           for keyword in ['curriculum', 'vitae', 'resume', 'cv', 'professional', 'creative', '@']):
+                        continue
+                    
+                    combined = f"{line1} {line2}"
+                    words = combined.split()
+                    if 2 <= len(words) <= 5:
+                        # Check if it forms a valid name pattern
+                        is_title_case = all(word[0].isupper() for word in words if word and word[0].isalpha())
+                        is_all_caps = combined.isupper() and len(combined) < 60
+                        
+                        if (is_title_case or is_all_caps) and not any(char in combined for char in ['@', '+', '(', ')', '/', '\\']):
+                            if not re.search(r'\d', combined):
+                                name_candidates.append((combined, i, 'split'))
+            
+            # Add large text candidates from font_info (artistically formatted names)
+            if large_text_candidates:
+                for candidate in large_text_candidates:
+                    name_candidates.append((candidate, 0, 'large_text'))  # Position 0 = top of page
+            
+            # If we found candidates, pick the best one
             if name_candidates:
-                # Prefer longer names (more likely to be complete)
-                name_candidates.sort(key=lambda x: (len(x[0]), -x[1]))  # Longer first, then earlier in doc
-                parsed['name'] = name_candidates[-1][0]  # Get the longest, earliest name
+                # Score candidates: prefer earlier in doc, longer names, standard format over split
+                # Large text gets highest priority (artistically formatted names)
+                def score_candidate(candidate):
+                    name, pos, source = candidate
+                    score = 0
+                    # Large text (artistically formatted) gets highest priority
+                    if source == 'large_text':
+                        score += 200
+                    # Earlier is better (names are usually at top)
+                    score += (15 - pos) * 10
+                    # Longer names are better (more complete)
+                    score += len(name) * 2
+                    # Standard format preferred over split
+                    if source == 'standard':
+                        score += 50
+                    # Prefer 2-3 word names (most common)
+                    word_count = len(name.split())
+                    if 2 <= word_count <= 3:
+                        score += 30
+                    return score
+                
+                name_candidates.sort(key=score_candidate, reverse=True)
+                parsed['name'] = name_candidates[0][0]  # Get best candidate
+                logger.info(f"Extracted name: {parsed['name']} from position {name_candidates[0][1]} (source: {name_candidates[0][2]})")
             else:
                 # Fallback: try to reconstruct name from fragmented text
                 # Look for patterns like "HO PE" or "PE GILBERT" that might be fragments

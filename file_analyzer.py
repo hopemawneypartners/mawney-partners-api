@@ -161,26 +161,90 @@ class FileAnalyzer:
                     page_count = len(pdf.pages)
                     
                     # First pass: try standard text extraction with layout preservation
-                    for page in pdf.pages:
+                    # Also extract font size info to identify large text (likely names)
+                    page_texts = []
+                    page_font_info = []  # Store font size info for name detection
+                    
+                    for page_idx, page in enumerate(pdf.pages):
                         # Try layout-based extraction first (better for colored/styled text)
                         text = page.extract_text(layout=True)
                         if not text or len(text.strip()) < 50:
                             # Fallback to standard extraction
                             text = page.extract_text()
                         
-                        # Also try extracting from words/chars (can capture colored text better)
-                        if not text or len(text.strip()) < 50:
-                            words = page.extract_words()
-                            if words:
-                                # Reconstruct text from words (preserves colored text)
-                                word_text = ' '.join([w.get('text', '') for w in words if w.get('text')])
-                                if word_text and len(word_text) > len(text or ''):
-                                    text = word_text
+                        # Extract words with font size information (for identifying large text/names)
+                        words = page.extract_words()
+                        if words:
+                            # Reconstruct text from words (preserves colored text)
+                            word_text = ' '.join([w.get('text', '') for w in words if w.get('text')])
+                            if word_text and len(word_text) > len(text or ''):
+                                text = word_text
+                            
+                            # Store font size info for first page (where names typically are)
+                            if page_idx == 0:
+                                # Look for large text (likely name) - typically 14pt+ for names
+                                large_text_words = []
+                                for w in words:
+                                    size = w.get('size', 0)
+                                    if size > 12:  # Large text threshold
+                                        large_text_words.append(w.get('text', ''))
+                                if large_text_words:
+                                    page_font_info.append({
+                                        'page': 0,
+                                        'large_text': ' '.join(large_text_words),
+                                        'words': words
+                                    })
                         
                         if text:
                             # Clean the extracted text
                             cleaned_text = self._clean_extracted_text(text)
+                            page_texts.append((page_idx, cleaned_text))
                             extracted_text += cleaned_text + "\n"
+                    
+                    # ALWAYS use OCR for first page to catch artistically formatted names
+                    # Names are often styled/large/colored and may be missed by text extraction
+                    first_page_ocr = ""
+                    try:
+                        from pdf2image import convert_from_bytes
+                        images = convert_from_bytes(file_data, dpi=300)
+                        if images:
+                            # OCR first page with higher DPI for better name detection
+                            first_image = images[0]
+                            # Crop top 30% of first page (where names typically are)
+                            width, height = first_image.size
+                            top_region = first_image.crop((0, 0, width, int(height * 0.3)))
+                            first_page_ocr = pytesseract.image_to_string(top_region, lang='eng', config='--psm 6')
+                            logger.info(f"OCR extracted {len(first_page_ocr)} characters from first page header area")
+                            
+                            # Also try full first page OCR
+                            full_first_page_ocr = pytesseract.image_to_string(first_image, lang='eng', config='--psm 6')
+                            if len(full_first_page_ocr) > len(first_page_ocr):
+                                first_page_ocr = full_first_page_ocr
+                    except Exception as ocr_err:
+                        logger.warning(f"First page OCR failed: {str(ocr_err)}")
+                    
+                    # Merge first page OCR with extracted text
+                    if first_page_ocr and page_texts:
+                        first_page_text = page_texts[0][1] if page_texts else ""
+                        # If OCR found significantly more text, use it
+                        if len(first_page_ocr.strip()) > len(first_page_text.strip()) * 1.1:
+                            logger.info(f"Using OCR for first page (OCR: {len(first_page_ocr)} vs extracted: {len(first_page_text)})")
+                            page_texts[0] = (0, self._clean_extracted_text(first_page_ocr))
+                            # Rebuild extracted_text with OCR first page
+                            extracted_text = ""
+                            for page_idx, text in page_texts:
+                                extracted_text += text + "\n"
+                        else:
+                            # Merge OCR and extracted text for first page
+                            merged_first = self._merge_text_extractions(first_page_text, first_page_ocr)
+                            page_texts[0] = (0, merged_first)
+                            extracted_text = ""
+                            for page_idx, text in page_texts:
+                                extracted_text += text + "\n"
+                    
+                    # Store font info for later use in name extraction
+                    if page_font_info:
+                        logger.info(f"Found large text on first page: {page_font_info[0].get('large_text', '')[:100]}")
                     
                     # Check if extraction seems incomplete (might be missing colored text)
                     # If text is suspiciously short for a CV, try OCR
@@ -280,6 +344,9 @@ class FileAnalyzer:
             # Analyze document content
             analysis = self._analyze_document_content(extracted_text, filename)
             
+            # Store font info for name extraction
+            font_info = page_font_info if 'page_font_info' in locals() else []
+            
             return {
                 'type': 'pdf',
                 'filename': filename,
@@ -289,7 +356,8 @@ class FileAnalyzer:
                     'page_count': page_count,
                     'word_count': len(extracted_text.split()) if extracted_text else 0,
                     'char_count': len(extracted_text),
-                    'used_ocr': use_ocr
+                    'used_ocr': use_ocr,
+                    'font_info': font_info  # Large text info for name detection
                 },
                 'analysis': analysis,
                 'has_text': bool(extracted_text)

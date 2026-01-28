@@ -2234,7 +2234,9 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
         # Prefer the full Mawney template first (includes profile, skills, education)
         try:
             template_formatter_primary = MawneyTemplateFormatter()
-            formatted_result = template_formatter_primary.format_cv_with_template(cv_content, filename)
+            # Get font_info from CV file analysis for better name extraction
+            font_info = cv_file.get('document_properties', {}).get('font_info', [])
+            formatted_result = template_formatter_primary.format_cv_with_template(cv_content, filename, font_info=font_info)
         except Exception:
             formatted_result = {}
 
