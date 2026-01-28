@@ -1990,6 +1990,12 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
         cv_content = cv_file.get('extracted_text', '')
         
         # Debug: Log the extracted content
+        print(f"=== CV FILE ANALYSIS ===")
+        print(f"Filename: {filename}")
+        print(f"File type: {cv_file.get('type', 'unknown')}")
+        print(f"Content length: {len(cv_content)} characters")
+        print(f"First 1000 characters: {cv_content[:1000]}")
+        print(f"=== END CV FILE ANALYSIS ===")
         logger.info(f"=== CV FILE ANALYSIS ===")
         logger.info(f"Filename: {filename}")
         logger.info(f"File type: {cv_file.get('type', 'unknown')}")
