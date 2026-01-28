@@ -210,37 +210,37 @@ class FileAnalyzer:
                         if images:
                             # OCR first page with higher DPI for better name detection
                             first_image = images[0]
-                            # Crop top 30% of first page (where names typically are)
+                            # Crop top 40% of first page (where names and headers typically are)
                             width, height = first_image.size
-                            top_region = first_image.crop((0, 0, width, int(height * 0.3)))
-                            first_page_ocr = pytesseract.image_to_string(top_region, lang='eng', config='--psm 6')
-                            logger.info(f"OCR extracted {len(first_page_ocr)} characters from first page header area")
+                            top_region = first_image.crop((0, 0, width, int(height * 0.4)))
+                            first_page_ocr_top = pytesseract.image_to_string(top_region, lang='eng', config='--psm 6')
+                            logger.info(f"OCR extracted {len(first_page_ocr_top)} characters from first page header area")
                             
-                            # Also try full first page OCR
+                            # Also try full first page OCR (more complete)
                             full_first_page_ocr = pytesseract.image_to_string(first_image, lang='eng', config='--psm 6')
-                            if len(full_first_page_ocr) > len(first_page_ocr):
+                            logger.info(f"OCR extracted {len(full_first_page_ocr)} characters from full first page")
+                            
+                            # Use the longer/more complete version
+                            if len(full_first_page_ocr) > len(first_page_ocr_top):
                                 first_page_ocr = full_first_page_ocr
+                            else:
+                                first_page_ocr = first_page_ocr_top
                     except Exception as ocr_err:
                         logger.warning(f"First page OCR failed: {str(ocr_err)}")
                     
-                    # Merge first page OCR with extracted text
+                    # Merge first page OCR with extracted text - always prefer more complete text
                     if first_page_ocr and page_texts:
                         first_page_text = page_texts[0][1] if page_texts else ""
-                        # If OCR found significantly more text, use it
-                        if len(first_page_ocr.strip()) > len(first_page_text.strip()) * 1.1:
-                            logger.info(f"Using OCR for first page (OCR: {len(first_page_ocr)} vs extracted: {len(first_page_text)})")
-                            page_texts[0] = (0, self._clean_extracted_text(first_page_ocr))
-                            # Rebuild extracted_text with OCR first page
-                            extracted_text = ""
-                            for page_idx, text in page_texts:
-                                extracted_text += text + "\n"
-                        else:
-                            # Merge OCR and extracted text for first page
-                            merged_first = self._merge_text_extractions(first_page_text, first_page_ocr)
-                            page_texts[0] = (0, merged_first)
-                            extracted_text = ""
-                            for page_idx, text in page_texts:
-                                extracted_text += text + "\n"
+                        # Always merge - OCR often catches text that extraction misses
+                        merged_first = self._merge_text_extractions(first_page_text, first_page_ocr)
+                        # Clean the merged text
+                        merged_first = self._clean_extracted_text(merged_first)
+                        page_texts[0] = (0, merged_first)
+                        logger.info(f"Merged first page: extracted {len(first_page_text)} + OCR {len(first_page_ocr)} = merged {len(merged_first)}")
+                        # Rebuild extracted_text with merged first page
+                        extracted_text = ""
+                        for page_idx, text in page_texts:
+                            extracted_text += text + "\n"
                     
                     # Store font info for later use in name extraction
                     if page_font_info:
