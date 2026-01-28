@@ -2245,13 +2245,27 @@ def _handle_cv_formatting(cv_files: List[Dict]) -> Dict[str, Any]:
 
         # If template output is insufficient, fall back to deterministic work-experience and cascade formatters
         html_candidate = (formatted_result.get('html_content') or formatted_result.get('html_version') or '') if isinstance(formatted_result, dict) else ''
-        if not _has_visible_text(html_candidate):
+        html_length = len(html_candidate)
+        has_visible = _has_visible_text(html_candidate)
+        logger.info(f"🎯 Template formatter HTML check: length={html_length}, has_visible_text={has_visible}, min_chars=200")
+        
+        if not has_visible and html_length > 0:
+            logger.warning(f"⚠️ Template formatter produced HTML ({html_length} chars) but _has_visible_text returned False. Checking content...")
+            # Log first 500 chars to see what we got
+            logger.info(f"   First 500 chars: {html_candidate[:500]}")
+        
+        if not has_visible:
+            logger.warning("⚠️ Template formatter didn't produce sufficient visible text, trying fallback formatters...")
             det = _deterministic_parse_to_html(cv_content)
             if det.get('success') and _has_visible_text(det.get('html_content', '')):
+                logger.info("✅ Deterministic parser produced visible content")
                 formatted_result = det
             else:
+                logger.warning("⚠️ Deterministic parser failed, trying cascading templates...")
                 # Try cascading enhanced formatters
                 formatted_result = _format_with_cascading_templates(cv_content, filename)
+        else:
+            logger.info("✅ Template formatter produced sufficient visible text, using it")
 
         # Normalize key names from different formatters
         html_content = formatted_result.get('html_content') or formatted_result.get('html_version') or ''
