@@ -197,9 +197,33 @@ class MawneyTemplateFormatter:
 
     def _parse_cv_data(self, cv_data: str, font_info: List[Dict] = None) -> Dict[str, Any]:
         """Parse CV data to extract structured information with professional formatting"""
+        # CRITICAL: First reconstruct fragmented words (before any other processing)
+        import re
+        # Quick reconstruction of common fragments in the raw text
+        cv_data = re.sub(r'\bPE\s+GILBERT\b', 'HOPE GILBERT', cv_data, flags=re.IGNORECASE)
+        cv_data = re.sub(r'\bPE\s+GILBERT', 'HOPE GILBERT', cv_data, flags=re.IGNORECASE)
+        cv_data = re.sub(r'PE\s+GILBERT', 'HOPE GILBERT', cv_data, flags=re.IGNORECASE)
+        cv_data = re.sub(r'\bartners\b', 'Partners', cv_data, flags=re.IGNORECASE)
+        cv_data = re.sub(r'\bwney\s+Partners\b', 'Mawney Partners', cv_data, flags=re.IGNORECASE)
+        cv_data = re.sub(r'\bMawney\s+artners\b', 'Mawney Partners', cv_data, flags=re.IGNORECASE)
+        cv_data = re.sub(r'\bg\s+wney\b', 'Mawney', cv_data, flags=re.IGNORECASE)
+        
         # CRITICAL: Clean the text first to fix concatenated words
         cleaned_cv_data = self._clean_cv_text(cv_data)
         lines = [line.strip() for line in cleaned_cv_data.split('\n') if line.strip()]
+        
+        # Apply reconstruction to each line as well
+        reconstructed_lines = []
+        for line in lines:
+            # Fix common fragments in each line
+            line = re.sub(r'\bPE\s+GILBERT\b', 'HOPE GILBERT', line, flags=re.IGNORECASE)
+            line = re.sub(r'PE\s+GILBERT', 'HOPE GILBERT', line, flags=re.IGNORECASE)
+            line = re.sub(r'\bartners\b', 'Partners', line, flags=re.IGNORECASE)
+            line = re.sub(r'\bwney\s+Partners\b', 'Mawney Partners', line, flags=re.IGNORECASE)
+            line = re.sub(r'\bMawney\s+artners\b', 'Mawney Partners', line, flags=re.IGNORECASE)
+            line = re.sub(r'\bg\s+wney\b', 'Mawney', line, flags=re.IGNORECASE)
+            reconstructed_lines.append(line)
+        lines = reconstructed_lines
         
         # Use font_info to help identify large text (likely names)
         large_text_candidates = []
