@@ -2,6 +2,6 @@ services:
   - type: web
     name: mawney-daily-news-api
     env: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: python app.py
+    buildCommand: pip install -r requirements_clean.txt
+    startCommand: gunicorn app_clean:app --bind 0.0.0.0:$PORT
     plan: free
